@@ -20,6 +20,10 @@ public class EditConfigurationActivity extends Activity {
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    if (!BuildConfig.DEBUG) {
+      finish();
+      return;
+    }
     setContentView(R.layout.activity_edit_configuration);
 
     EditText usernameField = findViewById(R.id.edit_username);
@@ -54,6 +58,9 @@ public class EditConfigurationActivity extends Activity {
   }
 
   static boolean hasDebugConfig(Context context) {
+    if (!BuildConfig.DEBUG) {
+      return false;
+    }
     SharedPreferences prefs = context.getSharedPreferences(DEBUG_PREFS_NAME, Context.MODE_PRIVATE);
     String username = prefs.getString("username", null);
     String domain = prefs.getString("adDomain", null);

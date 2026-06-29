@@ -209,6 +209,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     UserAuthenticationTask kinit =
         new UserAuthenticationTask(
             this,
+            this,
             new KerberosAccountDetails(
                 account.getName(),
                 account.getPassword(),

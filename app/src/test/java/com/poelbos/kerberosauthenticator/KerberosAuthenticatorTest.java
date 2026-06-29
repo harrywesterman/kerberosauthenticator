@@ -153,7 +153,8 @@ public class KerberosAuthenticatorTest {
             null, account, "SPNEGO:HOSTBASED:HTTP@test-server.example.com", getTestOptions());
     // The auth token is invalid so we renew the TGT.
     Intent resultIntent = result.getParcelable(AccountManager.KEY_INTENT);
-    assertThat(resultIntent.getExtras().getString(Constants.SERVICE_NAME)).isEqualTo("test-server");
+    assertThat(resultIntent.getExtras().getString(Constants.SERVICE_NAME))
+        .isEqualTo("test-server.example.com");
     assertIsAuthenticationActivity(resultIntent);
   }
 
@@ -185,7 +186,8 @@ public class KerberosAuthenticatorTest {
 
     // The auth token is invalid so we renew the TGT.
     Intent resultIntent = result.getParcelable(AccountManager.KEY_INTENT);
-    assertThat(resultIntent.getExtras().getString(Constants.SERVICE_NAME)).isEqualTo("test-server");
+    assertThat(resultIntent.getExtras().getString(Constants.SERVICE_NAME))
+        .isEqualTo("test-server.example.com");
     assertThat(resultIntent.getComponent().getClassName())
         .isEqualTo(ServiceTicketActivity.class.getName());
   }
@@ -217,7 +219,8 @@ public class KerberosAuthenticatorTest {
 
     // The auth token is invalid so we renew the TGT.
     Intent resultIntent = result.getParcelable(AccountManager.KEY_INTENT);
-    assertThat(resultIntent.getExtras().getString("ServiceName")).isEqualTo("test-server");
+    assertThat(resultIntent.getExtras().getString("ServiceName"))
+        .isEqualTo("test-server.example.com");
     assertIsAuthenticationActivity(resultIntent);
   }
 

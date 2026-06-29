@@ -17,12 +17,14 @@ package com.poelbos.kerberosauthenticator.internal.spnego;
 
 import static com.poelbos.kerberosauthenticator.Constants.TAG;
 
+import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Base64;
 import android.util.Log;
+import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
-import com.google.common.base.Ascii;
+import java.io.IOException;
 import javax.security.auth.Subject;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSException;
@@ -40,14 +42,17 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
   private final String domain;
   private final String domainController;
   private final boolean debugWithSensitiveData;
+  private final Context context;
   private String service = null;
   private String serviceSpnegoTicket = null;
 
   public GetSpnegoTicketTask(
+      Context context,
       Subject subject,
       String domain,
       String domainController,
       boolean debugWithSensitiveData, ServiceTicketResultListener listener) {
+    this.context = context.getApplicationContext();
     this.subject = subject;
     this.domain = domain;
     this.domainController = domainController;
@@ -59,10 +64,12 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
   protected TicketRequestResult doInBackground(String... services) {
     service = services[0];
     GSSUtil.setGlobalSubject(subject);
-    System.setProperty("java.security.krb5.kdc", domainController);
-    System.setProperty("java.security.krb5.realm", Ascii.toUpperCase(domain));
-
-    System.setProperty("sun.security.jgss.debug", Boolean.toString(debugWithSensitiveData));
+    try {
+      KerberosEnvironment.configure(context, domain, domainController, debugWithSensitiveData);
+    } catch (IOException e) {
+      Log.e(TAG, "Failure configuring Kerberos environment", e);
+      return new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, e.getMessage());
+    }
 
     GSSManager manager = new GSSManagerImpl(GSSCaller.CALLER_INITIATE, false);
 

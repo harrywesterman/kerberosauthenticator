@@ -6,10 +6,15 @@ android {
     namespace = "com.poelbos.kerberosauthenticator"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.poelbos.kerberosauthenticator"
         minSdk = 26
         targetSdk = 35
+        manifestPlaceholders["debugConfigEnabled"] = "false"
     }
 
     compileOptions {
@@ -27,8 +32,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["debugConfigEnabled"] = "true"
+        }
         release {
             isMinifyEnabled = false
+            manifestPlaceholders["debugConfigEnabled"] = "false"
             signingConfig = signingConfigs.getByName("release")
         }
     }

@@ -17,13 +17,15 @@ package com.poelbos.kerberosauthenticator.internal.kinit;
 
 import static com.poelbos.kerberosauthenticator.Constants.TAG;
 
+import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
+import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
-import com.google.common.base.Ascii;
 import com.sun.security.auth.module.Krb5LoginModule;
+import java.io.IOException;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,12 +49,15 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
   private final String domainController;
   private final boolean debugWithCredentials;
   private final UserAuthenticationResultListener listener;
+  private final Context context;
   private Subject subject = null;
 
   public UserAuthenticationTask(
+      Context context,
       UserAuthenticationResultListener listener,
       KerberosAccountDetails accountDetails,
       boolean debugWithCredentials) {
+    this.context = context.getApplicationContext();
     this.listener = listener;
     this.username = accountDetails.getUsername();
     this.password = accountDetails.getPassword();
@@ -65,10 +70,12 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
   protected TicketRequestResult doInBackground(Void... voids) {
     Log.i(TAG, String.format("Authenticating user %s to domain %s via %s",
         username, adDomain, domainController));
-    System.setProperty("java.security.krb5.kdc", domainController);
-    //NOTE: Domain MUST be upper-case.
-    System.setProperty("java.security.krb5.realm", Ascii.toUpperCase(adDomain));
-    System.setProperty("sun.security.jgss.debug", Boolean.toString(debugWithCredentials));
+    try {
+      KerberosEnvironment.configure(context, adDomain, domainController, debugWithCredentials);
+    } catch (IOException e) {
+      Log.w(TAG, "Failure configuring Kerberos environment", e);
+      return new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage());
+    }
 
     Krb5LoginModule lm = new Krb5LoginModule();
     subject = new Subject();

@@ -68,7 +68,7 @@ public class AccountConfigurationTest {
 
   @Test
   public void testPartialConfigSetupIsConsideredFalse() {
-    Set<String> testKeys = Sets.newHashSet("adDomain", "adController", "username");
+    Set<String> testKeys = Sets.newHashSet("adDomain", "username");
     for (String key : testKeys) {
       restrictionsBundle = TestHelper.makeRestrictionsBundle();
       restrictionsBundle.remove(key);
@@ -76,6 +76,14 @@ public class AccountConfigurationTest {
       accConfig = new AccountConfiguration(context);
       assertFalse(accConfig.hasManagedConfigs());
     }
+  }
+
+  @Test
+  public void testDomainControllerConfigIsOptional() {
+    restrictionsBundle.remove("adController");
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+    accConfig = new AccountConfiguration(context);
+    assertTrue(accConfig.hasManagedConfigs());
   }
 
   @Test

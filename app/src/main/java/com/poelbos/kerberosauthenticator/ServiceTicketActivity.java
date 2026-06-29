@@ -77,6 +77,7 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
     GetSpnegoTicketTask spnego =
         new GetSpnegoTicketTask(
+            this,
             tgt.asSubject(),
             account.getDomain(),
             account.getDomainController(),
@@ -104,7 +105,7 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
 
     Bundle result = new Bundle();
     KerberosAccount account = KerberosAccount.getAccount(this);
-    if (account != null || service != null) {
+    if (account != null && service != null) {
       result.putString(AccountManager.KEY_ACCOUNT_NAME, account.getName());
       result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
       result.putString(AccountManager.KEY_AUTHTOKEN, serviceTicket);

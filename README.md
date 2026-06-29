@@ -33,7 +33,7 @@ APK at `app/build/outputs/apk/debug/app-debug.apk`.
 ./gradlew test
 ```
 
-35 unit tests (Robolectric 4.16.1). Requires JDK 17 — the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
+39 unit tests (Robolectric 4.16.1). Requires JDK 17 — the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
 
 ## Installing on device
 
@@ -43,27 +43,49 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-On first launch, the app shows a debug screen where you can enter AD credentials manually (username, password, domain, domain controller). These are saved to SharedPreferences as fallback when no managed configuration is available.
+Debug builds show a local configuration screen on first launch when no managed configuration is available. You can enter AD credentials manually (username, password, domain, optional domain controller). These values are saved to SharedPreferences and are disabled in release builds.
 
 ## MDM Deployment
 
 The app reads its configuration from Android's [managed configuration](https://developer.android.com/work/managed-configurations), pushed by an EMM/MDM.
 
-### Android Management API / Google Play Managed Config
+### Omnissa Workspace ONE UEM
+
+Create one application configuration for this authenticator app and one for Chrome. The authenticator configuration gives the app AD credentials; the Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
+
+#### Kerberos Authenticator app
+
+1. In Workspace ONE UEM, add the APK as an internal Android application, or publish it as a private Managed Google Play application.
+2. Assign the app to the Android Enterprise smart group that contains the target devices.
+3. In the app assignment, enable **Application Configuration** / managed configuration.
+4. Enter the managed configuration keys below. If Workspace ONE UEM discovers the app restriction schema from the APK, use the generated fields. Otherwise, add the keys manually as custom key-value pairs.
+
+Example managed configuration:
 
 ```json
 {
   "username": "john.doe",
   "password": "s3cret",
   "adDomain": "example.com",
-  "adController": "dc01",
+  "adController": "",
   "sensitiveDebugData": false
 }
 ```
 
-### Microsoft Intune
+`adController` is optional. Leave it empty to discover KDCs from DNS SRV records such as `_kerberos._udp.example.com`. Set it only when DNS discovery is not available or you need to force a specific KDC.
 
-In the Intune admin center, create an app configuration policy for managed Android devices with configuration values as key-value pairs using the keys below.
+#### Chrome app
+
+Chrome must also be managed. Add or edit the managed Google Play assignment for `com.android.chrome`, then set these application configuration values:
+
+| Key | Type | Example | Description |
+|---|---|---|---|
+| `AuthAndroidNegotiateAccountType` | string | `AndroidEnterpriseKerberos` | Account type exposed by this authenticator app. Without this, Chrome disables HTTP Negotiate on Android. |
+| `AuthServerAllowlist` | string | `*.example.com,example.com` | Internal sites where Chrome may answer Kerberos/Negotiate challenges. |
+| `AuthSchemes` | string | `basic,digest,ntlm,negotiate` | Optional. Include `negotiate` if you restrict authentication schemes. |
+| `AuthNegotiateDelegateAllowlist` | string | `*.example.com` | Optional. Only needed if credential delegation is required. |
+
+After the assignment syncs, open `chrome://policy` on the device to confirm the Chrome policies are present.
 
 ### Testing managed config
 
@@ -89,7 +111,7 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `username` | string | yes | AD username |
 | `password` | string | no | AD password. If omitted, the user is prompted to enter it on first login |
 | `adDomain` | string | yes | Active Directory domain (e.g. `example.com`) |
-| `adController` | string | yes | Domain controller hostname (not FQDN) |
+| `adController` | string | no | Optional domain controller/KDC hostname. Leave empty for DNS SRV discovery |
 | `sensitiveDebugData` | bool | no | Enable debug logging that includes credentials (`true`/`false`, default `false`) |
 
 ## License

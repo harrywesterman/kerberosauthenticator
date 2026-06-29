@@ -28,6 +28,7 @@ import android.util.Base64;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.BaseAuthenticatorActivity.ServiceTicketInfo;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
+import java.util.Objects;
 
 /** Kerberos account functionality. */
 public class KerberosAccount {
@@ -135,7 +136,7 @@ public class KerberosAccount {
 
     final String domain = userData.getString(KEY_AD_DOMAIN);
     final String currentDomain = am.getUserData(account, KEY_AD_DOMAIN);
-    if (!currentDomain.equals(domain)) {
+    if (!Objects.equals(currentDomain, domain)) {
       Log.i(TAG, String.format("Updating domain for account %s from %s to %s.", account.name,
           currentDomain, domain));
       am.setUserData(account, KEY_AD_DOMAIN, domain);
@@ -143,7 +144,7 @@ public class KerberosAccount {
 
     final String domainController = userData.getString(KEY_AD_DC);
     String currentDomainController = am.getUserData(account, KEY_AD_DC);
-    if (!currentDomainController.equals(domainController)) {
+    if (!Objects.equals(currentDomainController, domainController)) {
       Log.i(
           TAG,
           String.format(

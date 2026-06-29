@@ -103,10 +103,20 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     Bundle result = new Bundle();
     Matcher matcher = Constants.AUTH_TOKEN_PATTERN.matcher(authTokenType);
     String serviceName;
-    if (matcher.matches() && matcher.groupCount() == 5) {
-      serviceName = matcher.group(4);
+    if (matcher.matches() && matcher.groupCount() == 2) {
+      serviceName = matcher.group(2).trim();
+      if (serviceName.endsWith(".")) {
+        serviceName = serviceName.substring(0, serviceName.length() - 1);
+      }
     } else {
       // Cannot obtain service name.
+      result.putInt(AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_ARGUMENTS);
+      result.putString(
+          AccountManager.KEY_ERROR_MESSAGE,
+          String.format("Invalid auth token format for %s.", authTokenType));
+      return result;
+    }
+    if (serviceName.isEmpty() || serviceName.startsWith(".")) {
       result.putInt(AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_ARGUMENTS);
       result.putString(
           AccountManager.KEY_ERROR_MESSAGE,

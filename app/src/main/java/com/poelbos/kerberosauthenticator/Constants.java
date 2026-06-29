@@ -38,8 +38,7 @@ public class Constants {
   static final String PREFERENCE_NAME = "service_ticket_info_storage";
   // Tag for logging
   public static final String TAG = "AFW_KerberosAuth";
-  // Regex pattern to match the format of a service ticket type description.
-  // Matches the formats word:word:...@serviceName.domain. ... .tld
+  // Regex pattern to match token types like SPNEGO:HOSTBASED:HTTP@host.example.com.
   static final Pattern AUTH_TOKEN_PATTERN =
-      Pattern.compile("([\\w-]+):([\\w-]+):([\\w-]+)@([\\w-]+)\\.(.)*");
+      Pattern.compile("^SPNEGO:HOSTBASED:([^@]+)@(.+)$");
 }

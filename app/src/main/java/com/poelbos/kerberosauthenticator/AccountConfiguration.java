@@ -70,11 +70,17 @@ public class AccountConfiguration {
   }
 
   private void setManagedConfigs() {
+    username = null;
+    password = null;
+    adDomain = null;
+    adController = null;
+    debugWithSensitiveData = false;
+
     Bundle restrictionsBundle = restrictionsManager.getApplicationRestrictions();
     if (restrictionsBundle == null) {
       restrictionsBundle = new Bundle();
     }
-    if (restrictionsBundle.isEmpty()) {
+    if (BuildConfig.DEBUG && restrictionsBundle.isEmpty()) {
       SharedPreferences debugPrefs = context
           .getSharedPreferences(EditConfigurationActivity.DEBUG_PREFS_NAME, Context.MODE_PRIVATE);
       String debugUser = debugPrefs.getString("username", null);
@@ -87,7 +93,6 @@ public class AccountConfiguration {
     }
     // Obtain managed configs.
     if (restrictionsBundle.containsKey(AD_DOMAIN_KEY)
-        && restrictionsBundle.containsKey(AD_CONTROLLER_KEY)
         && restrictionsBundle.containsKey(USERNAME_KEY)) {
       adDomain = restrictionsBundle.getString(AD_DOMAIN_KEY);
       adController = restrictionsBundle.getString(AD_CONTROLLER_KEY);
@@ -125,15 +130,13 @@ public class AccountConfiguration {
     // If any restriction string is empty, the configs are assumed to be missing.
     boolean emptyUsername = Strings.isNullOrEmpty(username);
     boolean emptyDomain = Strings.isNullOrEmpty(adDomain);
-    boolean emptyDomainController = Strings.isNullOrEmpty(adController);
-    boolean hasManagedConfigs = !(emptyUsername || emptyDomain || emptyDomainController);
+    boolean hasManagedConfigs = !(emptyUsername || emptyDomain);
     if (!hasManagedConfigs) {
       Log.d(
           Constants.TAG,
           String.format(
-              "Missing managed configuration: username? %s, domain? %s, domain"
-                  + " controller? %s.",
-              emptyUsername, emptyDomain, emptyDomainController));
+              "Missing managed configuration: username? %s, domain? %s.",
+              emptyUsername, emptyDomain));
     }
     return hasManagedConfigs;
   }
