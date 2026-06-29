@@ -35,6 +35,8 @@ APK at `app/build/outputs/apk/debug/app-debug.apk`.
 
 39 unit tests (Robolectric 4.16.1). Requires JDK 17 — the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
 
+For GitHub Actions releases, add the base64-encoded release keystore as the repository secret `RELEASE_KEYSTORE_B64`.
+
 ## Installing on device
 
 ```bash
