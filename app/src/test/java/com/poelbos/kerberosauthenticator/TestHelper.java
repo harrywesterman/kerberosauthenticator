@@ -23,7 +23,6 @@ public class TestHelper {
   static final String TEST_USERNAME = "TEST_USERNAME";
   static final String TEST_PASSWORD = "TEST_PASSWORD";
   static final String TEST_AD_DOMAIN = "TEST_AD_DOMAIN";
-  static final String TEST_AD_CONTROLLER = "TEST_AD_CONTROLLER";
 
   static final String USERNAME = "test_user";
   static final String PASSWORD = "test_password";
@@ -87,7 +86,6 @@ public class TestHelper {
     restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, TEST_USERNAME);
     restrictionsBundle.putString(AccountConfiguration.PASSWORD_KEY, TEST_PASSWORD);
     restrictionsBundle.putString(AccountConfiguration.AD_DOMAIN_KEY, TEST_AD_DOMAIN);
-    restrictionsBundle.putString(AccountConfiguration.AD_CONTROLLER_KEY, TEST_AD_CONTROLLER);
     return restrictionsBundle;
   }
 

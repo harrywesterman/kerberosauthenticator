@@ -19,8 +19,10 @@ import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.robolectric.Shadows.shadowOf;
 
+import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.RestrictionsManager;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import androidx.test.core.app.ApplicationProvider;
 import com.google.common.collect.Sets;
@@ -49,6 +51,11 @@ public class AccountConfigurationTest {
     restrictionsManager = (RestrictionsManager) context.getSystemService(
         context.getSystemServiceName(RestrictionsManager.class));
     restrictionsBundle = TestHelper.makeRestrictionsBundle();
+    context.getSharedPreferences(
+            EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .clear()
+        .apply();
   }
 
   @Test
@@ -79,9 +86,17 @@ public class AccountConfigurationTest {
   }
 
   @Test
-  public void testDomainControllerConfigIsOptional() {
-    restrictionsBundle.remove("adController");
-    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+  public void testLocalConfigIsUsedWhenManagedConfigMissing() {
+    shadowOf(restrictionsManager).setApplicationRestrictions(new Bundle());
+    SharedPreferences prefs =
+        context.getSharedPreferences(
+            EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE);
+    prefs
+        .edit()
+        .putString(AccountConfiguration.USERNAME_KEY, TestHelper.TEST_USERNAME)
+        .putString(AccountConfiguration.PASSWORD_KEY, TestHelper.TEST_PASSWORD)
+        .putString(AccountConfiguration.AD_DOMAIN_KEY, TestHelper.TEST_AD_DOMAIN)
+        .apply();
     accConfig = new AccountConfiguration(context);
     assertTrue(accConfig.hasManagedConfigs());
   }

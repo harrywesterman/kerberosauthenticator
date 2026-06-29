@@ -194,9 +194,13 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
 
   void showVersion() {
     try {
-      PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+      String versionName = BuildConfig.VERSION_NAME;
+      if (TextUtils.isEmpty(versionName)) {
+        PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+        versionName = packageInfo.versionName;
+      }
       ((TextView) findViewById(R.id.version_no))
-          .setText(String.format("v%s", packageInfo.versionName));
+          .setText(String.format("v%s", versionName));
     } catch (NameNotFoundException e) {
       ((TextView) findViewById(R.id.version_no)).setText(R.string.version_error);
       Log.e(TAG, "Incorrect package name.");

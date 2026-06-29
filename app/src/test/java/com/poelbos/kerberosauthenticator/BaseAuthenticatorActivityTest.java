@@ -69,7 +69,7 @@ public class BaseAuthenticatorActivityTest {
     assertThat(accountDetails.getUsername()).isEqualTo(TestHelper.TEST_USERNAME);
     assertThat(accountDetails.getPassword()).isEqualTo(TestHelper.TEST_PASSWORD);
     assertThat(accountDetails.getActiveDirectoryDomain()).isEqualTo(TestHelper.TEST_AD_DOMAIN);
-    assertThat(accountDetails.getAdDomainController()).isEqualTo(TestHelper.TEST_AD_CONTROLLER);
+    assertThat(accountDetails.getAdDomainController()).isEmpty();
   }
 
   @Test

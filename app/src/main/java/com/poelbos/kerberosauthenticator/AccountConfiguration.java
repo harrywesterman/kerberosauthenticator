@@ -42,7 +42,6 @@ public class AccountConfiguration {
 
   // Managed configs keys
   static final String AD_DOMAIN_KEY = "adDomain";
-  static final String AD_CONTROLLER_KEY = "adController";
   static final String USERNAME_KEY = "username";
   static final String PASSWORD_KEY = "password";
   static final String SENSITIVE_DEBUG_DATA_KEY = "sensitiveDebugData";
@@ -54,7 +53,6 @@ public class AccountConfiguration {
   private String username;
   private String password;
   private String adDomain;
-  private String adController;
   private boolean debugWithSensitiveData = false;
 
   AccountConfiguration(@NonNull Context context) {
@@ -73,29 +71,27 @@ public class AccountConfiguration {
     username = null;
     password = null;
     adDomain = null;
-    adController = null;
     debugWithSensitiveData = false;
 
     Bundle restrictionsBundle = restrictionsManager.getApplicationRestrictions();
     if (restrictionsBundle == null) {
       restrictionsBundle = new Bundle();
     }
-    if (BuildConfig.DEBUG && restrictionsBundle.isEmpty()) {
-      SharedPreferences debugPrefs = context
-          .getSharedPreferences(EditConfigurationActivity.DEBUG_PREFS_NAME, Context.MODE_PRIVATE);
-      String debugUser = debugPrefs.getString("username", null);
-      if (debugUser != null) {
-        restrictionsBundle.putString(USERNAME_KEY, debugUser);
-        restrictionsBundle.putString(PASSWORD_KEY, debugPrefs.getString("password", ""));
-        restrictionsBundle.putString(AD_DOMAIN_KEY, debugPrefs.getString("adDomain", ""));
-        restrictionsBundle.putString(AD_CONTROLLER_KEY, debugPrefs.getString("adController", ""));
+    if (restrictionsBundle.isEmpty()) {
+      SharedPreferences localPrefs = context
+          .getSharedPreferences(EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE);
+      String localUser = localPrefs.getString(USERNAME_KEY, null);
+      String localDomain = localPrefs.getString(AD_DOMAIN_KEY, null);
+      if (localUser != null && localDomain != null) {
+        restrictionsBundle.putString(USERNAME_KEY, localUser);
+        restrictionsBundle.putString(PASSWORD_KEY, localPrefs.getString(PASSWORD_KEY, ""));
+        restrictionsBundle.putString(AD_DOMAIN_KEY, localDomain);
       }
     }
     // Obtain managed configs.
     if (restrictionsBundle.containsKey(AD_DOMAIN_KEY)
         && restrictionsBundle.containsKey(USERNAME_KEY)) {
       adDomain = restrictionsBundle.getString(AD_DOMAIN_KEY);
-      adController = restrictionsBundle.getString(AD_CONTROLLER_KEY);
       username = restrictionsBundle.getString(USERNAME_KEY);
     }
     if (restrictionsBundle.containsKey(PASSWORD_KEY)) {
@@ -110,7 +106,7 @@ public class AccountConfiguration {
     if (!hasManagedConfigs()) {
       return null;
     }
-    return new KerberosAccountDetails(username, password, adDomain, adController);
+    return new KerberosAccountDetails(username, password, adDomain, "");
   }
 
   boolean getDebugWithSensitiveData() {

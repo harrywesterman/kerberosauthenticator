@@ -28,19 +28,9 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     super.onCreate(savedInstanceState);
 
     if (!accountConfiguration.hasManagedConfigs()) {
-      if (EditConfigurationActivity.hasDebugConfig(this)) {
-        // Debug config exists from a previous session, use it.
-        // AccountConfiguration already picked it up from SharedPreferences.
-      } else if (BuildConfig.DEBUG) {
-        // No config at all: show debug entry screen so the user can enter credentials.
-        startActivity(new Intent(this, EditConfigurationActivity.class));
-        finish();
-        return;
-      } else {
-        startActivity(DeclineAddingAccountActivity.getDeclineIntentDueToConfigMissing(this, null));
-        finish();
-        return;
-      }
+      startActivity(new Intent(this, EditConfigurationActivity.class));
+      finish();
+      return;
     }
 
     setContentView(R.layout.authenticator);

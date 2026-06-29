@@ -11,7 +11,7 @@ This app provides Kerberos/SPNEGO authentication for Chrome on Android Enterpris
 - **Support Library → AndroidX**
 - **CompileSDK 35, MinSDK 26, TargetSDK 35**
 - `openjdk-kerberos` included as a local library module (cloned from [google/openjdk-kerberos](https://github.com/google/openjdk-kerberos))
-- Debug config UI for testing without MDM
+- Manual config UI for testing without MDM
 
 ## Prerequisites
 
@@ -43,7 +43,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-Debug builds show a local configuration screen on first launch when no managed configuration is available. You can enter AD credentials manually (username, password, domain, optional domain controller). These values are saved to SharedPreferences and are disabled in release builds.
+When no managed configuration is available, the app shows a local configuration screen on first launch. You can enter AD credentials manually (username, password, domain). The values are saved locally and are used as fallback in both debug and release builds.
+
+![Local configuration screen](docs/kerberos-authenticator-final2.png)
 
 ## MDM Deployment
 
@@ -67,12 +69,11 @@ Example managed configuration:
   "username": "john.doe",
   "password": "s3cret",
   "adDomain": "example.com",
-  "adController": "",
   "sensitiveDebugData": false
 }
 ```
 
-`adController` is optional. Leave it empty to discover KDCs from DNS SRV records such as `_kerberos._udp.example.com`. Set it only when DNS discovery is not available or you need to force a specific KDC.
+The app discovers Kerberos KDCs from DNS SRV records such as `_kerberos._udp.example.com`.
 
 #### Chrome app
 
@@ -111,7 +112,6 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `username` | string | yes | AD username |
 | `password` | string | no | AD password. If omitted, the user is prompted to enter it on first login |
 | `adDomain` | string | yes | Active Directory domain (e.g. `example.com`) |
-| `adController` | string | no | Optional domain controller/KDC hostname. Leave empty for DNS SRV discovery |
 | `sensitiveDebugData` | bool | no | Enable debug logging that includes credentials (`true`/`false`, default `false`) |
 
 ## License

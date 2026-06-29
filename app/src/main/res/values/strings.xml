@@ -30,10 +30,6 @@
     <string name="ad_domain">Active Directory Domain</string>
     <!-- [CHAR_LIMIT=300] -->
     <string name="ad_domain_description">The organization’s Active Directory domain.</string>
-    <!-- [CHAR_LIMIT=100] -->
-    <string name="service_principal">AD Controller (optional)</string>
-    <!-- [CHAR_LIMIT=300] -->
-    <string name="service_principal_description">Optional domain controller hostname. Leave empty to discover Kerberos KDCs from DNS SRV records.</string>
     <!-- Name of the managed configuration field for controlling debugging -->
     <!-- [CHAR_LIMIT=100] -->
     <string name="sensitive_debug_data">Sensitive Debug Data</string>
