@@ -68,7 +68,11 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
     // Let the user know an account cannot be added because managed config is missing.
     if (!accountConfiguration.hasManagedConfigs()) {
-      startActivity(DeclineAddingAccountActivity.getDeclineIntentDueToConfigMissing(this, null));
+      Intent intent = EditConfigurationActivity.getEditIntent(
+          this,
+          getIntent().getParcelableExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE),
+          getIntent().getStringExtra(Constants.SERVICE_NAME));
+      startActivity(intent);
       finish();
       return;
     }

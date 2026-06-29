@@ -35,8 +35,8 @@
         <activity android:name=".DeclineAddingAccountActivity" android:exported="true"/>
         <activity android:name=".ServiceTicketActivity" android:exported="true"/>
         <activity android:name=".LoginActivity" android:exported="true"/>
-        <activity android:name=".EditConfigurationActivity"
-            android:enabled="${debugConfigEnabled}"
+        <activity
+            android:name=".EditConfigurationActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
         <meta-data android:name="android.content.APP_RESTRICTIONS"

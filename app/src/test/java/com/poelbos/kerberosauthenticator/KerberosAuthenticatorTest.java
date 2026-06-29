@@ -19,7 +19,6 @@ import static com.poelbos.kerberosauthenticator.Constants.KERBEROS_ACCOUNT_TYPE;
 import static com.poelbos.kerberosauthenticator.TestHelper.AD_DC;
 import static com.poelbos.kerberosauthenticator.TestHelper.AD_DOMAIN;
 import static com.poelbos.kerberosauthenticator.TestHelper.PASSWORD;
-import static com.poelbos.kerberosauthenticator.TestHelper.TEST_AD_CONTROLLER;
 import static com.poelbos.kerberosauthenticator.TestHelper.TEST_AD_DOMAIN;
 import static com.poelbos.kerberosauthenticator.TestHelper.TGT_B64;
 import static com.poelbos.kerberosauthenticator.TestHelper.USERNAME;
@@ -81,13 +80,13 @@ public class KerberosAuthenticatorTest {
   }
 
   @Test
-  public void testDeclineAddAccountWhenMissingManagedConfigs() {
+  public void testEditConfigAddAccountWhenMissingManagedConfigs() {
     // SPNEGO requests are approved.
     Bundle result =
         authenticator.addAccount(
             null, null, null, new String[] {Constants.SPNEGO}, getTestOptions());
     assertThat(((Intent) result.get("intent")).getComponent().getClassName())
-        .isEqualTo(DeclineAddingAccountActivity.class.getName());
+        .isEqualTo(EditConfigurationActivity.class.getName());
   }
 
   @Test
@@ -140,7 +139,7 @@ public class KerberosAuthenticatorTest {
   public void testGetAuthTokenRenewTGT() {
     Account testAccount = new Account(TestHelper.USERNAME, KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(testAccount);
-    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, TEST_AD_CONTROLLER);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_TGT, TGT_B64);
 
@@ -162,7 +161,7 @@ public class KerberosAuthenticatorTest {
   public void testGetAuthTokenValidTGT() {
     Account testAccount = new Account(TestHelper.USERNAME, Constants.KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(testAccount);
-    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, TEST_AD_CONTROLLER);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
     accountManager.setUserData(
         testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
@@ -196,7 +195,7 @@ public class KerberosAuthenticatorTest {
   public void testGetAuthTokenAccountDetailsChange() {
     Account testAccount = new Account(TestHelper.USERNAME, Constants.KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(testAccount);
-    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, TEST_AD_CONTROLLER);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
     accountManager.setUserData(
         testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);

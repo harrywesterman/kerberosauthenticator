@@ -38,13 +38,6 @@
     android:restrictionType="string"/>
 
   <restriction
-    android:key="adController"
-    android:title="@string/service_principal"
-    android:description="@string/service_principal_description"
-    android:defaultValue=""
-    android:restrictionType="string"/>
-
-  <restriction
       android:key="sensitiveDebugData"
       android:title="@string/sensitive_debug_data"
       android:description="@string/sensitive_debug_data_description"
