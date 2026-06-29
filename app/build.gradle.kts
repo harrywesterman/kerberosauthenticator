@@ -2,6 +2,15 @@ plugins {
     id("com.android.application")
 }
 
+fun versionCodeFor(versionName: String): Int {
+    val parts = versionName.split(".")
+    val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
+    val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    return major * 100 + minor
+}
+
+val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.0")
+
 android {
     namespace = "com.poelbos.kerberosauthenticator"
     compileSdk = 35
@@ -12,8 +21,8 @@ android {
 
     defaultConfig {
         applicationId = "com.poelbos.kerberosauthenticator"
-        versionCode = 1
-        versionName = "1.0.0"
+        versionName = releaseVersion.get()
+        versionCode = versionCodeFor(releaseVersion.get())
         minSdk = 26
         targetSdk = 35
     }
