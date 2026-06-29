@@ -45,8 +45,6 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 When no managed configuration is available, the app shows a local configuration screen on first launch. You can enter AD credentials manually (username, password, domain). The values are saved locally and are used as fallback in both debug and release builds.
 
-![Local configuration screen](docs/kerberos-authenticator-final2.png)
-
 ## MDM Deployment
 
 The app reads its configuration from Android's [managed configuration](https://developer.android.com/work/managed-configurations), pushed by an EMM/MDM.
