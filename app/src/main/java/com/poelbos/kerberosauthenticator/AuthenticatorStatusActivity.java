@@ -38,6 +38,9 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     boolean isLaunchedByUser = Intent.ACTION_MAIN.equals(getIntent().getAction());
     // Initialise the UI, showing a "Dismiss" button.
     initUI(isLaunchedByUser, "");
+    showOkBtn(true);
+    showRefreshBtn(accountConfiguration.hasManagedConfigs());
+    showLogoutBtn(accountConfiguration.hasManagedConfigs());
 
     // If only the status is shown, the activity remains open until the user taps the dismiss
     // button to finish it.

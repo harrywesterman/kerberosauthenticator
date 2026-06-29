@@ -44,6 +44,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     UserAuthenticationResultListener {
 
   boolean isPasswordRetry = false;
+  private boolean refreshStatusAfterAuth = false;
 
   /** Returns an intent that can be used to authenticate an account. */
   public static Intent getAuthenticateIntent(
@@ -59,6 +60,12 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (serviceName != null) {
       intent.putExtra(Constants.SERVICE_NAME, serviceName);
     }
+    return intent;
+  }
+
+  public static Intent getRefreshIntent(Context context) {
+    Intent intent = new Intent(context, LoginActivity.class);
+    intent.putExtra(Constants.REFRESH_STATUS_AFTER_AUTH, true);
     return intent;
   }
 
@@ -78,10 +85,11 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     }
 
     isPasswordRetry = false;
+    Intent intent = getIntent();
+    refreshStatusAfterAuth = intent.getBooleanExtra(Constants.REFRESH_STATUS_AFTER_AUTH, false);
 
     setContentView(R.layout.authenticator);
 
-    Intent intent = getIntent();
     String serviceName = intent.getStringExtra(Constants.SERVICE_NAME);
     boolean shouldAddAccount = TextUtils.isEmpty(serviceName);
     Log.d(
@@ -92,6 +100,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
     // Initialise the UI with corresponding values.
     initUI(false /*isUserInitiated*/, serviceName);
+    showLogoutBtn(accountConfiguration.hasManagedConfigs());
 
     // Generate or renew a TGT. Do not attempt recovering from a bad password if we are in the
     // process of adding a new account.
@@ -139,8 +148,15 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (serviceName == null) {
       result.putString(AccountManager.KEY_ACCOUNT_NAME, account.getName());
       result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
-      // Change UI to show the TGT is obtained correctly.
-      setResultAndFinish(result);
+      if (refreshStatusAfterAuth) {
+        Intent statusIntent = new Intent(this, AuthenticatorStatusActivity.class);
+        statusIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(statusIntent);
+        finish();
+      } else {
+        // Change UI to show the TGT is obtained correctly.
+        setResultAndFinish(result);
+      }
     } else {
       // A service name was provided - meaning the TGT had to be renewed before getting a service
       // ticket. As the TGT was renewed successfully, launch the service ticket activity.
