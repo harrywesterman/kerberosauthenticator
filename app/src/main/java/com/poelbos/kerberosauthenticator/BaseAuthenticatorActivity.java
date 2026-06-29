@@ -20,6 +20,7 @@ import static com.poelbos.kerberosauthenticator.Constants.TAG;
 import android.accounts.AccountAuthenticatorActivity;
 import android.accounts.AccountManager;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -212,8 +213,47 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
       findViewById(R.id.ok_btn).setVisibility(View.VISIBLE);
       findViewById(R.id.ok_btn).setOnClickListener(v -> finish());
     } else {
-      findViewById(R.id.ok_btn).setVisibility(View.INVISIBLE);
+      findViewById(R.id.ok_btn).setVisibility(View.GONE);
     }
+  }
+
+  protected void showLogoutBtn(boolean isVisible) {
+    if (isVisible) {
+      findViewById(R.id.logout_btn).setVisibility(View.VISIBLE);
+      findViewById(R.id.logout_btn).setOnClickListener(v -> onLogoutRequested());
+    } else {
+      findViewById(R.id.logout_btn).setVisibility(View.GONE);
+    }
+  }
+
+  protected void showRefreshBtn(boolean isVisible) {
+    if (isVisible) {
+      findViewById(R.id.refresh_btn).setVisibility(View.VISIBLE);
+      findViewById(R.id.refresh_btn).setOnClickListener(v -> onRefreshRequested());
+    } else {
+      findViewById(R.id.refresh_btn).setVisibility(View.GONE);
+    }
+  }
+
+  protected void onLogoutRequested() {
+    KerberosAccount.removeAccount(this);
+    getSharedPreferences(EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, MODE_PRIVATE)
+        .edit()
+        .clear()
+        .apply();
+    Intent intent =
+        EditConfigurationActivity.getEditIntent(
+            this,
+            getIntent().getParcelableExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE),
+            getIntent().getStringExtra(Constants.SERVICE_NAME));
+    intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+    startActivity(intent);
+    finish();
+  }
+
+  protected void onRefreshRequested() {
+    Intent intent = LoginActivity.getRefreshIntent(this);
+    startActivity(intent);
   }
 
   protected void setErrorStatus(int textviewId) {

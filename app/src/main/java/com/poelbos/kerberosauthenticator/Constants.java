@@ -34,6 +34,8 @@ public class Constants {
   // Key of the activity extra indicating the service name for which a service ticket should be
   // obtained.
   static final String SERVICE_NAME = "ServiceName";
+  // Key of the activity extra indicating a TGT refresh should return to status.
+  static final String REFRESH_STATUS_AFTER_AUTH = "RefreshStatusAfterAuth";
   // Key for the servicet ticket information key-value store.
   static final String PREFERENCE_NAME = "service_ticket_info_storage";
   // Tag for logging
