@@ -12,6 +12,10 @@ This app provides Kerberos/SPNEGO authentication for Chrome on Android Enterpris
 - **CompileSDK 35, MinSDK 26, TargetSDK 35**
 - `openjdk-kerberos` included as a local library module (cloned from [google/openjdk-kerberos](https://github.com/google/openjdk-kerberos))
 - Manual config UI for testing without MDM
+- DNS-based KDC discovery from SRV records (`_kerberos._udp.<realm>`)
+- App version, TGT validity, and service ticket info shown in the status UI
+- GitHub Actions release workflow that publishes APKs on push to `main`
+- Logout button that removes the account and clears local config
 
 ## Prerequisites
 
@@ -27,15 +31,36 @@ This app provides Kerberos/SPNEGO authentication for Chrome on Android Enterpris
 
 APK at `app/build/outputs/apk/debug/app-debug.apk`.
 
+```bash
+./gradlew assembleRelease -PreleaseVersion=1.0
+```
+
+Release APK at `app/build/outputs/apk/release/app-release.apk`. Requires `release.keystore` in the project root.
+
 ## Testing
 
 ```bash
 ./gradlew test
 ```
 
-39 unit tests (Robolectric 4.16.1). Requires JDK 17 — the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
+38 unit tests (Robolectric 4.16.1). Requires JDK 17 — the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
 
-For GitHub Actions releases, add the base64-encoded release keystore as the repository secret `RELEASE_KEYSTORE_B64`.
+## Releasing
+
+Pushing to the `main` branch triggers the [Build and Publish Release](.github/workflows/release.yml) workflow:
+
+1. Restores the signing keystore from the GitHub secret `RELEASE_KEYSTORE_B64`.
+2. Determines the next version by incrementing the latest GitHub release tag (e.g. `v1.0` → `v1.1`).
+3. Builds the release APK signed with the keystore.
+4. Creates a git tag and publishes a GitHub release with the APK attached.
+
+To set up the release keystore secret:
+
+```bash
+base64 -i release.keystore | pbcopy
+```
+
+Add the clipboard contents as the repository secret `RELEASE_KEYSTORE_B64` in GitHub.
 
 ## Installing on device
 
@@ -114,6 +139,8 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `adDomain` | string | yes | Active Directory domain (e.g. `example.com`) |
 | `sensitiveDebugData` | bool | no | Enable debug logging that includes credentials (`true`/`false`, default `false`) |
 
+When no domain controller is specified, the app automatically discovers KDCs through DNS SRV lookups (`_kerberos._udp.<domain>` and `_kerberos._tcp.<domain>`).
+
 ## License
 
-Apache 2.0 — see [LICENSE](https://github.com/google/android-kerberos-authenticator/blob/master/LICENSE) in the original repository.
+Apache 2.0 — see [LICENSE](LICENSE).
