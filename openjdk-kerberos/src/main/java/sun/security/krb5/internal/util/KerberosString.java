@@ -28,7 +28,7 @@ package sun.security.krb5.internal.util;
 import java.io.IOException;
 import java.security.AccessController;
 import sun.security.action.GetBooleanAction;
-import sun.security.util.DerValue;
+import krb.sun.security.util.DerValue;
 
 /**
  * Implements the ASN.1 KerberosString type.

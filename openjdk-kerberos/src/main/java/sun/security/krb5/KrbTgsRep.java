@@ -33,7 +33,7 @@ package sun.security.krb5;
 
 import sun.security.krb5.internal.*;
 import sun.security.krb5.internal.crypto.KeyUsage;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.io.IOException;
 
 /**

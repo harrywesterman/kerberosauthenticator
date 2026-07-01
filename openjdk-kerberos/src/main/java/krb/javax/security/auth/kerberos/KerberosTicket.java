@@ -34,10 +34,10 @@ import krb.javax.security.auth.Refreshable;
 import javax.security.auth.Destroyable;
 import krb.javax.security.auth.RefreshFailedException;
 import javax.security.auth.DestroyFailedException;
-import sun.misc.HexDumpEncoder;
+import krb.sun.misc.HexDumpEncoder;
 import sun.security.krb5.EncryptionKey;
 import sun.security.krb5.Asn1Exception;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 
 /**
  * This class encapsulates a Kerberos ticket and associated

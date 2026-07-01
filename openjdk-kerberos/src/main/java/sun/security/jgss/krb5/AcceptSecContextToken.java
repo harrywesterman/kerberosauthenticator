@@ -81,7 +81,7 @@ class AcceptSecContextToken extends InitialToken {
                                    "AP_REP token id does not match!");
 
         byte[] apRepBytes =
-            new sun.security.util.DerValue(is).toByteArray();
+            new krb.sun.security.util.DerValue(is).toByteArray();
 
         KrbApRep apRep = new KrbApRep(apRepBytes, serviceCreds, apReq);
 

@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.misc;
+package krb.sun.misc;
 
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;

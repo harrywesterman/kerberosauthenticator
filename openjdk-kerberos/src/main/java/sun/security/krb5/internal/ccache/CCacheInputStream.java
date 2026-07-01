@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
 
-import sun.misc.IOUtils;
+import krb.sun.misc.IOUtils;
 import sun.security.krb5.*;
 import sun.security.krb5.internal.*;
 import sun.security.krb5.internal.util.KrbDataInputStream;

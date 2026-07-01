@@ -32,7 +32,7 @@
 package sun.security.krb5;
 
 import sun.security.krb5.internal.Krb5;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.io.IOException;
 import java.util.*;
 

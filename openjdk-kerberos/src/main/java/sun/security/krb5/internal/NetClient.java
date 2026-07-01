@@ -31,7 +31,7 @@
 
 package sun.security.krb5.internal;
 
-import sun.misc.IOUtils;
+import krb.sun.misc.IOUtils;
 
 import java.io.*;
 import java.net.*;

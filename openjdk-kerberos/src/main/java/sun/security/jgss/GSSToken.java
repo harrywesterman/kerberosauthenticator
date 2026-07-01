@@ -29,7 +29,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.io.EOFException;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 
 /**
  * Utilities for processing GSS Tokens.

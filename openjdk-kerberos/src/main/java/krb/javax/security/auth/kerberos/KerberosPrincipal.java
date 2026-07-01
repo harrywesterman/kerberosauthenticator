@@ -29,7 +29,7 @@ import java.io.*;
 import sun.security.krb5.KrbException;
 import sun.security.krb5.PrincipalName;
 import sun.security.krb5.Realm;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 
 /**
  * This class encapsulates a Kerberos principal.

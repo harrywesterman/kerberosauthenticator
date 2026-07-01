@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.security.util;
+package krb.sun.security.util;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;

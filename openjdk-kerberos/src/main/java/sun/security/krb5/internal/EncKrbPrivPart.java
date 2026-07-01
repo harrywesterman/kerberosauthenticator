@@ -29,7 +29,7 @@
 
 package sun.security.krb5.internal;
 
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import sun.security.krb5.Asn1Exception;
 import java.util.Vector;
 import java.io.IOException;

@@ -33,9 +33,9 @@ package sun.security.krb5.internal;
 import sun.security.krb5.Asn1Exception;
 import sun.security.krb5.Config;
 import sun.security.krb5.KrbException;
-import sun.security.util.DerInputStream;
-import sun.security.util.DerOutputStream;
-import sun.security.util.DerValue;
+import krb.sun.security.util.DerInputStream;
+import krb.sun.security.util.DerOutputStream;
+import krb.sun.security.util.DerValue;
 
 import java.io.IOException;
 import java.util.Calendar;

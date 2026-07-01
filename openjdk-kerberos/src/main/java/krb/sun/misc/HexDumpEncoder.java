@@ -24,7 +24,7 @@
  */
 
 
-package sun.misc;
+package krb.sun.misc;
 import java.io.PrintStream;
 import java.io.OutputStream;
 import java.io.IOException;

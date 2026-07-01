@@ -37,7 +37,7 @@ import sun.security.krb5.Checksum;
 import sun.security.krb5.Asn1Exception;
 import sun.security.krb5.Realm;
 import sun.security.krb5.RealmException;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.math.BigInteger;
@@ -227,7 +227,7 @@ public class KRBError implements java.io.Serializable {
             } catch (Exception e) {
                 if (DEBUG) {
                     System.out.println("Unable to parse eData field of KRB-ERROR:\n" +
-                            new sun.misc.HexDumpEncoder().encodeBuffer(data));
+                            new krb.sun.misc.HexDumpEncoder().encodeBuffer(data));
                 }
                 IOException ioe = new IOException(
                         "Unable to parse eData field of KRB-ERROR");
@@ -237,7 +237,7 @@ public class KRBError implements java.io.Serializable {
         } else {
             if (DEBUG) {
                 System.out.println("Unknown eData field of KRB-ERROR:\n" +
-                        new sun.misc.HexDumpEncoder().encodeBuffer(data));
+                        new krb.sun.misc.HexDumpEncoder().encodeBuffer(data));
             }
         }
     }

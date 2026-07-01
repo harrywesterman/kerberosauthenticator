@@ -28,7 +28,7 @@ package sun.security.jgss.spnego;
 import java.io.*;
 import java.util.*;
 import org.ietf.jgss.*;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import sun.security.jgss.*;
 
 /**

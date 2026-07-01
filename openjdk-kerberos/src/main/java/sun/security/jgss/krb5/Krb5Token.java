@@ -26,7 +26,7 @@
 package sun.security.jgss.krb5;
 
 import java.io.IOException;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import sun.security.jgss.*;
 
 /**

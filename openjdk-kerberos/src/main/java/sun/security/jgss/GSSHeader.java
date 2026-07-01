@@ -29,7 +29,7 @@ import org.ietf.jgss.GSSException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.IOException;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 
 /**
  * This class represents the mechanism independent part of a GSS-API

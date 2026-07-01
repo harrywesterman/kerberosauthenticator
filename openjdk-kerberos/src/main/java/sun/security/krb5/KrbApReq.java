@@ -35,7 +35,7 @@ import sun.security.krb5.internal.*;
 import sun.security.krb5.internal.crypto.*;
 import sun.security.jgss.krb5.Krb5AcceptCredential;
 import java.net.InetAddress;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.io.IOException;
 import java.util.Arrays;
 import java.security.MessageDigest;
