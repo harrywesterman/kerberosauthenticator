@@ -30,14 +30,14 @@ import java.util.Arrays;
 import javax.crypto.SecretKey;
 import javax.security.auth.Destroyable;
 import javax.security.auth.DestroyFailedException;
-import sun.misc.HexDumpEncoder;
+import krb.sun.misc.HexDumpEncoder;
 import sun.security.krb5.Asn1Exception;
 import sun.security.krb5.PrincipalName;
 import sun.security.krb5.EncryptionKey;
 import sun.security.krb5.EncryptedData;
 import sun.security.krb5.KrbException;
 import sun.security.krb5.KrbCryptoException;
-import sun.security.util.DerValue;
+import krb.sun.security.util.DerValue;
 
 /**
  * This class encapsulates a Kerberos encryption key. It is not associated

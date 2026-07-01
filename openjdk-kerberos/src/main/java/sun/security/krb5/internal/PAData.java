@@ -31,7 +31,7 @@
 package sun.security.krb5.internal;
 
 import sun.security.krb5.KrbException;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import sun.security.krb5.Asn1Exception;
 import java.io.IOException;
 import sun.security.krb5.internal.util.KerberosString;
@@ -303,7 +303,7 @@ public class PAData {
                             } else if (s2kparams.length == 0) {
                                 sb.append("empty\n");
                             } else {
-                                sb.append(new sun.misc.HexDumpEncoder()
+                                sb.append(new krb.sun.misc.HexDumpEncoder()
                                         .encodeBuffer(s2kparams));
                             }
                         }

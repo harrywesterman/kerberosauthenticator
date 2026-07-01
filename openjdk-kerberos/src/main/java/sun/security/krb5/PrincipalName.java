@@ -32,7 +32,7 @@
 package sun.security.krb5;
 
 import sun.security.krb5.internal.*;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.net.*;
 import java.util.Vector;
 import java.util.Locale;

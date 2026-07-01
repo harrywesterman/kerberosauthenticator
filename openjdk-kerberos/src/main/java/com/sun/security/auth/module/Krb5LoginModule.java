@@ -36,7 +36,7 @@ import krb.javax.security.auth.*;
 import krb.javax.security.auth.callback.*;
 import krb.javax.security.auth.kerberos.*;
 import krb.javax.security.auth.spi.*;
-import sun.misc.HexDumpEncoder;
+import krb.sun.misc.HexDumpEncoder;
 import sun.security.jgss.krb5.Krb5Util;
 import sun.security.krb5.*;
 import sun.security.krb5.Credentials;

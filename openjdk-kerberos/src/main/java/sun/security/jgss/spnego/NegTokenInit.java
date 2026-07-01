@@ -29,7 +29,7 @@ import java.io.*;
 import java.util.*;
 import org.ietf.jgss.*;
 import sun.security.jgss.*;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 
 /**
  * Implements the SPNEGO NegTokenInit token

@@ -33,7 +33,7 @@ package sun.security.krb5.internal;
 import sun.security.krb5.EncryptedData;
 import sun.security.krb5.Asn1Exception;
 import sun.security.krb5.RealmException;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.util.Vector;
 import java.io.IOException;
 import java.math.BigInteger;

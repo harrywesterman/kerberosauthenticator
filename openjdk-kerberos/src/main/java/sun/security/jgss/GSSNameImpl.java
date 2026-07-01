@@ -33,9 +33,9 @@ import java.util.HashSet;
 import java.util.Arrays;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import sun.security.util.ObjectIdentifier;
-import sun.security.util.DerInputStream;
-import sun.security.util.DerOutputStream;
+import krb.sun.security.util.ObjectIdentifier;
+import krb.sun.security.util.DerInputStream;
+import krb.sun.security.util.DerOutputStream;
 
 /**
  * This is the implementation class for GSSName. Conceptually the

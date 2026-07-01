@@ -30,7 +30,7 @@ import java.lang.reflect.*;
 
 import java.security.*;
 
-import sun.security.util.PropertyExpander;
+import krb.sun.security.util.PropertyExpander;
 
 /**
  * Class representing a configured provider. Encapsulates configuration

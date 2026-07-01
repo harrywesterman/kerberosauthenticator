@@ -33,8 +33,8 @@ package sun.security.krb5.internal.util;
 import java.io.IOException;
 import java.util.Arrays;
 import sun.security.krb5.internal.Krb5;
-import sun.security.util.BitArray;
-import sun.security.util.DerOutputStream;
+import krb.sun.security.util.BitArray;
+import krb.sun.security.util.DerOutputStream;
 
 /**
  * A wrapper class around sun.security.util.BitArray, so that KDCOptions,

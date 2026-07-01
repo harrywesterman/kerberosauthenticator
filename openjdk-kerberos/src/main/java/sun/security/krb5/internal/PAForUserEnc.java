@@ -30,8 +30,8 @@ import java.io.IOException;
 import sun.security.krb5.*;
 import sun.security.krb5.internal.crypto.KeyUsage;
 import sun.security.krb5.internal.util.KerberosString;
-import sun.security.util.DerOutputStream;
-import sun.security.util.DerValue;
+import krb.sun.security.util.DerOutputStream;
+import krb.sun.security.util.DerValue;
 
 /**
  * Implements the ASN.1 PA-FOR-USER type.

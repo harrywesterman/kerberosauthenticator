@@ -25,7 +25,7 @@
 
 package sun.security.krb5.internal;
 
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import sun.security.krb5.Asn1Exception;
 import java.io.IOException;
 import sun.security.krb5.internal.util.KerberosString;

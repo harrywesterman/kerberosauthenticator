@@ -31,7 +31,7 @@
  * @author D. N. Hoover
  */
 
-package sun.security.util;
+package krb.sun.security.util;
 
 import java.util.Comparator;
 

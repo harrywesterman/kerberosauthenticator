@@ -34,7 +34,7 @@ package sun.security.krb5;
 import sun.security.krb5.internal.*;
 import sun.security.krb5.internal.crypto.KeyUsage;
 import java.io.IOException;
-import sun.security.util.DerValue;
+import krb.sun.security.util.DerValue;
 
 /**
  * This class encapsulates the KRB-CRED message that a client uses to

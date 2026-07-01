@@ -27,7 +27,7 @@ package sun.security.jgss;
 
 import org.ietf.jgss.*;
 import sun.security.jgss.spi.*;
-import sun.security.util.ObjectIdentifier;
+import krb.sun.security.util.ObjectIdentifier;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.ByteArrayInputStream;

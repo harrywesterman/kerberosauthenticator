@@ -31,7 +31,7 @@
 
 package sun.security.krb5;
 
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import sun.security.krb5.internal.crypto.*;
 import sun.security.krb5.internal.*;
 import java.io.IOException;

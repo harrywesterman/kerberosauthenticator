@@ -33,7 +33,7 @@ package sun.security.krb5.internal;
 
 import sun.security.krb5.Config;
 import sun.security.krb5.Asn1Exception;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 import java.net.InetAddress;
 import java.net.Inet4Address;
 import java.net.Inet6Address;

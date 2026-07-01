@@ -32,7 +32,7 @@ import java.security.Provider;
 import org.ietf.jgss.*;
 import sun.security.jgss.*;
 import sun.security.jgss.spi.*;
-import sun.security.util.*;
+import krb.sun.security.util.*;
 
 /**
  * Implements the mechanism specific context class for SPNEGO

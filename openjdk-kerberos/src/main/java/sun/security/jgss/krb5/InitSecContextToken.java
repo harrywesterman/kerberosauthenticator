@@ -98,7 +98,7 @@ class InitSecContextToken extends InitialToken {
 
         // XXX Modify KrbApReq cons to take an InputStream
         byte[] apReqBytes =
-            new sun.security.util.DerValue(is).toByteArray();
+            new krb.sun.security.util.DerValue(is).toByteArray();
         //debug("=====ApReqBytes: [" + getHexBytes(apReqBytes) + "]\n");
 
         InetAddress addr = null;

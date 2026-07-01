@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.security.util;
+package krb.sun.security.util;
 
 /**
  * <p> This class represents the <code>ResourceBundle</code>
