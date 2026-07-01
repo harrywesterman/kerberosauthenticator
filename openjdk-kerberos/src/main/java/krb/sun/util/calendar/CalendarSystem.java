@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.util.calendar;
+package krb.sun.util.calendar;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -84,7 +84,7 @@ public abstract class CalendarSystem {
     // Map of calendar names and CalendarSystem instances
     private static ConcurrentMap<String,CalendarSystem> calendars;
 
-    private static final String PACKAGE_NAME = "sun.util.calendar.";
+    private static final String PACKAGE_NAME = "krb.sun.util.calendar.";
 
     private static final String[] namePairs = {
         "gregorian", "Gregorian",

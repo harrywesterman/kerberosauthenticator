@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.util.calendar;
+package krb.sun.util.calendar;
 
 import java.util.Locale;
 import java.util.TimeZone;

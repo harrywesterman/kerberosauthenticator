@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.util.calendar;
+package krb.sun.util.calendar;
 
 import java.util.HashMap;
 import java.util.Map;

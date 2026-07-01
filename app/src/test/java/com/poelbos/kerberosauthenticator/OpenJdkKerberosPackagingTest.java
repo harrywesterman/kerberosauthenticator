@@ -42,7 +42,8 @@ public final class OpenJdkKerberosPackagingTest {
                   String source =
                       new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
                   if (containsUnrelocatedPackageReference(source, "sun.security.util")
-                      || containsUnrelocatedPackageReference(source, "sun.misc")) {
+                      || containsUnrelocatedPackageReference(source, "sun.misc")
+                      || containsUnrelocatedPackageReference(source, "sun.util.calendar")) {
                     references.add(sourceRoot.relativize(path).toString());
                   }
                 } catch (IOException e) {
@@ -52,8 +53,8 @@ public final class OpenJdkKerberosPackagingTest {
     }
 
     assertWithMessage(
-            "Android loads sun.security.util from the bootclasspath, so vendored OpenJDK "
-                + "Kerberos code must use relocated packages for platform-internal helpers.")
+            "Android loads platform-internal packages from the bootclasspath, so vendored "
+                + "OpenJDK Kerberos code must use relocated packages for internal helpers.")
         .that(references)
         .isEmpty();
   }

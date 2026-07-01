@@ -30,8 +30,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.util.Date;
-import sun.util.calendar.CalendarDate;
-import sun.util.calendar.CalendarSystem;
+import krb.sun.util.calendar.CalendarDate;
+import krb.sun.util.calendar.CalendarSystem;
 
 /**
  * DER input buffer ... this is the main abstraction in the DER library
