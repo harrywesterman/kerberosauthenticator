@@ -33,6 +33,8 @@ package sun.security.krb5.internal;
 
 import sun.security.krb5.*;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * This class is a utility that contains much of the TGS-Exchange
@@ -305,6 +307,78 @@ public class CredentialsUtil {
     private static Credentials serviceCreds(
             PrincipalName service, Credentials ccreds)
             throws KrbException, IOException {
-        return new KrbTgsReq(ccreds, service).sendAndGetCreds();
+        try {
+            return serviceCredsWithReferrals(service, ccreds);
+        } catch (KrbException e) {
+            if (isDebugEnabled()) {
+                System.out.println(">>> Credentials serviceCreds: referral path failed for "
+                        + service + ": " + e);
+                e.printStackTrace(System.out);
+                System.out.println(">>> Credentials serviceCreds: retrying without referrals for "
+                        + service);
+            }
+            return new KrbTgsReq(ccreds, service).sendAndGetCreds();
+        }
+    }
+
+    private static Credentials serviceCredsWithReferrals(
+            PrincipalName service, Credentials ccreds)
+            throws KrbException, IOException {
+        KDCOptions options = new KDCOptions();
+        options.set(KDCOptions.CANONICALIZE, true);
+        PrincipalName requestedService = service;
+        Credentials currentCreds = ccreds;
+        Set<String> seenReferralRealms = new HashSet<>();
+
+        for (int i = 0; i <= 5; i++) {
+            if (isDebugEnabled()) {
+                System.out.println(">>> Credentials serviceCreds: requesting "
+                        + requestedService + " with CANONICALIZE using "
+                        + currentCreds.getServer());
+            }
+            Credentials creds = new KrbTgsReq(
+                    options, currentCreds, requestedService).sendAndGetCreds();
+            String referralRealm = getReferralRealm(
+                    creds.getServer(), requestedService);
+            if (referralRealm == null) {
+                if (isDebugEnabled()) {
+                    System.out.println(">>> Credentials serviceCreds: got service ticket for "
+                            + creds.getServer());
+                }
+                return creds;
+            }
+            if (!seenReferralRealms.add(referralRealm)) {
+                throw new KrbException("Referral loop detected for " + service);
+            }
+            if (isDebugEnabled()) {
+                System.out.println(">>> Credentials serviceCreds: following referral to "
+                        + referralRealm);
+            }
+            currentCreds = creds;
+            requestedService = withRealm(service, referralRealm);
+        }
+        throw new KrbException("Too many Kerberos referrals for " + service);
+    }
+
+    private static boolean isDebugEnabled() {
+        return DEBUG || Boolean.getBoolean("sun.security.krb5.debug");
+    }
+
+    static String getReferralRealm(
+            PrincipalName server, PrincipalName requestedService) {
+        String[] serverNameStrings = server.getNameStrings();
+        if (serverNameStrings.length == 2
+                && serverNameStrings[0].equals(PrincipalName.TGS_DEFAULT_SRV_NAME)
+                && server.getRealmString().equals(requestedService.getRealmString())
+                && !requestedService.getRealmAsString().equals(serverNameStrings[1])) {
+            return serverNameStrings[1];
+        }
+        return null;
+    }
+
+    static PrincipalName withRealm(PrincipalName principal, String realm)
+            throws RealmException {
+        return new PrincipalName(
+                principal.getNameString(), principal.getNameType(), realm);
     }
 }

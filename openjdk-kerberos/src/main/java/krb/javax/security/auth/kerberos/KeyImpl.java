@@ -189,13 +189,27 @@ class KeyImpl implements SecretKey, Destroyable, Serializable {
 
     private void readObject(ObjectInputStream ois)
                 throws IOException, ClassNotFoundException {
-        try {
-            EncryptionKey encKey = new EncryptionKey(new
-                                     DerValue((byte[])ois.readObject()));
-            keyType = encKey.getEType();
-            keyBytes = encKey.getBytes();
-        } catch (Asn1Exception ae) {
-            throw new IOException(ae.getMessage());
+        readKey(new DerValue((byte[])ois.readObject()));
+    }
+
+    private void readKey(DerValue encoding) throws IOException {
+        if (encoding.getTag() != DerValue.tag_Sequence) {
+            throw new IOException("EncryptionKey is not a sequence");
+        }
+
+        DerValue typeDer = encoding.getData().getDerValue();
+        if ((typeDer.getTag() & (byte) 0x1F) != (byte) 0x00) {
+            throw new IOException("EncryptionKey is missing keytype");
+        }
+        keyType = typeDer.getData().getBigInteger().intValue();
+
+        DerValue valueDer = encoding.getData().getDerValue();
+        if ((valueDer.getTag() & (byte) 0x1F) != (byte) 0x01) {
+            throw new IOException("EncryptionKey is missing keyvalue");
+        }
+        keyBytes = valueDer.getData().getOctetString();
+        if (valueDer.getData().available() > 0) {
+            throw new IOException("EncryptionKey has trailing keyvalue data");
         }
     }
 

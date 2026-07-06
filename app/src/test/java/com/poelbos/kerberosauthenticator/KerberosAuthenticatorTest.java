@@ -32,6 +32,9 @@ import android.content.Intent;
 import android.content.RestrictionsManager;
 import android.os.Bundle;
 import androidx.test.core.app.ApplicationProvider;
+import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
+import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
+import com.poelbos.kerberosauthenticator.internal.spnego.GetSpnegoTicketTask;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,6 +62,9 @@ public class KerberosAuthenticatorTest {
 
   @After
   public void tearDown() {
+    KerberosAuthenticator.resetServiceTicketProviderForTesting();
+    KerberosAuthenticator.resetTgtValidityCheckerForTesting();
+    KerberosAccount.resetAccountVisibilitySetterForTesting();
     shadowOf(accountManager).removeAllAccounts();
   }
 
@@ -159,6 +165,14 @@ public class KerberosAuthenticatorTest {
 
   @Test
   public void testGetAuthTokenValidTGT() {
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, serviceName, krbAccount, debugWithSensitiveData) ->
+            new GetSpnegoTicketTask.SpnegoTicketResult(
+                new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
+                "test-spnego-token"));
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> true);
+    KerberosAccount.setAccountVisibilitySetterForTesting(
+        (accountManager, account, packageName, visibility) -> true);
     Account testAccount = new Account(TestHelper.USERNAME, Constants.KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(testAccount);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
@@ -183,12 +197,11 @@ public class KerberosAuthenticatorTest {
         authenticator.getAuthToken(
             null, account, "SPNEGO:HOSTBASED:HTTP@test-server.example.com", getTestOptions());
 
-    // The auth token is invalid so we renew the TGT.
-    Intent resultIntent = result.getParcelable(AccountManager.KEY_INTENT);
-    assertThat(resultIntent.getExtras().getString(Constants.SERVICE_NAME))
-        .isEqualTo("test-server.example.com");
-    assertThat(resultIntent.getComponent().getClassName())
-        .isEqualTo(ServiceTicketActivity.class.getName());
+    assertThat(result.getString(AccountManager.KEY_ACCOUNT_NAME)).isEqualTo(USERNAME);
+    assertThat(result.getString(AccountManager.KEY_ACCOUNT_TYPE))
+        .isEqualTo(Constants.KERBEROS_ACCOUNT_TYPE);
+    assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo("test-spnego-token");
+    assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
   }
 
   @Test

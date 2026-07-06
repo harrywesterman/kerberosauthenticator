@@ -45,9 +45,21 @@ abstract class KrbKdcRep {
             throw new KrbApErrException(Krb5.KRB_AP_ERR_MODIFIED);
         }
 
+        // A TGS request with CANONICALIZE may receive a referral TGT
+        // krbtgt/TO-REALM@FROM-REALM instead of the originally requested
+        // service. Accept that shape so CredentialsUtil can follow it.
         if (!req.reqBody.sname.equals(rep.encKDCRepPart.sname)) {
+            String[] snameStrings = rep.encKDCRepPart.sname.getNameStrings();
+            if (isAsReq ||
+                    !req.reqBody.kdcOptions.get(KDCOptions.CANONICALIZE) ||
+                    snameStrings == null ||
+                    snameStrings.length != 2 ||
+                    !snameStrings[0].equals(PrincipalName.TGS_DEFAULT_SRV_NAME) ||
+                    !rep.encKDCRepPart.sname.getRealmString().equals(
+                            req.reqBody.sname.getRealmString())) {
             rep.encKDCRepPart.key.destroy();
             throw new KrbApErrException(Krb5.KRB_AP_ERR_MODIFIED);
+            }
         }
 
         if (req.reqBody.getNonce() != rep.encKDCRepPart.nonce) {

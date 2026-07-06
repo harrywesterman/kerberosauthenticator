@@ -73,6 +73,24 @@ public class KrbTgsReq {
             null); // EncryptionKey subSessionKey
     }
 
+    // Used by CredentialsUtil when requesting RFC 6806 referrals.
+    public KrbTgsReq(KDCOptions options,
+                     Credentials asCreds,
+                     PrincipalName sname)
+        throws KrbException, IOException {
+        this(options,
+            asCreds,
+            sname,
+            null, // KerberosTime from
+            null, // KerberosTime till
+            null, // KerberosTime rtime
+            null, // eTypes
+            null, // HostAddresses addresses
+            null, // AuthorizationData authorizationData
+            null, // Ticket[] additionalTickets
+            null); // EncryptionKey subSessionKey
+    }
+
     // S4U2proxy
     public KrbTgsReq(Credentials asCreds,
                      Ticket second,
