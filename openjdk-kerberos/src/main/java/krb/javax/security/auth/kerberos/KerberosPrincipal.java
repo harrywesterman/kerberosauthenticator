@@ -26,6 +26,10 @@
 package krb.javax.security.auth.kerberos;
 
 import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import sun.security.krb5.KrbException;
 import sun.security.krb5.PrincipalName;
 import sun.security.krb5.Realm;
@@ -248,14 +252,76 @@ public final class KerberosPrincipal
         byte[] asn1EncPrincipal = (byte [])ois.readObject();
         byte[] encRealm = (byte [])ois.readObject();
         try {
-           Realm realmObject = new Realm(new DerValue(encRealm));
-           PrincipalName krb5Principal = new PrincipalName(
-                   new DerValue(asn1EncPrincipal), realmObject);
-           realm = realmObject.toString();
-           fullName = krb5Principal.toString();
-           nameType = krb5Principal.getNameType();
+           realm = decodeKerberosString(new DerValue(encRealm));
+           DecodedPrincipal principal = decodePrincipalName(new DerValue(asn1EncPrincipal));
+           fullName = principal.toFullName(realm);
+           nameType = principal.nameType;
         } catch (Exception e) {
             throw new IOException(e);
+        }
+    }
+
+    private static DecodedPrincipal decodePrincipalName(DerValue encoding) throws IOException {
+        if (encoding == null) {
+            throw new IllegalArgumentException("Null encoding not allowed");
+        }
+        if (encoding.getTag() != DerValue.tag_Sequence) {
+            throw new IOException("PrincipalName is not a sequence");
+        }
+
+        DerValue typeDer = encoding.getData().getDerValue();
+        if ((typeDer.getTag() & 0x1F) != 0x00) {
+            throw new IOException("PrincipalName is missing name-type");
+        }
+        int decodedNameType = typeDer.getData().getBigInteger().intValue();
+
+        DerValue namesDer = encoding.getData().getDerValue();
+        if ((namesDer.getTag() & 0x1F) != 0x01) {
+            throw new IOException("PrincipalName is missing name-string");
+        }
+        DerValue namesSequence = namesDer.getData().getDerValue();
+        if (namesSequence.getTag() != DerValue.tag_SequenceOf) {
+            throw new IOException("PrincipalName name-string is not a sequence");
+        }
+
+        List<String> decodedNameStrings = new ArrayList<>();
+        while (namesSequence.getData().available() > 0) {
+            decodedNameStrings.add(decodeKerberosString(namesSequence.getData().getDerValue()));
+        }
+        return new DecodedPrincipal(decodedNameType, decodedNameStrings);
+    }
+
+    private static String decodeKerberosString(DerValue der) throws IOException {
+        if (der.tag != DerValue.tag_GeneralString) {
+            throw new IOException("KerberosString's tag is incorrect: " + der.tag);
+        }
+        Charset charset =
+                Boolean.getBoolean("sun.security.krb5.msinterop.kstring")
+                        ? StandardCharsets.UTF_8
+                        : StandardCharsets.US_ASCII;
+        return new String(der.getDataBytes(), charset);
+    }
+
+    private static final class DecodedPrincipal {
+        private final int nameType;
+        private final List<String> nameStrings;
+
+        private DecodedPrincipal(int nameType, List<String> nameStrings) {
+            this.nameType = nameType;
+            this.nameStrings = nameStrings;
+        }
+
+        private String toFullName(String realm) {
+            StringBuilder fullName = new StringBuilder();
+            for (int i = 0; i < nameStrings.size(); i++) {
+                if (i > 0) {
+                    fullName.append("/");
+                }
+                fullName.append(nameStrings.get(i));
+            }
+            fullName.append("@");
+            fullName.append(realm);
+            return fullName.toString();
         }
     }
 

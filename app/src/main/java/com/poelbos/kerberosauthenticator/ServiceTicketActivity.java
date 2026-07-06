@@ -81,6 +81,8 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
             tgt.asSubject(),
             account.getDomain(),
             account.getDomainController(),
+            account.getName(),
+            account.getPassword(),
             accountConfiguration.getDebugWithSensitiveData(),
             this);
     spnego.execute(serviceName);

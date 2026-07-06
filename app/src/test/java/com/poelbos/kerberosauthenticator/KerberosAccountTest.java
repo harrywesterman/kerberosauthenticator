@@ -54,11 +54,13 @@ public final class KerberosAccountTest {
   public void setUp() {
     context = ApplicationProvider.getApplicationContext();
     accountManager = AccountManager.get(context);
+    KerberosAccount.setAccountVisibilitySetterForTesting((am, account, packageName, visibility) -> true);
   }
 
   @After
   public void tearDown() {
     shadowOf(accountManager).removeAllAccounts();
+    KerberosAccount.resetAccountVisibilitySetterForTesting();
   }
 
   private void assertKerberosAccount(KerberosAccount account) {
@@ -132,6 +134,23 @@ public final class KerberosAccountTest {
     TestHelper.createKerberosAccount().save(context);
     KerberosAccount loadedAccount = KerberosAccount.getAccount(context);
     assertKerberosAccount(loadedAccount);
+  }
+
+  @Test
+  public void testSaveAccount_visibleToChrome() {
+    final boolean[] visibilitySet = {false};
+    KerberosAccount.setAccountVisibilitySetterForTesting(
+        (am, account, packageName, visibility) -> {
+          assertThat(account.name).isEqualTo(USERNAME);
+          assertThat(packageName).isEqualTo(Constants.CHROME_PACKAGE_NAME);
+          assertThat(visibility).isEqualTo(AccountManager.VISIBILITY_VISIBLE);
+          visibilitySet[0] = true;
+          return true;
+        });
+
+    TestHelper.createKerberosAccount().save(context);
+
+    assertThat(visibilitySet[0]).isTrue();
   }
 
   @Test

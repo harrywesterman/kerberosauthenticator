@@ -30,13 +30,11 @@ package sun.security.krb5.internal.crypto.dk;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
-import javax.crypto.SecretKeyFactory;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.DESedeKeySpec;
 import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
-import java.security.spec.KeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import sun.security.krb5.KrbCryptoException;
 import sun.security.krb5.Confounder;
@@ -102,16 +100,11 @@ public class AesDkCrypto extends DkCrypto {
     public byte[] stringToKey(char[] password, String salt, byte[] s2kparams)
         throws GeneralSecurityException {
 
-        byte[] saltUtf8 = null;
+        byte[] saltUtf8 = salt.getBytes(StandardCharsets.UTF_8);
         try {
-            saltUtf8 = salt.getBytes("UTF-8");
             return stringToKey(password, saltUtf8, s2kparams);
-        } catch (Exception e) {
-            return null;
         } finally {
-            if (saltUtf8 != null) {
-                Arrays.fill(saltUtf8, (byte)0);
-            }
+            Arrays.fill(saltUtf8, (byte)0);
         }
     }
 
@@ -121,7 +114,8 @@ public class AesDkCrypto extends DkCrypto {
         int iter_count = DEFAULT_ITERATION_COUNT;
         if (params != null) {
             if (params.length != 4) {
-                throw new RuntimeException("Invalid parameter to stringToKey");
+                throw new GeneralSecurityException(
+                        "Invalid parameter to stringToKey");
             }
             iter_count = readBigEndian(params, 0, 4);
         }
@@ -477,13 +471,69 @@ public class AesDkCrypto extends DkCrypto {
     private static byte[] PBKDF2(char[] secret, byte[] salt,
         int count, int keyLength) throws GeneralSecurityException {
 
-        PBEKeySpec keySpec = new PBEKeySpec(secret, salt, count, keyLength);
-        SecretKeyFactory skf =
-                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
-        SecretKey key = skf.generateSecret(keySpec);
-        byte[] result = key.getEncoded();
+        if (count <= 0) {
+            throw new GeneralSecurityException(
+                    "Invalid PBKDF2 iteration count: " + count);
+        }
+        if (keyLength <= 0 || (keyLength & 7) != 0) {
+            throw new GeneralSecurityException(
+                    "Invalid PBKDF2 key length: " + keyLength);
+        }
 
-        return result;
+        byte[] password = new String(secret).getBytes(StandardCharsets.UTF_8);
+        byte[] block = null;
+        byte[] u = null;
+        byte[] t = null;
+        try {
+            Mac prf = Mac.getInstance("HmacSHA1");
+            prf.init(new SecretKeySpec(password, "HmacSHA1"));
+
+            int hlen = prf.getMacLength();
+            int dkLen = keyLength >> 3;
+            int blocks = (dkLen + hlen - 1) / hlen;
+            byte[] result = new byte[dkLen];
+
+            block = new byte[salt.length + 4];
+            System.arraycopy(salt, 0, block, 0, salt.length);
+
+            int offset = 0;
+            for (int i = 1; i <= blocks; i++) {
+                writeBigEndian(i, block, salt.length);
+
+                u = prf.doFinal(block);
+                t = u.clone();
+                for (int j = 1; j < count; j++) {
+                    byte[] nextU = prf.doFinal(u);
+                    Arrays.fill(u, (byte)0);
+                    u = nextU;
+                    for (int k = 0; k < hlen; k++) {
+                        t[k] ^= u[k];
+                    }
+                }
+
+                int bytesToCopy = Math.min(hlen, dkLen - offset);
+                System.arraycopy(t, 0, result, offset, bytesToCopy);
+                offset += bytesToCopy;
+
+                Arrays.fill(u, (byte)0);
+                Arrays.fill(t, (byte)0);
+                u = null;
+                t = null;
+            }
+
+            return result;
+        } finally {
+            Arrays.fill(password, (byte)0);
+            if (block != null) {
+                Arrays.fill(block, (byte)0);
+            }
+            if (u != null) {
+                Arrays.fill(u, (byte)0);
+            }
+            if (t != null) {
+                Arrays.fill(t, (byte)0);
+            }
+        }
     }
 
     public static final int readBigEndian(byte[] data, int pos, int size) {
@@ -496,6 +546,13 @@ public class AesDkCrypto extends DkCrypto {
             size--;
         }
         return retVal;
+    }
+
+    private static void writeBigEndian(int value, byte[] data, int pos) {
+        data[pos] = (byte) ((value >> 24) & 0xff);
+        data[pos + 1] = (byte) ((value >> 16) & 0xff);
+        data[pos + 2] = (byte) ((value >> 8) & 0xff);
+        data[pos + 3] = (byte) (value & 0xff);
     }
 
 }

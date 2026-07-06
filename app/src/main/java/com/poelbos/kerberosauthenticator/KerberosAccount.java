@@ -35,10 +35,20 @@ public class KerberosAccount {
   @VisibleForTesting static final String KEY_AD_DOMAIN = "ad_domain";
   @VisibleForTesting static final String KEY_AD_DC = "domain_controller";
   @VisibleForTesting static final String KEY_TGT = "ticket_granting_ticket";
+  private static final AccountVisibilitySetter DEFAULT_ACCOUNT_VISIBILITY_SETTER =
+      AccountManager::setAccountVisibility;
+  private static AccountVisibilitySetter accountVisibilitySetter =
+      DEFAULT_ACCOUNT_VISIBILITY_SETTER;
 
   private final String name;
   private final String password;
   private final Bundle userData = new Bundle();
+
+  @VisibleForTesting
+  interface AccountVisibilitySetter {
+    boolean setVisibility(
+        AccountManager accountManager, Account account, String packageName, int visibility);
+  }
 
   KerberosAccount(String name, String password, String adDomain, String domainController) {
     this(name, password, adDomain, domainController, "");
@@ -119,13 +129,16 @@ public class KerberosAccount {
               name, accounts[0].name));
     }
 
+    final Account account;
     if (hasNoAccount) {
       Log.i(TAG, String.format("Adding account %s.", name));
-      am.addAccountExplicitly(new Account(name, KERBEROS_ACCOUNT_TYPE), password, userData);
+      account = new Account(name, KERBEROS_ACCOUNT_TYPE);
+      am.addAccountExplicitly(account, password, userData);
+      allowChromeToSeeAccount(am, account);
       return;
     }
 
-    final Account account = accounts[0];
+    account = accounts[0];
     Log.i(TAG, String.format("Updating TGT for account %s.", account.name));
     am.setUserData(account, KEY_TGT, userData.getString(KEY_TGT));
 
@@ -152,6 +165,29 @@ public class KerberosAccount {
               account.name, currentDomainController, domainController));
       am.setUserData(account, KEY_AD_DC, domainController);
     }
+    allowChromeToSeeAccount(am, account);
+  }
+
+  private static void allowChromeToSeeAccount(AccountManager accountManager, Account account) {
+    boolean visible =
+        accountVisibilitySetter.setVisibility(
+            accountManager,
+            account,
+            Constants.CHROME_PACKAGE_NAME,
+            AccountManager.VISIBILITY_VISIBLE);
+    if (!visible) {
+      Log.w(TAG, String.format("Could not make account %s visible to Chrome.", account.name));
+    }
+  }
+
+  @VisibleForTesting
+  static void setAccountVisibilitySetterForTesting(AccountVisibilitySetter setter) {
+    accountVisibilitySetter = setter;
+  }
+
+  @VisibleForTesting
+  static void resetAccountVisibilitySetterForTesting() {
+    accountVisibilitySetter = DEFAULT_ACCOUNT_VISIBILITY_SETTER;
   }
 
   String getDomainController() {

@@ -32,6 +32,10 @@ public final class DnsKdcDiscovery {
   private static final int DNS_PORT = 53;
   private static final int DNS_TIMEOUT_MILLIS = 2000;
   private static final int DNS_MAX_PACKET_SIZE = 1500;
+  private static final int DNS_TYPE_A = 1;
+  private static final int DNS_TYPE_CNAME = 5;
+  private static final int DNS_TYPE_PTR = 12;
+  private static final int DNS_TYPE_TXT = 16;
   private static final int DNS_TYPE_SRV = 33;
   private static final int DNS_CLASS_IN = 1;
   private static final SecureRandom RANDOM = new SecureRandom();
@@ -48,9 +52,72 @@ public final class DnsKdcDiscovery {
     String normalizedRealm = normalizeRealm(realm);
     for (String protocol : new String[] {"_udp", "_tcp"}) {
       String queryName = "_kerberos." + protocol + "." + normalizedRealm;
-      List<String> kdcs = queryDnsServers(dnsServers, queryName);
+      List<String> kdcs = queryDnsServers(dnsServers, queryName, 88);
       if (!kdcs.isEmpty()) {
         return joinHosts(kdcs);
+      }
+    }
+    return null;
+  }
+
+  public static String discoverLdap(Context context, String realm) {
+    List<InetAddress> dnsServers = getDnsServers(context);
+    if (dnsServers.isEmpty()) {
+      Log.w(TAG, "Cannot discover LDAP servers because the active network has no DNS servers.");
+      return null;
+    }
+
+    String normalizedRealm = normalizeRealm(realm);
+    for (String queryName :
+        new String[] {
+          "_ldap._tcp." + normalizedRealm,
+          "_ldap._tcp.dc._msdcs." + normalizedRealm
+        }) {
+      List<String> ldapServers = queryDnsServers(dnsServers, queryName, 389);
+      if (!ldapServers.isEmpty()) {
+        return joinHosts(ldapServers);
+      }
+    }
+    return null;
+  }
+
+  public static String discoverCname(Context context, String host) {
+    List<InetAddress> dnsServers = getDnsServers(context);
+    if (dnsServers.isEmpty()) {
+      Log.w(TAG, "Cannot discover DNS aliases because the active network has no DNS servers.");
+      return null;
+    }
+
+    List<String> aliases = queryCnameDnsServers(dnsServers, host);
+    return aliases.isEmpty() ? null : aliases.get(0);
+  }
+
+  public static String discoverPtr(Context context, InetAddress address) {
+    String queryName = reverseIpv4Name(address);
+    if (queryName == null) {
+      return null;
+    }
+    List<InetAddress> dnsServers = getDnsServers(context);
+    if (dnsServers.isEmpty()) {
+      Log.w(TAG, "Cannot discover reverse DNS because the active network has no DNS servers.");
+      return null;
+    }
+
+    List<String> hosts = queryPtrDnsServers(dnsServers, queryName);
+    return hosts.isEmpty() ? null : hosts.get(0);
+  }
+
+  public static String discoverRealmForHost(Context context, String host) {
+    List<InetAddress> dnsServers = getDnsServers(context);
+    if (dnsServers.isEmpty()) {
+      Log.w(TAG, "Cannot discover Kerberos realm because the active network has no DNS servers.");
+      return null;
+    }
+
+    for (String queryName : kerberosRealmLookupNames(host)) {
+      List<String> realms = queryTxtDnsServers(dnsServers, queryName);
+      if (!realms.isEmpty()) {
+        return realms.get(0);
       }
     }
     return null;
@@ -73,10 +140,11 @@ public final class DnsKdcDiscovery {
     return linkProperties.getDnsServers();
   }
 
-  private static List<String> queryDnsServers(List<InetAddress> dnsServers, String queryName) {
+  private static List<String> queryDnsServers(
+      List<InetAddress> dnsServers, String queryName, int expectedSrvPort) {
     for (InetAddress dnsServer : dnsServers) {
       try {
-        List<String> hosts = querySrv(dnsServer, queryName);
+        List<String> hosts = querySrv(dnsServer, queryName, expectedSrvPort);
         if (!hosts.isEmpty()) {
           return hosts;
         }
@@ -89,9 +157,74 @@ public final class DnsKdcDiscovery {
     return Collections.emptyList();
   }
 
+  private static List<String> queryTxtDnsServers(List<InetAddress> dnsServers, String queryName) {
+    for (InetAddress dnsServer : dnsServers) {
+      try {
+        List<String> values = queryTxt(dnsServer, queryName);
+        if (!values.isEmpty()) {
+          return values;
+        }
+      } catch (SocketTimeoutException e) {
+        Log.w(TAG, String.format("DNS TXT lookup timed out at %s for %s.", dnsServer, queryName));
+      } catch (IOException e) {
+        Log.w(TAG, String.format("DNS TXT lookup failed at %s for %s.", dnsServer, queryName), e);
+      }
+    }
+    return Collections.emptyList();
+  }
+
+  private static List<String> queryCnameDnsServers(List<InetAddress> dnsServers, String queryName) {
+    for (InetAddress dnsServer : dnsServers) {
+      try {
+        List<String> values = queryCname(dnsServer, queryName);
+        if (!values.isEmpty()) {
+          return values;
+        }
+      } catch (SocketTimeoutException e) {
+        Log.w(TAG, String.format("DNS CNAME lookup timed out at %s for %s.", dnsServer, queryName));
+      } catch (IOException e) {
+        Log.w(TAG, String.format("DNS CNAME lookup failed at %s for %s.", dnsServer, queryName), e);
+      }
+    }
+    return Collections.emptyList();
+  }
+
+  private static List<String> queryPtrDnsServers(List<InetAddress> dnsServers, String queryName) {
+    for (InetAddress dnsServer : dnsServers) {
+      try {
+        List<String> values = queryPtr(dnsServer, queryName);
+        if (!values.isEmpty()) {
+          return values;
+        }
+      } catch (SocketTimeoutException e) {
+        Log.w(TAG, String.format("DNS PTR lookup timed out at %s for %s.", dnsServer, queryName));
+      } catch (IOException e) {
+        Log.w(TAG, String.format("DNS PTR lookup failed at %s for %s.", dnsServer, queryName), e);
+      }
+    }
+    return Collections.emptyList();
+  }
+
   static List<String> querySrv(InetAddress dnsServer, String queryName) throws IOException {
+    return querySrv(dnsServer, queryName, 88);
+  }
+
+  static List<String> querySrv(InetAddress dnsServer, String queryName, int expectedSrvPort)
+      throws IOException {
     int queryId = RANDOM.nextInt(0x10000);
     byte[] query = buildSrvQuery(queryId, queryName);
+    return queryRecord(dnsServer, query, queryId, true, expectedSrvPort);
+  }
+
+  static List<String> queryTxt(InetAddress dnsServer, String queryName) throws IOException {
+    int queryId = RANDOM.nextInt(0x10000);
+    byte[] query = buildTxtQuery(queryId, queryName);
+    return queryRecord(dnsServer, query, queryId, false, -1);
+  }
+
+  static List<String> queryCname(InetAddress dnsServer, String queryName) throws IOException {
+    int queryId = RANDOM.nextInt(0x10000);
+    byte[] query = buildAddressQuery(queryId, queryName);
     byte[] response = new byte[DNS_MAX_PACKET_SIZE];
 
     try (DatagramSocket socket = new DatagramSocket()) {
@@ -101,11 +234,62 @@ public final class DnsKdcDiscovery {
       socket.receive(packet);
       byte[] message = new byte[packet.getLength()];
       System.arraycopy(packet.getData(), 0, message, 0, packet.getLength());
-      return parseSrvResponse(message, queryId);
+      return parseCnameResponse(message, queryId);
+    }
+  }
+
+  static List<String> queryPtr(InetAddress dnsServer, String queryName) throws IOException {
+    int queryId = RANDOM.nextInt(0x10000);
+    byte[] query = buildPtrQuery(queryId, queryName);
+    byte[] response = new byte[DNS_MAX_PACKET_SIZE];
+
+    try (DatagramSocket socket = new DatagramSocket()) {
+      socket.setSoTimeout(DNS_TIMEOUT_MILLIS);
+      socket.send(new DatagramPacket(query, query.length, new InetSocketAddress(dnsServer, DNS_PORT)));
+      DatagramPacket packet = new DatagramPacket(response, response.length);
+      socket.receive(packet);
+      byte[] message = new byte[packet.getLength()];
+      System.arraycopy(packet.getData(), 0, message, 0, packet.getLength());
+      return parsePtrResponse(message, queryId);
+    }
+  }
+
+  private static List<String> queryRecord(
+      InetAddress dnsServer, byte[] query, int queryId, boolean srv, int expectedSrvPort)
+      throws IOException {
+    byte[] response = new byte[DNS_MAX_PACKET_SIZE];
+
+    try (DatagramSocket socket = new DatagramSocket()) {
+      socket.setSoTimeout(DNS_TIMEOUT_MILLIS);
+      socket.send(new DatagramPacket(query, query.length, new InetSocketAddress(dnsServer, DNS_PORT)));
+      DatagramPacket packet = new DatagramPacket(response, response.length);
+      socket.receive(packet);
+      byte[] message = new byte[packet.getLength()];
+      System.arraycopy(packet.getData(), 0, message, 0, packet.getLength());
+      return srv
+          ? parseSrvResponse(message, queryId, expectedSrvPort)
+          : parseTxtResponse(message, queryId);
     }
   }
 
   static byte[] buildSrvQuery(int queryId, String queryName) throws IOException {
+    return buildQuery(queryId, queryName, DNS_TYPE_SRV);
+  }
+
+  static byte[] buildAddressQuery(int queryId, String queryName) throws IOException {
+    return buildQuery(queryId, queryName, DNS_TYPE_A);
+  }
+
+  static byte[] buildPtrQuery(int queryId, String queryName) throws IOException {
+    return buildQuery(queryId, queryName, DNS_TYPE_PTR);
+  }
+
+  static byte[] buildTxtQuery(int queryId, String queryName) throws IOException {
+    return buildQuery(queryId, queryName, DNS_TYPE_TXT);
+  }
+
+  private static byte[] buildQuery(int queryId, String queryName, int queryType)
+      throws IOException {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     writeShort(out, queryId);
     writeShort(out, 0x0100); // Standard query with recursion desired.
@@ -114,12 +298,17 @@ public final class DnsKdcDiscovery {
     writeShort(out, 0);
     writeShort(out, 0);
     writeDnsName(out, queryName);
-    writeShort(out, DNS_TYPE_SRV);
+    writeShort(out, queryType);
     writeShort(out, DNS_CLASS_IN);
     return out.toByteArray();
   }
 
   static List<String> parseSrvResponse(byte[] message, int expectedQueryId) throws IOException {
+    return parseSrvResponse(message, expectedQueryId, 88);
+  }
+
+  static List<String> parseSrvResponse(byte[] message, int expectedQueryId, int expectedPort)
+      throws IOException {
     if (message.length < 12) {
       throw new IOException("DNS response is too short.");
     }
@@ -151,10 +340,13 @@ public final class DnsKdcDiscovery {
         int weight = readUnsignedShort(message, offset + 2);
         int port = readUnsignedShort(message, offset + 4);
         NameReadResult target = readName(message, offset + 6);
-        if (!target.name.isEmpty() && port == 88) {
+        if (!target.name.isEmpty() && port == expectedPort) {
           records.add(new SrvRecord(priority, weight, target.name));
-        } else if (port != 88) {
-          Log.w(TAG, String.format("Ignoring Kerberos SRV record on unsupported port %d.", port));
+        } else if (port != expectedPort) {
+          Log.w(
+              TAG,
+              String.format(
+                  "Ignoring SRV record on port %d for expected port %d.", port, expectedPort));
         }
       }
       offset += dataLength;
@@ -166,6 +358,142 @@ public final class DnsKdcDiscovery {
       hosts.add(record.host);
     }
     return new ArrayList<>(hosts);
+  }
+
+  static List<String> parseTxtResponse(byte[] message, int expectedQueryId) throws IOException {
+    if (message.length < 12) {
+      throw new IOException("DNS response is too short.");
+    }
+    int responseId = readUnsignedShort(message, 0);
+    if (responseId != expectedQueryId) {
+      throw new IOException("DNS response ID does not match the query.");
+    }
+
+    int questionCount = readUnsignedShort(message, 4);
+    int answerCount = readUnsignedShort(message, 6);
+    int offset = 12;
+    for (int i = 0; i < questionCount; i++) {
+      offset = readName(message, offset).nextOffset + 4;
+      ensureAvailable(message, offset, 0);
+    }
+
+    List<String> values = new ArrayList<>();
+    for (int i = 0; i < answerCount; i++) {
+      NameReadResult ignoredName = readName(message, offset);
+      offset = ignoredName.nextOffset;
+      ensureAvailable(message, offset, 10);
+      int type = readUnsignedShort(message, offset);
+      int dnsClass = readUnsignedShort(message, offset + 2);
+      int dataLength = readUnsignedShort(message, offset + 8);
+      offset += 10;
+      ensureAvailable(message, offset, dataLength);
+      if (type == DNS_TYPE_TXT && dnsClass == DNS_CLASS_IN) {
+        String text = readTxtData(message, offset, dataLength);
+        if (!text.isEmpty()) {
+          values.add(text);
+        }
+      }
+      offset += dataLength;
+    }
+    return values;
+  }
+
+  static List<String> parseCnameResponse(byte[] message, int expectedQueryId) throws IOException {
+    return parseNameRecordResponse(message, expectedQueryId, DNS_TYPE_CNAME);
+  }
+
+  static List<String> parsePtrResponse(byte[] message, int expectedQueryId) throws IOException {
+    return parseNameRecordResponse(message, expectedQueryId, DNS_TYPE_PTR);
+  }
+
+  private static List<String> parseNameRecordResponse(
+      byte[] message, int expectedQueryId, int expectedType) throws IOException {
+    if (message.length < 12) {
+      throw new IOException("DNS response is too short.");
+    }
+    int responseId = readUnsignedShort(message, 0);
+    if (responseId != expectedQueryId) {
+      throw new IOException("DNS response ID does not match the query.");
+    }
+
+    int questionCount = readUnsignedShort(message, 4);
+    int answerCount = readUnsignedShort(message, 6);
+    int offset = 12;
+    for (int i = 0; i < questionCount; i++) {
+      offset = readName(message, offset).nextOffset + 4;
+      ensureAvailable(message, offset, 0);
+    }
+
+    List<String> values = new ArrayList<>();
+    for (int i = 0; i < answerCount; i++) {
+      NameReadResult ignoredName = readName(message, offset);
+      offset = ignoredName.nextOffset;
+      ensureAvailable(message, offset, 10);
+      int type = readUnsignedShort(message, offset);
+      int dnsClass = readUnsignedShort(message, offset + 2);
+      int dataLength = readUnsignedShort(message, offset + 8);
+      offset += 10;
+      ensureAvailable(message, offset, dataLength);
+      if (type == expectedType && dnsClass == DNS_CLASS_IN) {
+        values.add(readName(message, offset).name);
+      }
+      offset += dataLength;
+    }
+    return values;
+  }
+
+  static List<String> kerberosRealmLookupNames(String host) {
+    String normalizedHost = normalizeRealm(host);
+    String[] labels = normalizedHost.split("\\.");
+    List<String> lookupNames = new ArrayList<>();
+    for (int i = 0; i < labels.length; i++) {
+      StringBuilder suffix = new StringBuilder();
+      for (int j = i; j < labels.length; j++) {
+        if (labels[j].isEmpty()) {
+          continue;
+        }
+        if (suffix.length() > 0) {
+          suffix.append('.');
+        }
+        suffix.append(labels[j]);
+      }
+      if (suffix.length() > 0) {
+        lookupNames.add("_kerberos." + suffix);
+      }
+    }
+    return lookupNames;
+  }
+
+  private static String readTxtData(byte[] message, int offset, int dataLength) throws IOException {
+    StringBuilder text = new StringBuilder();
+    int currentOffset = offset;
+    int endOffset = offset + dataLength;
+    while (currentOffset < endOffset) {
+      int chunkLength = message[currentOffset] & 0xff;
+      currentOffset++;
+      ensureAvailable(message, currentOffset, chunkLength);
+      if (currentOffset + chunkLength > endOffset) {
+        throw new IOException("DNS TXT response is truncated.");
+      }
+      text.append(new String(message, currentOffset, chunkLength, "US-ASCII"));
+      currentOffset += chunkLength;
+    }
+    return text.toString();
+  }
+
+  private static String reverseIpv4Name(InetAddress address) {
+    byte[] bytes = address.getAddress();
+    if (bytes.length != 4) {
+      return null;
+    }
+    return (bytes[3] & 0xff)
+        + "."
+        + (bytes[2] & 0xff)
+        + "."
+        + (bytes[1] & 0xff)
+        + "."
+        + (bytes[0] & 0xff)
+        + ".in-addr.arpa";
   }
 
   private static void writeDnsName(ByteArrayOutputStream out, String name) throws IOException {

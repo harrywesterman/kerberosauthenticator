@@ -24,9 +24,11 @@ import android.accounts.AccountManager;
 import android.accounts.NetworkErrorException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
+import com.poelbos.kerberosauthenticator.internal.spnego.GetSpnegoTicketTask;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.regex.Matcher;
@@ -34,10 +36,42 @@ import java.util.regex.Matcher;
 /** Kerberos account authenticator. */
 public class KerberosAuthenticator extends AbstractAccountAuthenticator {
   private final Context context;
+  private static ServiceTicketProvider serviceTicketProvider =
+      KerberosAuthenticator::requestServiceTicket;
+  private static TgtValidityChecker tgtValidityChecker =
+      KerberosAuthenticator::hasValidTicketGrantingTicket;
 
   KerberosAuthenticator(Context context) {
     super(context);
     this.context = context;
+  }
+
+  interface ServiceTicketProvider {
+    GetSpnegoTicketTask.SpnegoTicketResult getServiceTicket(
+        Context context,
+        String serviceName,
+        KerberosAccount account,
+        boolean debugWithSensitiveData);
+  }
+
+  interface TgtValidityChecker {
+    boolean hasValidTgt(KerberosAccount account);
+  }
+
+  static void setServiceTicketProviderForTesting(ServiceTicketProvider provider) {
+    serviceTicketProvider = provider;
+  }
+
+  static void resetServiceTicketProviderForTesting() {
+    serviceTicketProvider = KerberosAuthenticator::requestServiceTicket;
+  }
+
+  static void setTgtValidityCheckerForTesting(TgtValidityChecker checker) {
+    tgtValidityChecker = checker;
+  }
+
+  static void resetTgtValidityCheckerForTesting() {
+    tgtValidityChecker = KerberosAuthenticator::hasValidTicketGrantingTicket;
   }
 
   @Override
@@ -145,12 +179,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     // getAuthenticateIntent as it will remove the old account and add a new one.
     boolean needReAuthentication = !krbAccount.getName().equals(getManagedConfigurationUsername());
 
-    // Before requesting a service ticket, check if the TGT for the current account needs renewal.
-    TicketGrantingTicket tgt =
-        TicketGrantingTicket.fromSerializedSubject(krbAccount.getTicketGrantingTicket());
-
-    needReAuthentication |=
-        tgt == null || tgt.getExpiryDate() == null || tgt.getExpiryDate().before(new Date());
+    if (!needReAuthentication && !tgtValidityChecker.hasValidTgt(krbAccount)) {
+      needReAuthentication = true;
+    }
     if (needReAuthentication) {
       Log.d(
           TAG,
@@ -163,10 +194,59 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
     Log.d(TAG, String.format("Will request service ticket for %s, account %s.",
         serviceName, krbAccount.getName()));
-    Intent intent =
-        ServiceTicketActivity.getServiceTicketIntent(context, serviceName, response);
-    result.putParcelable(AccountManager.KEY_INTENT, intent);
+    GetSpnegoTicketTask.SpnegoTicketResult serviceTicketResult =
+        serviceTicketProvider.getServiceTicket(
+            context,
+            serviceName,
+            krbAccount,
+            getFromAccountConfiguration(AccountConfiguration::getDebugWithSensitiveData));
+    if (!serviceTicketResult.getRequestResult().successful()
+        || serviceTicketResult.getServiceTicket() == null) {
+      SharedPreferences sharedPref =
+          context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
+      BaseAuthenticatorActivity.ServiceTicketInfo.saveServiceTicketInfo(
+          sharedPref, null, new Date().getTime(), serviceTicketResult.getRequestResult().toString());
+      result.putInt(
+          AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_AUTHENTICATION);
+      result.putString(
+          AccountManager.KEY_ERROR_MESSAGE, serviceTicketResult.getRequestResult().toString());
+      return result;
+    }
+
+    result.putString(AccountManager.KEY_ACCOUNT_NAME, krbAccount.getName());
+    result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
+    result.putString(AccountManager.KEY_AUTHTOKEN, serviceTicketResult.getServiceTicket());
+    result.putInt("spnegoResult", 0);
+    krbAccount.save(context);
+    SharedPreferences sharedPref =
+        context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
+    BaseAuthenticatorActivity.ServiceTicketInfo.saveServiceTicketInfo(
+        sharedPref, serviceName, new Date().getTime(), null);
     return result;
+  }
+
+  private static GetSpnegoTicketTask.SpnegoTicketResult requestServiceTicket(
+      Context context,
+      String serviceName,
+      KerberosAccount account,
+      boolean debugWithSensitiveData) {
+    TicketGrantingTicket tgt =
+        TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
+    return GetSpnegoTicketTask.getServiceTicket(
+        context,
+        tgt.asSubject(),
+        account.getDomain(),
+        account.getDomainController(),
+        account.getName(),
+        account.getPassword(),
+        debugWithSensitiveData,
+        serviceName);
+  }
+
+  private static boolean hasValidTicketGrantingTicket(KerberosAccount account) {
+    TicketGrantingTicket tgt =
+        TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
+    return tgt != null && tgt.getExpiryDate() != null && tgt.getExpiryDate().after(new Date());
   }
 
   @Override
