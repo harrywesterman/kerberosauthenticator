@@ -28,18 +28,38 @@ public final class GetSpnegoTicketTaskTest {
   }
 
   @Test
-  public void serviceTicketCandidatesUseCertificateDnsNamesBeforeGenericAliases() {
+  public void serviceTicketCandidatesUseDnsAliasesBeforeCertificateDnsNames() {
     assertThat(
             GetSpnegoTicketTask.serviceTicketCandidates(
                 "app.example.internal",
+                Arrays.asList("alias.example.local"),
                 Arrays.asList(
                     "app.example.internal",
                     "web01.example.local",
                     "web02.example.local")))
         .containsExactly(
             "app.example.internal",
+            "alias.example.local",
             "web01.example.local",
             "web02.example.local",
+            "app.example.internal.local",
+            "app")
+        .inOrder();
+  }
+
+  @Test
+  public void serviceTicketCandidatesUseLdapDnsNamesBeforeGenericAliases() {
+    assertThat(
+            GetSpnegoTicketTask.serviceTicketCandidates(
+                "app.example.internal",
+                Arrays.asList("alias.example.local"),
+                Arrays.asList("app.example.internal"),
+                Arrays.asList("auth01.example.local", "auth02.example.local")))
+        .containsExactly(
+            "app.example.internal",
+            "alias.example.local",
+            "auth01.example.local",
+            "auth02.example.local",
             "app.example.internal.local",
             "app")
         .inOrder();

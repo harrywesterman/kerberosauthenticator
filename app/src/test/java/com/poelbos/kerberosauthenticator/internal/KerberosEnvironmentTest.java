@@ -19,6 +19,36 @@ public final class KerberosEnvironmentTest {
   }
 
   @Test
+  public void inferRealmFromServiceHostUsesLongerDnsSuffix() {
+    assertThat(
+            KerberosEnvironment.inferRealmFromServiceHost(
+                "portal.int.example.local", "EXAMPLE.LOCAL"))
+        .isEqualTo("INT.EXAMPLE.LOCAL");
+  }
+
+  @Test
+  public void inferRealmFromServiceHostUsesExampleInternalDomain() {
+    assertThat(
+            KerberosEnvironment.inferRealmFromServiceHost(
+                "portal.int.example", "EXAMPLE.LOCAL"))
+        .isEqualTo("INT.EXAMPLE");
+  }
+
+  @Test
+  public void preferDiscoveredServiceRealmUsesDnsResultWhenDifferentFromDefault() {
+    assertThat(
+            KerberosEnvironment.preferDiscoveredServiceRealm(
+                "INT.EXAMPLE", "EXAMPLE.LOCAL"))
+        .isEqualTo("INT.EXAMPLE");
+    assertThat(
+            KerberosEnvironment.preferDiscoveredServiceRealm(
+                "EXAMPLE.LOCAL", "EXAMPLE.LOCAL"))
+        .isNull();
+    assertThat(KerberosEnvironment.preferDiscoveredServiceRealm(null, "EXAMPLE.LOCAL"))
+        .isNull();
+  }
+
+  @Test
   public void inferRealmFromServiceHostSkipsDefaultRealmAndIpAddresses() {
     assertThat(
             KerberosEnvironment.inferRealmFromServiceHost(

@@ -159,15 +159,32 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     GSSName serverName = null;
     try {
       Oid spnegoOid = new Oid("1.3.6.1.5.5.2");
-      if (debugWithSensitiveData) {
-        logServiceResolution(context, service);
-        logDnsAlias(context, service);
+      boolean serviceResolvable = logServiceResolution(context, service);
+      String normalizedService = normalizeService(service);
+      if (!serviceResolvable && normalizedService != null && !isIpv4Address(normalizedService)) {
+        Log.w(TAG, "Service host could not be resolved: " + service);
+        return new SpnegoTicketResult(
+            new TicketRequestResult(
+                ResultCode.ERROR_DNS_FAILURE, "DNS resolution failed for " + service),
+            null);
       }
+      List<String> dnsAliasCandidates = getDnsAliasCandidates(context, service);
       List<String> certificateDnsNames =
           getServerCertificateDnsNames(service, debugWithSensitiveData);
+      List<String> ldapCandidates =
+          getLdapServiceCandidates(
+              context,
+              domain,
+              activeDomainControllers,
+              username,
+              password,
+              service,
+              debugWithSensitiveData);
 
       GSSException lastException = null;
-      for (String ticketService : serviceTicketCandidates(service, certificateDnsNames)) {
+      for (String ticketService :
+          serviceTicketCandidates(
+              service, dnsAliasCandidates, certificateDnsNames, ldapCandidates)) {
         try {
           serverName =
               manager.createName("HTTP@" + ticketService, GSSName.NT_HOSTBASED_SERVICE, spnegoOid);
@@ -228,6 +245,20 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
   }
 
   static List<String> serviceTicketCandidates(String service, List<String> certificateDnsNames) {
+    return serviceTicketCandidates(
+        service, new ArrayList<String>(), certificateDnsNames, new ArrayList<String>());
+  }
+
+  static List<String> serviceTicketCandidates(
+      String service, List<String> dnsAliasNames, List<String> certificateDnsNames) {
+    return serviceTicketCandidates(service, dnsAliasNames, certificateDnsNames, new ArrayList<String>());
+  }
+
+  static List<String> serviceTicketCandidates(
+      String service,
+      List<String> dnsAliasNames,
+      List<String> certificateDnsNames,
+      List<String> ldapDnsNames) {
     String normalizedService = normalizeService(service);
     if (normalizedService == null) {
       return new ArrayList<>();
@@ -239,10 +270,24 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       return new ArrayList<>(candidates);
     }
 
+    for (String dnsAliasName : dnsAliasNames) {
+      String normalizedDnsAliasName = normalizeService(dnsAliasName);
+      if (normalizedDnsAliasName != null) {
+        candidates.add(normalizedDnsAliasName);
+      }
+    }
+
     for (String certificateDnsName : certificateDnsNames) {
       String normalizedCertificateDnsName = normalizeService(certificateDnsName);
       if (normalizedCertificateDnsName != null) {
         candidates.add(normalizedCertificateDnsName);
+      }
+    }
+
+    for (String ldapDnsName : ldapDnsNames) {
+      String normalizedLdapDnsName = normalizeService(ldapDnsName);
+      if (normalizedLdapDnsName != null) {
+        candidates.add(normalizedLdapDnsName);
       }
     }
 
@@ -269,7 +314,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     listener.onServiceTicketResult(service, result, null);
   }
 
-  private static void logServiceResolution(Context context, String service) {
+  private static boolean logServiceResolution(Context context, String service) {
     ConnectivityManager connectivityManager =
         (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
     Network activeNetwork =
@@ -284,7 +329,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
                   service, address.getHostAddress(), address.getCanonicalHostName()));
           logReverseDns(context, address);
         }
-        return;
+        return true;
       } catch (IOException e) {
         Log.w(TAG, "Active network could not resolve service " + service, e);
       }
@@ -297,9 +342,11 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
                   "Default resolver resolved %s to %s with canonical host %s",
                   service, address.getHostAddress(), address.getCanonicalHostName()));
       logReverseDns(context, address);
+      return true;
     } catch (IOException e) {
       Log.w(TAG, "Default resolver could not resolve service " + service, e);
     }
+    return false;
   }
 
   private void logLdapSpnMatches(String domainControllers) {
@@ -319,6 +366,71 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     }
   }
 
+  private static List<String> getLdapServiceCandidates(
+      Context context,
+      String domain,
+      String domainControllers,
+      String username,
+      String password,
+      String service,
+      boolean debugWithSensitiveData) {
+    Log.i(
+        TAG,
+        String.format(
+            "Starting LDAP SPN lookup for %s using controllers %s.", service, domainControllers));
+    List<LdapSpnDiscovery.SearchResult> results =
+        LdapSpnDiscovery.findHttpServicePrincipalNames(
+            context, domain, domainControllers, username, password, service);
+    if (debugWithSensitiveData) {
+      if (results.isEmpty()) {
+        Log.i(TAG, "LDAP SPN lookup found no HTTP service principal names for " + service);
+      } else {
+        for (LdapSpnDiscovery.SearchResult result : results) {
+          Log.i(
+              TAG,
+              String.format(
+                  "LDAP SPN match account=%s dns=%s spns=%s",
+                  result.getAccountName(), result.getDnsHostName(), result.getServicePrincipalNames()));
+        }
+      }
+    }
+    LinkedHashSet<String> candidates = new LinkedHashSet<>();
+    for (LdapSpnDiscovery.SearchResult result : results) {
+      String dnsHostName = result.getDnsHostName();
+      if (dnsHostName != null) {
+        candidates.add(dnsHostName);
+      }
+      for (String servicePrincipalName : result.getServicePrincipalNames()) {
+        String candidate = ldapServiceCandidateFromPrincipal(servicePrincipalName);
+        if (candidate != null) {
+          candidates.add(candidate);
+        }
+      }
+    }
+    Log.i(
+        TAG,
+        String.format(
+            "LDAP SPN lookup produced %d candidate host(s) for %s.",
+            candidates.size(), service));
+    return new ArrayList<>(candidates);
+  }
+
+  private static String ldapServiceCandidateFromPrincipal(String servicePrincipalName) {
+    if (servicePrincipalName == null) {
+      return null;
+    }
+    String normalized = servicePrincipalName.trim();
+    if (!normalized.regionMatches(true, 0, "HTTP/", 0, 5)) {
+      return null;
+    }
+    normalized = normalized.substring(5);
+    int at = normalized.indexOf('@');
+    if (at > 0) {
+      normalized = normalized.substring(0, at);
+    }
+    return normalizeService(normalized);
+  }
+
   private static void logReverseDns(Context context, InetAddress address) {
     String reverseName = DnsKdcDiscovery.discoverPtr(context, address);
     if (reverseName == null) {
@@ -328,13 +440,16 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     Log.i(TAG, "DNS discovered PTR host " + reverseName + " for " + address.getHostAddress());
   }
 
-  private static void logDnsAlias(Context context, String service) {
+  private static List<String> getDnsAliasCandidates(Context context, String service) {
     String alias = DnsKdcDiscovery.discoverCname(context, service);
     if (alias == null) {
       Log.i(TAG, "DNS did not discover a CNAME alias for " + service);
-      return;
+      return new ArrayList<>();
     }
     Log.i(TAG, "DNS discovered CNAME alias " + alias + " for " + service);
+    List<String> aliases = new ArrayList<>();
+    aliases.add(alias);
+    return aliases;
   }
 
   private static List<String> getServerCertificateDnsNames(String service, boolean logNames) {
