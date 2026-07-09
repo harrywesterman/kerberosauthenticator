@@ -38,39 +38,39 @@ public class DnsKdcDiscoveryTest {
 
   @Test
   public void testParseTxtResponseReturnsRealmStrings() throws Exception {
-    byte[] response = buildTxtResponse("INT.POLITIE");
+    byte[] response = buildTxtResponse("INT.EXAMPLE");
 
     List<String> realms = DnsKdcDiscovery.parseTxtResponse(response, 0x1234);
 
-    assertThat(realms).containsExactly("INT.POLITIE");
+    assertThat(realms).containsExactly("INT.EXAMPLE");
   }
 
   @Test
   public void testKerberosRealmLookupNamesUseHostSuffixes() {
-    List<String> lookupNames = DnsKdcDiscovery.kerberosRealmLookupNames("mobiel.int.politie");
+    List<String> lookupNames = DnsKdcDiscovery.kerberosRealmLookupNames("portal.int.example");
 
     assertThat(lookupNames)
         .containsExactly(
-            "_kerberos.mobiel.int.politie", "_kerberos.int.politie", "_kerberos.politie")
+            "_kerberos.portal.int.example", "_kerberos.int.example", "_kerberos.example")
         .inOrder();
   }
 
   @Test
   public void testParseCnameResponseReturnsAliases() throws Exception {
-    byte[] response = buildCnameResponse("web01.politie.local");
+    byte[] response = buildCnameResponse("web01.example.local");
 
     List<String> aliases = DnsKdcDiscovery.parseCnameResponse(response, 0x1234);
 
-    assertThat(aliases).containsExactly("web01.politie.local");
+    assertThat(aliases).containsExactly("web01.example.local");
   }
 
   @Test
   public void testParsePtrResponseReturnsHostNames() throws Exception {
-    byte[] response = buildPtrResponse("web01.politie.local");
+    byte[] response = buildPtrResponse("web01.example.local");
 
     List<String> hosts = DnsKdcDiscovery.parsePtrResponse(response, 0x1234);
 
-    assertThat(hosts).containsExactly("web01.politie.local");
+    assertThat(hosts).containsExactly("web01.example.local");
   }
 
   private static byte[] buildResponse() throws Exception {
@@ -113,7 +113,7 @@ public class DnsKdcDiscoveryTest {
     writeShort(out, 1);
     writeShort(out, 0);
     writeShort(out, 0);
-    writeName(out, "_kerberos.int.politie");
+    writeName(out, "_kerberos.int.example");
     writeShort(out, 16);
     writeShort(out, 1);
     writeTxtAnswer(out, realm);
@@ -128,7 +128,7 @@ public class DnsKdcDiscoveryTest {
     writeShort(out, 1);
     writeShort(out, 0);
     writeShort(out, 0);
-    writeName(out, "mobiel.int.politie");
+    writeName(out, "portal.int.example");
     writeShort(out, 1);
     writeShort(out, 1);
     writeCnameAnswer(out, alias);

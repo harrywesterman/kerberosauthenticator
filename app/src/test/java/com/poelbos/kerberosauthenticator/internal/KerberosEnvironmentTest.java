@@ -14,17 +14,17 @@ public final class KerberosEnvironmentTest {
   public void inferRealmFromServiceHostUsesDnsDomain() {
     assertThat(
             KerberosEnvironment.inferRealmFromServiceHost(
-                "mobiel.int.politie", "POLITIE.LOCAL"))
-        .isEqualTo("INT.POLITIE");
+                "portal.int.example", "EXAMPLE.LOCAL"))
+        .isEqualTo("INT.EXAMPLE");
   }
 
   @Test
   public void inferRealmFromServiceHostSkipsDefaultRealmAndIpAddresses() {
     assertThat(
             KerberosEnvironment.inferRealmFromServiceHost(
-                "intranet.politie.local", "POLITIE.LOCAL"))
+                "intranet.example.local", "EXAMPLE.LOCAL"))
         .isNull();
-    assertThat(KerberosEnvironment.inferRealmFromServiceHost("10.151.17.27", "POLITIE.LOCAL"))
+    assertThat(KerberosEnvironment.inferRealmFromServiceHost("10.151.17.27", "EXAMPLE.LOCAL"))
         .isNull();
   }
 
@@ -32,19 +32,19 @@ public final class KerberosEnvironmentTest {
   public void buildKrb5ConfigAddsServiceDomainRealmMapping() {
     String config =
         KerberosEnvironment.buildKrb5Config(
-            "POLITIE.LOCAL",
-            "dc01.politie.local dc02.politie.local",
-            "mobiel.int.politie",
-            "INT.POLITIE",
-            "dc01.int.politie");
+            "EXAMPLE.LOCAL",
+            "dc01.example.local dc02.example.local",
+            "portal.int.example",
+            "INT.EXAMPLE",
+            "dc01.int.example");
 
-    assertThat(config).contains("default_realm = POLITIE.LOCAL");
-    assertThat(config).contains("POLITIE.LOCAL = {");
-    assertThat(config).contains("kdc = dc01.politie.local");
-    assertThat(config).contains("kdc = dc02.politie.local");
-    assertThat(config).contains("INT.POLITIE = {");
-    assertThat(config).contains("kdc = dc01.int.politie");
-    assertThat(config).contains(".int.politie = INT.POLITIE");
-    assertThat(config).contains("int.politie = INT.POLITIE");
+    assertThat(config).contains("default_realm = EXAMPLE.LOCAL");
+    assertThat(config).contains("EXAMPLE.LOCAL = {");
+    assertThat(config).contains("kdc = dc01.example.local");
+    assertThat(config).contains("kdc = dc02.example.local");
+    assertThat(config).contains("INT.EXAMPLE = {");
+    assertThat(config).contains("kdc = dc01.int.example");
+    assertThat(config).contains(".int.example = INT.EXAMPLE");
+    assertThat(config).contains("int.example = INT.EXAMPLE");
   }
 }

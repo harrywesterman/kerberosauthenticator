@@ -12,15 +12,12 @@ import org.junit.Test;
 
 public final class GetSpnegoTicketTaskTest {
   @Test
-  public void serviceTicketCandidatesIncludePoliceCanonicalNames() {
-    assertThat(GetSpnegoTicketTask.serviceTicketCandidates("Mobiel.Int.Politie."))
+  public void serviceTicketCandidatesIncludeGenericCanonicalNames() {
+    assertThat(GetSpnegoTicketTask.serviceTicketCandidates("Service.Example.Internal."))
         .containsExactly(
-            "mobiel.int.politie",
-            "mobiel.politie.local",
-            "mobiel.int.politie.local",
-            "mobiel.int.politie.nl",
-            "mobiel.politie.nl",
-            "mobiel")
+            "service.example.internal",
+            "service.example.internal.local",
+            "service")
         .inOrder();
   }
 
@@ -34,24 +31,17 @@ public final class GetSpnegoTicketTaskTest {
   public void serviceTicketCandidatesUseCertificateDnsNamesBeforeGenericAliases() {
     assertThat(
             GetSpnegoTicketTask.serviceTicketCandidates(
-                "bvcm-np.politie.local",
+                "app.example.internal",
                 Arrays.asList(
-                    "bvcm-np.politie.local",
-                    "ELAVSW3520.politie.local",
-                    "ELAVSW3521.politie.local")))
+                    "app.example.internal",
+                    "web01.example.local",
+                    "web02.example.local")))
         .containsExactly(
-            "bvcm-np.politie.local",
-            "blue.politie.local",
-            "elavsw3520.politie.local",
-            "elavsw3521.politie.local",
-            "bvcm-np")
-        .inOrder();
-  }
-
-  @Test
-  public void serviceTicketCandidatesIncludeKnownBvcmAlias() {
-    assertThat(GetSpnegoTicketTask.serviceTicketCandidates("BVCM-NP.Politie.Local"))
-        .containsExactly("bvcm-np.politie.local", "blue.politie.local", "bvcm-np")
+            "app.example.internal",
+            "web01.example.local",
+            "web02.example.local",
+            "app.example.internal.local",
+            "app")
         .inOrder();
   }
 }

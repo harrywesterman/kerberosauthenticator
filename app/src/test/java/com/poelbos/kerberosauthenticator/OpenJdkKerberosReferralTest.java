@@ -35,11 +35,11 @@ public final class OpenJdkKerberosReferralTest {
     Object requestedService =
         principalName
             .getConstructor(String.class, int.class, String.class)
-            .newInstance("HTTP/mobiel.int.politie", unknownNameType, "POLITIE.LOCAL");
+            .newInstance("HTTP/portal.int.example", unknownNameType, "EXAMPLE.LOCAL");
     Object referralTicket =
         principalName
             .getConstructor(String.class, int.class, String.class)
-            .newInstance("krbtgt/INT.POLITIE", srvInstNameType, "POLITIE.LOCAL");
+            .newInstance("krbtgt/INT.EXAMPLE", srvInstNameType, "EXAMPLE.LOCAL");
 
     Class<?> credentialsUtil =
         Class.forName("sun.security.krb5.internal.CredentialsUtil", true, loader);
@@ -50,9 +50,9 @@ public final class OpenJdkKerberosReferralTest {
     withRealm.setAccessible(true);
 
     assertThat((String) referralRealm.invoke(null, referralTicket, requestedService))
-        .isEqualTo("INT.POLITIE");
-    assertThat(withRealm.invoke(null, requestedService, "INT.POLITIE").toString())
-        .isEqualTo("HTTP/mobiel.int.politie@INT.POLITIE");
+        .isEqualTo("INT.EXAMPLE");
+    assertThat(withRealm.invoke(null, requestedService, "INT.EXAMPLE").toString())
+        .isEqualTo("HTTP/portal.int.example@INT.EXAMPLE");
   }
 
   @Test

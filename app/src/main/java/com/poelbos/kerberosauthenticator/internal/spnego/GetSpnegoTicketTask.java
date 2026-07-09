@@ -239,8 +239,6 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       return new ArrayList<>(candidates);
     }
 
-    addKnownPoliceServiceAliases(normalizedService, candidates);
-
     for (String certificateDnsName : certificateDnsNames) {
       String normalizedCertificateDnsName = normalizeService(certificateDnsName);
       if (normalizedCertificateDnsName != null) {
@@ -251,24 +249,12 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     int dot = normalizedService.indexOf('.');
     if (dot > 0) {
       String firstLabel = normalizedService.substring(0, dot);
-      if (normalizedService.endsWith(".int.politie")) {
-        candidates.add(firstLabel + ".politie.local");
-        candidates.add(firstLabel + ".int.politie.local");
-        candidates.add(firstLabel + ".int.politie.nl");
-        candidates.add(firstLabel + ".politie.nl");
-      }
       if (!normalizedService.endsWith(".local")) {
         candidates.add(normalizedService + ".local");
       }
       candidates.add(firstLabel);
     }
     return new ArrayList<>(candidates);
-  }
-
-  private static void addKnownPoliceServiceAliases(String normalizedService, Set<String> candidates) {
-    if ("bvcm-np.politie.local".equals(normalizedService)) {
-      candidates.add("blue.politie.local");
-    }
   }
 
   @Override
