@@ -28,6 +28,7 @@ public class TicketRequestResult {
     ERROR_BAD_PASSWORD,
     ERROR_LOGIN_FAILED,
     ERROR_COMMIT_FAILED,
+    ERROR_DNS_FAILURE,
     ERROR_GSS_FAILURE
   };
 

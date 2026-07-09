@@ -47,8 +47,18 @@ public final class KerberosEnvironment {
       throw new IOException("No domain controller configured and DNS SRV lookup found no KDC.");
     }
 
-    String serviceRealm = null;
+    String serviceRealm =
+        preferDiscoveredServiceRealm(
+            DnsKdcDiscovery.discoverRealmForHost(context, serviceHost), realm);
     String serviceRealmKdc = null;
+    if (serviceRealm != null) {
+      Log.i(TAG, String.format("Inferring service realm %s for host %s.", serviceRealm, serviceHost));
+      serviceRealmKdc = DnsKdcDiscovery.discover(context, serviceRealm);
+      if (TextUtils.isEmpty(serviceRealmKdc)) {
+        Log.w(TAG, String.format("DNS SRV lookup found no KDC for inferred service realm %s.", serviceRealm));
+        serviceRealmKdc = null;
+      }
+    }
 
     File krb5ConfigFile = new File(context.getCacheDir(), "krb5.conf");
     writeKrb5Config(
@@ -78,6 +88,14 @@ public final class KerberosEnvironment {
       return null;
     }
     return inferredRealm;
+  }
+
+  static String preferDiscoveredServiceRealm(String discoveredRealm, String defaultRealm) {
+    String normalizedRealm = trimToNull(discoveredRealm);
+    if (normalizedRealm == null || normalizedRealm.equalsIgnoreCase(defaultRealm)) {
+      return null;
+    }
+    return Ascii.toUpperCase(normalizedRealm);
   }
 
   static String buildKrb5Config(

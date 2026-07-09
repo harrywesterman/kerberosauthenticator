@@ -78,7 +78,7 @@ public final class OpenJdkKerberosCryptoTest {
             "acquireSecretKey", char[].class, String.class, int.class, byte[].class);
 
     acquireSecretKey.invoke(
-        null, "password".toCharArray(), "POLITIE.LOCALuser", aes256Type, new byte[] {0x00, 0x00});
+        null, "password".toCharArray(), "EXAMPLE.LOCALuser", aes256Type, new byte[] {0x00, 0x00});
   }
 
   private static byte[] stringToAesKey(
