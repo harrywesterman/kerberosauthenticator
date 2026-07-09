@@ -27,34 +27,34 @@ public final class LdapSpnDiscoveryTest {
 
   @Test
   public void searchTermsIncludeHostAndFirstLabel() {
-    assertThat(LdapSpnDiscovery.searchTerms("Mobiel.Int.Example."))
-        .containsExactly("mobiel.int.example", "mobiel")
+    assertThat(LdapSpnDiscovery.searchTerms("Portal.Int.Example."))
+        .containsExactly("portal.int.example", "portal")
         .inOrder();
   }
 
   @Test
   public void bindNamesIncludeUpnDownLevelAndShortForms() {
-    assertThat(LdapSpnDiscovery.bindNames("ISC75972", "EXAMPLE.LOCAL"))
-        .containsExactly("ISC75972@EXAMPLE.LOCAL", "EXAMPLE\\ISC75972", "ISC75972")
+    assertThat(LdapSpnDiscovery.bindNames("USER123", "EXAMPLE.LOCAL"))
+        .containsExactly("USER123@EXAMPLE.LOCAL", "EXAMPLE\\USER123", "USER123")
         .inOrder();
   }
 
   @Test
   public void bindRequestIsLdapBindMessage() throws Exception {
-    byte[] request = LdapSpnDiscovery.buildBindRequest(7, "ISC75972@EXAMPLE.LOCAL", "secret");
+    byte[] request = LdapSpnDiscovery.buildBindRequest(7, "USER123@EXAMPLE.LOCAL", "secret");
 
     LdapSpnDiscovery.LdapMessage message = LdapSpnDiscovery.parseMessage(request);
 
     assertThat(message.messageId).isEqualTo(7);
     assertThat(message.protocolOpTag).isEqualTo(0x60);
-    assertThat(asLatin1(request)).contains("ISC75972@EXAMPLE.LOCAL");
+    assertThat(asLatin1(request)).contains("USER123@EXAMPLE.LOCAL");
     assertThat(asLatin1(request)).contains("secret");
   }
 
   @Test
   public void searchRequestContainsSpnFiltersAndAttributes() throws Exception {
     byte[] request =
-        LdapSpnDiscovery.buildSearchRequest(8, "DC=EXAMPLE,DC=LOCAL", "Mobiel.Int.Example.");
+        LdapSpnDiscovery.buildSearchRequest(8, "DC=EXAMPLE,DC=LOCAL", "Portal.Int.Example.");
 
     LdapSpnDiscovery.LdapMessage message = LdapSpnDiscovery.parseMessage(request);
 
@@ -62,7 +62,7 @@ public final class LdapSpnDiscoveryTest {
     assertThat(message.protocolOpTag).isEqualTo(0x63);
     String requestText = asLatin1(request);
     assertThat(requestText).contains("DC=EXAMPLE,DC=LOCAL");
-    assertThat(requestText).contains("HTTP/mobiel.int.example");
+    assertThat(requestText).contains("HTTP/portal.int.example");
     assertThat(requestText).contains("servicePrincipalName");
     assertThat(requestText).contains("sAMAccountName");
   }
@@ -104,7 +104,7 @@ public final class LdapSpnDiscoveryTest {
                         attribute("dNSHostName", "web01.example.local"),
                         attribute(
                             "servicePrincipalName",
-                            "HTTP/mobiel.int.example",
+                            "HTTP/portal.int.example",
                             "HTTP/web01.example.local")))));
 
     LdapSpnDiscovery.LdapMessage message = LdapSpnDiscovery.parseMessage(entry);
@@ -115,7 +115,7 @@ public final class LdapSpnDiscoveryTest {
     assertThat(result.getAccountName()).isEqualTo("svc-web");
     assertThat(result.getDnsHostName()).isEqualTo("web01.example.local");
     assertThat(result.getServicePrincipalNames())
-        .containsExactly("HTTP/mobiel.int.example", "HTTP/web01.example.local")
+        .containsExactly("HTTP/portal.int.example", "HTTP/web01.example.local")
         .inOrder();
   }
 

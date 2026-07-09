@@ -263,13 +263,13 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
   }
 
   protected void setOkStatus(int textviewId) {
-    Drawable ok = getDrawable(R.drawable.ic_check_blue_24dp);
+    Drawable ok = getDrawable(R.drawable.ic_check_primary_24dp);
     ((TextView) findViewById(textviewId))
         .setCompoundDrawablesWithIntrinsicBounds(ok, null, null, null);
   }
 
   protected void setRefreshingStatus(int textviewId) {
-    Drawable refresh = getDrawable(R.drawable.ic_autorenew_blue_24dp);
+    Drawable refresh = getDrawable(R.drawable.ic_autorenew_primary_24dp);
     ((TextView) findViewById(textviewId))
         .setCompoundDrawablesWithIntrinsicBounds(refresh, null, null, null);
   }

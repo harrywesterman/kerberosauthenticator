@@ -14,7 +14,7 @@ public final class KerberosEnvironmentTest {
   public void inferRealmFromServiceHostUsesDnsDomain() {
     assertThat(
             KerberosEnvironment.inferRealmFromServiceHost(
-                "mobiel.int.example", "EXAMPLE.LOCAL"))
+                "portal.int.example", "EXAMPLE.LOCAL"))
         .isEqualTo("INT.EXAMPLE");
   }
 
@@ -34,7 +34,7 @@ public final class KerberosEnvironmentTest {
         KerberosEnvironment.buildKrb5Config(
             "EXAMPLE.LOCAL",
             "dc01.example.local dc02.example.local",
-            "mobiel.int.example",
+            "portal.int.example",
             "INT.EXAMPLE",
             "dc01.int.example");
 

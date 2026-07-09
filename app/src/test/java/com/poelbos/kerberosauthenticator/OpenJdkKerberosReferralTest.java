@@ -35,7 +35,7 @@ public final class OpenJdkKerberosReferralTest {
     Object requestedService =
         principalName
             .getConstructor(String.class, int.class, String.class)
-            .newInstance("HTTP/mobiel.int.example", unknownNameType, "EXAMPLE.LOCAL");
+            .newInstance("HTTP/portal.int.example", unknownNameType, "EXAMPLE.LOCAL");
     Object referralTicket =
         principalName
             .getConstructor(String.class, int.class, String.class)
@@ -52,7 +52,7 @@ public final class OpenJdkKerberosReferralTest {
     assertThat((String) referralRealm.invoke(null, referralTicket, requestedService))
         .isEqualTo("INT.EXAMPLE");
     assertThat(withRealm.invoke(null, requestedService, "INT.EXAMPLE").toString())
-        .isEqualTo("HTTP/mobiel.int.example@INT.EXAMPLE");
+        .isEqualTo("HTTP/portal.int.example@INT.EXAMPLE");
   }
 
   @Test

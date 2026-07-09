@@ -47,11 +47,11 @@ public class DnsKdcDiscoveryTest {
 
   @Test
   public void testKerberosRealmLookupNamesUseHostSuffixes() {
-    List<String> lookupNames = DnsKdcDiscovery.kerberosRealmLookupNames("mobiel.int.example");
+    List<String> lookupNames = DnsKdcDiscovery.kerberosRealmLookupNames("portal.int.example");
 
     assertThat(lookupNames)
         .containsExactly(
-            "_kerberos.mobiel.int.example", "_kerberos.int.example", "_kerberos.example")
+            "_kerberos.portal.int.example", "_kerberos.int.example", "_kerberos.example")
         .inOrder();
   }
 
@@ -128,7 +128,7 @@ public class DnsKdcDiscoveryTest {
     writeShort(out, 1);
     writeShort(out, 0);
     writeShort(out, 0);
-    writeName(out, "mobiel.int.example");
+    writeName(out, "portal.int.example");
     writeShort(out, 1);
     writeShort(out, 1);
     writeCnameAnswer(out, alias);
