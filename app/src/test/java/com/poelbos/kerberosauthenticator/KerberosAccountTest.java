@@ -133,7 +133,11 @@ public final class KerberosAccountTest {
   public void testSaveAccount_noPreviousAccount() {
     TestHelper.createKerberosAccount().save(context);
     KerberosAccount loadedAccount = KerberosAccount.getAccount(context);
-    assertKerberosAccount(loadedAccount);
+    assertThat(loadedAccount.getName()).isEqualTo(USERNAME);
+    assertThat(loadedAccount.getPassword()).isNull();
+    assertThat(loadedAccount.getDomain()).isEqualTo(AD_DOMAIN);
+    assertThat(loadedAccount.getDomainController()).isEqualTo(AD_DC);
+    assertThat(loadedAccount.getTicketGrantingTicket()).isEqualTo(TGT);
   }
 
   @Test
@@ -175,10 +179,22 @@ public final class KerberosAccountTest {
     Account readAccount = accountManager.getAccountsByType(KERBEROS_ACCOUNT_TYPE)[0];
     assertThat(readAccount).isNotNull();
     assertThat(readAccount.name).isEqualTo(USERNAME);
-    assertThat(accountManager.getPassword(readAccount)).isEqualTo(anotherPassword);
+    assertThat(accountManager.getPassword(readAccount)).isNull();
     assertThat(accountManager.getUserData(readAccount, "ad_domain")).isEqualTo(anotherDomain);
     assertThat(accountManager.getUserData(readAccount, "domain_controller")).isEqualTo(anotherDc);
     assertThat(accountManager.getUserData(readAccount, "ticket_granting_ticket")).isEqualTo(b64Tgt);
+  }
+
+  @Test
+  public void testWithPasswordDoesNotPersistPasswordAndRetainsTicketGrantingTicket() {
+    KerberosAccount account = TestHelper.createKerberosAccount();
+    account.save(context);
+
+    account.withPassword("refreshed-password").save(context);
+
+    KerberosAccount refreshedAccount = KerberosAccount.getAccount(context);
+    assertThat(refreshedAccount.getPassword()).isNull();
+    assertThat(refreshedAccount.getTicketGrantingTicket()).isEqualTo(TGT);
   }
 
   @Test

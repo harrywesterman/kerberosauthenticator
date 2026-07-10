@@ -108,6 +108,15 @@ public class KerberosAccount {
     return name;
   }
 
+  KerberosAccount withPassword(String newPassword) {
+    return new KerberosAccount(
+        name,
+        newPassword,
+        userData.getString(KEY_AD_DOMAIN),
+        userData.getString(KEY_AD_DC),
+        userData.getString(KEY_TGT));
+  }
+
   byte[] getTicketGrantingTicket() {
     return Base64.decode(userData.getString(KEY_TGT), Base64.NO_WRAP);
   }
@@ -133,7 +142,7 @@ public class KerberosAccount {
     if (hasNoAccount) {
       Log.i(TAG, String.format("Adding account %s.", name));
       account = new Account(name, KERBEROS_ACCOUNT_TYPE);
-      am.addAccountExplicitly(account, password, userData);
+      am.addAccountExplicitly(account, null, userData);
       allowChromeToSeeAccount(am, account);
       return;
     }
@@ -142,10 +151,8 @@ public class KerberosAccount {
     Log.i(TAG, String.format("Updating TGT for account %s.", account.name));
     am.setUserData(account, KEY_TGT, userData.getString(KEY_TGT));
 
-    if (password != null && !password.equals(am.getPassword(account))) {
-      Log.v(TAG, String.format("Updating password for account %s.", account.name));
-      am.setPassword(account, password);
-    }
+    // The account manager persists the TGT and account metadata, never the AD password.
+    am.clearPassword(account);
 
     final String domain = userData.getString(KEY_AD_DOMAIN);
     final String currentDomain = am.getUserData(account, KEY_AD_DOMAIN);

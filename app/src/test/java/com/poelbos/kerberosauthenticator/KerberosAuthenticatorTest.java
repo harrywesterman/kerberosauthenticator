@@ -58,12 +58,19 @@ public class KerberosAuthenticatorTest {
     context = ApplicationProvider.getApplicationContext();
     accountManager = AccountManager.get(context);
     authenticator = new KerberosAuthenticator(context);
+    KerberosAuthenticator.setChromeCallerValidatorForTesting(
+        (callerContext, options) ->
+            options != null
+                && Constants.CHROME_PACKAGE_NAME.equals(
+                    options.getString(AccountManager.KEY_ANDROID_PACKAGE_NAME)));
   }
 
   @After
   public void tearDown() {
     KerberosAuthenticator.resetServiceTicketProviderForTesting();
     KerberosAuthenticator.resetTgtValidityCheckerForTesting();
+    KerberosAuthenticator.resetTgtRenewerForTesting();
+    KerberosAuthenticator.resetChromeCallerValidatorForTesting();
     KerberosAccount.resetAccountVisibilitySetterForTesting();
     shadowOf(accountManager).removeAllAccounts();
   }
@@ -78,7 +85,12 @@ public class KerberosAuthenticatorTest {
 
   @Test
   public void testAddAccount() {
-    setTestRestrictions();
+    RestrictionsManager restrictionsManager =
+        (RestrictionsManager)
+            context.getSystemService(context.getSystemServiceName(RestrictionsManager.class));
+    Bundle restrictionsBundle = TestHelper.makeRestrictionsBundle();
+    restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, USERNAME);
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
     Bundle result =
         authenticator.addAccount(
             null, null, null, new String[] {Constants.SPNEGO}, getTestOptions());
@@ -116,6 +128,14 @@ public class KerberosAuthenticatorTest {
             null, null, "SPNEGO:HOSTBASED:HTTP@test-server.example.com", options);
     assertThat(result.get("errorCode")).isEqualTo(AccountManager.ERROR_CODE_UNSUPPORTED_OPERATION);
     assertThat(result.get("errorMessage")).isEqualTo("Unsupported method: Unsupported caller app.");
+  }
+
+  @Test
+  public void testRejectsChromeCallerWithoutCallingUid() {
+    Bundle options = new Bundle();
+    options.putString(AccountManager.KEY_ANDROID_PACKAGE_NAME, Constants.CHROME_PACKAGE_NAME);
+
+    assertThat(KerberosAuthenticator.isAuthorizedChromeCaller(context, options)).isFalse();
   }
 
   @Test
@@ -166,7 +186,7 @@ public class KerberosAuthenticatorTest {
   @Test
   public void testGetAuthTokenValidTGT() {
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, debugWithSensitiveData) ->
+        (requestContext, serviceName, krbAccount, debugWithSensitiveData, incoming, contextBytes) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
                 "test-spnego-token"));
@@ -200,6 +220,40 @@ public class KerberosAuthenticatorTest {
     assertThat(result.getString(AccountManager.KEY_ACCOUNT_NAME)).isEqualTo(USERNAME);
     assertThat(result.getString(AccountManager.KEY_ACCOUNT_TYPE))
         .isEqualTo(Constants.KERBEROS_ACCOUNT_TYPE);
+    assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo("test-spnego-token");
+    assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
+  }
+
+  @Test
+  public void testGetAuthTokenRenewsExpiredTgtBeforePromptingForPassword() {
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, serviceName, krbAccount, debugWithSensitiveData, incoming, contextBytes) ->
+            new GetSpnegoTicketTask.SpnegoTicketResult(
+                new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
+                "test-spnego-token"));
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> false);
+    KerberosAuthenticator.setTgtRenewerForTesting((renewalContext, krbAccount) -> true);
+    KerberosAccount.setAccountVisibilitySetterForTesting(
+        (accountManager, account, packageName, visibility) -> true);
+    Account testAccount = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
+    shadowOf(accountManager).addAccount(testAccount);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
+    RestrictionsManager restrictionsManager =
+        (RestrictionsManager)
+            context.getSystemService(context.getSystemServiceName(RestrictionsManager.class));
+    Bundle restrictionsBundle = TestHelper.makeRestrictionsBundle();
+    restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, USERNAME);
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    Bundle result =
+        authenticator.getAuthToken(
+            null,
+            testAccount,
+            "SPNEGO:HOSTBASED:HTTP@test-server.example.com",
+            getTestOptions());
+
     assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo("test-spnego-token");
     assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
   }

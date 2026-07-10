@@ -25,6 +25,10 @@ public class Constants {
   // Account type - MUST match the value in res/xml/kerberos_authenticator.xml
   static final String KERBEROS_ACCOUNT_TYPE = "AndroidEnterpriseKerberos";
   static final String SPNEGO = "SPNEGO";
+  static final String KEY_SPNEGO_RESULT = "spnegoResult";
+  static final String KEY_SPNEGO_CONTEXT = "spnegoContext";
+  static final String KEY_INCOMING_AUTH_TOKEN = "incomingAuthToken";
+  static final String KEY_GSS_CONTEXT_BYTES = "gssContextBytes";
 
   // =========== Constants for internal use ===========
   // Only allow authentication requests from Chrome.
