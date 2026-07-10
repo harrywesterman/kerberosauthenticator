@@ -339,14 +339,14 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
 
     for (String dnsAliasName : dnsAliasNames) {
       String normalizedDnsAliasName = normalizeService(dnsAliasName);
-      if (normalizedDnsAliasName != null) {
+      if (normalizedDnsAliasName != null && !isWildcardHost(normalizedDnsAliasName)) {
         candidates.add(normalizedDnsAliasName);
       }
     }
 
     for (String certificateDnsName : certificateDnsNames) {
       String normalizedCertificateDnsName = normalizeService(certificateDnsName);
-      if (normalizedCertificateDnsName != null) {
+      if (normalizedCertificateDnsName != null && !isWildcardHost(normalizedCertificateDnsName)) {
         candidates.add(normalizedCertificateDnsName);
       }
     }
@@ -374,6 +374,10 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       resumed.add(candidates.get((previousIndex + offset) % candidates.size()));
     }
     return resumed;
+  }
+
+  private static boolean isWildcardHost(String host) {
+    return host.startsWith("*.");
   }
 
   @Override
