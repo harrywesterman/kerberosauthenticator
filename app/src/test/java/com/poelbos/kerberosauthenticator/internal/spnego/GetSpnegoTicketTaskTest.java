@@ -67,4 +67,15 @@ public final class GetSpnegoTicketTaskTest {
         .containsExactly("backend02.example", "requested.example", "backend01.example")
         .inOrder();
   }
+
+  @Test
+  public void wildcardCertificateNamesAreNotKerberosCandidates() {
+    assertThat(
+            GetSpnegoTicketTask.serviceTicketCandidates(
+                "service.example.internal",
+                Arrays.asList("*.service.example.internal", "backend.example.internal"),
+                Arrays.asList("*.backend.example.internal")))
+        .containsExactly("service.example.internal", "backend.example.internal")
+        .inOrder();
+  }
 }
