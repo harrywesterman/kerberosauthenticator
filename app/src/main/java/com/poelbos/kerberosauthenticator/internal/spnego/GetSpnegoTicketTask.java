@@ -532,6 +532,13 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       connection.setConnectTimeout(3000);
       connection.setReadTimeout(3000);
       connection.connect();
+      if (logNames) {
+        Log.i(
+            TAG,
+            String.format(
+                "HTTPS pre-auth response for %s: HTTP %d, WWW-Authenticate=%s",
+                service, connection.getResponseCode(), connection.getHeaderField("WWW-Authenticate")));
+      }
       Certificate[] certificates = connection.getServerCertificates();
       if (certificates.length == 0 || !(certificates[0] instanceof X509Certificate)) {
         if (logNames) {
