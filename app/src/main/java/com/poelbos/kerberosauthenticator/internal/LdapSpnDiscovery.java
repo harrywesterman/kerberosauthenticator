@@ -383,7 +383,8 @@ public final class LdapSpnDiscovery {
       InputStream in = socket.getInputStream();
       Oid kerberosOid = new Oid("1.2.840.113554.1.2.2");
       GSSManager manager = new GSSManagerImpl(GSSCaller.CALLER_INITIATE, false);
-      GSSName ldapName = manager.createName("ldap@" + host, GSSName.NT_HOSTBASED_SERVICE);
+      GSSName ldapName =
+          manager.createName("ldap@" + host, GSSName.NT_HOSTBASED_SERVICE, kerberosOid);
       GSSContext gssContext = manager.createContext(ldapName, kerberosOid, null, GSSContext.DEFAULT_LIFETIME);
       gssContext.requestMutualAuth(true);
       gssContext.requestInteg(true);
