@@ -68,6 +68,16 @@ public final class LdapSpnDiscoveryTest {
   }
 
   @Test
+  public void saslBindRequestSupportsGssSpnegoMechanism() throws Exception {
+    byte[] request =
+        LdapSpnDiscovery.buildSaslBindRequest(12, new byte[] {0x04, 0x05}, "GSS-SPNEGO");
+
+    assertThat(asLatin1(request)).contains("GSS-SPNEGO");
+    assertThat(request[request.length - 2]).isEqualTo((byte) 0x04);
+    assertThat(request[request.length - 1]).isEqualTo((byte) 0x05);
+  }
+
+  @Test
   public void searchRequestContainsSpnFiltersAndAttributes() throws Exception {
     byte[] request =
         LdapSpnDiscovery.buildSearchRequest(8, "DC=EXAMPLE,DC=LOCAL", "Portal.Int.Example.");

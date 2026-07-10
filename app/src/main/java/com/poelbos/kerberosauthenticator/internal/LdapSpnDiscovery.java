@@ -227,6 +227,10 @@ public final class LdapSpnDiscovery {
   }
 
   static byte[] buildGssApiBindRequest(int messageId, byte[] gssToken) {
+    return buildSaslBindRequest(messageId, gssToken, "GSSAPI");
+  }
+
+  static byte[] buildSaslBindRequest(int messageId, byte[] gssToken, String mechanism) {
     return ldapMessage(
         messageId,
         element(
@@ -236,7 +240,7 @@ public final class LdapSpnDiscovery {
                 octetString(""),
                 element(
                     0xa3,
-                    sequence(octetString("GSSAPI"), octetString(gssToken))))));
+                    sequence(octetString(mechanism), octetString(gssToken))))));
   }
 
   static byte[] buildSearchRequest(int messageId, String baseDn, String serviceHost) {
@@ -374,14 +378,42 @@ public final class LdapSpnDiscovery {
   private static List<SearchResult> queryHostWithGssApi(
       Context context, String host, String baseDn, String serviceHost, String realm)
       throws Exception {
+    Oid kerberosOid = new Oid("1.2.840.113554.1.2.2");
+    try {
+      return queryHostWithSasl(
+          context, host, baseDn, serviceHost, realm, kerberosOid, "GSSAPI");
+    } catch (Exception gssApiFailure) {
+      // AD also exposes Kerberos through SASL GSS-SPNEGO. Try it when a controller
+      // closes a GSSAPI bind before returning an LDAP response.
+      Oid spnegoOid = new Oid("1.3.6.1.5.5.2");
+      Log.i(TAG, "Retrying LDAP bind with GSS-SPNEGO at " + host + ".");
+      try {
+        return queryHostWithSasl(
+            context, host, baseDn, serviceHost, realm, spnegoOid, "GSS-SPNEGO");
+      } catch (Exception spnegoFailure) {
+        spnegoFailure.addSuppressed(gssApiFailure);
+        throw spnegoFailure;
+      }
+    }
+  }
+
+  private static List<SearchResult> queryHostWithSasl(
+      Context context,
+      String host,
+      String baseDn,
+      String serviceHost,
+      String realm,
+      Oid mechanismOid,
+      String saslMechanism)
+      throws Exception {
     try (Socket socket = openSocket(context, host, true)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
-      Oid kerberosOid = new Oid("1.2.840.113554.1.2.2");
       GSSManager manager = new GSSManagerImpl(GSSCaller.CALLER_INITIATE, false);
       GSSName ldapName =
-          manager.createName("ldap@" + host, GSSName.NT_HOSTBASED_SERVICE, kerberosOid);
-      GSSContext gssContext = manager.createContext(ldapName, kerberosOid, null, GSSContext.DEFAULT_LIFETIME);
+          manager.createName("ldap@" + host, GSSName.NT_HOSTBASED_SERVICE, mechanismOid);
+      GSSContext gssContext =
+          manager.createContext(ldapName, mechanismOid, null, GSSContext.DEFAULT_LIFETIME);
       gssContext.requestMutualAuth(true);
       // AD does not allow a SASL integrity/confidentiality layer on top of LDAPS.
       // TLS already protects the LDAP session; GSSAPI is used here for authentication.
@@ -396,7 +428,7 @@ public final class LdapSpnDiscovery {
           throw new IOException("Kerberos LDAP produced no client token.");
         }
         int messageId = round + 1;
-        out.write(buildGssApiBindRequest(messageId, clientToken));
+        out.write(buildSaslBindRequest(messageId, clientToken, saslMechanism));
         out.flush();
         LdapMessage response = parseMessage(readMessage(in));
         if (response.messageId != messageId || response.protocolOpTag != 0x61) {
@@ -409,7 +441,7 @@ public final class LdapSpnDiscovery {
           if (nextToken != null) {
             byte[] securityLayerResponse = buildSecurityLayerResponse(gssContext, nextToken);
             int securityMessageId = messageId + 1;
-            out.write(buildGssApiBindRequest(securityMessageId, securityLayerResponse));
+            out.write(buildSaslBindRequest(securityMessageId, securityLayerResponse, saslMechanism));
             out.flush();
             LdapMessage securityResponse = parseMessage(readMessage(in));
             if (securityResponse.messageId != securityMessageId
