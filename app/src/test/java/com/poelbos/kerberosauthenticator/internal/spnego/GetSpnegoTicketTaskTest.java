@@ -12,12 +12,9 @@ import org.junit.Test;
 
 public final class GetSpnegoTicketTaskTest {
   @Test
-  public void serviceTicketCandidatesIncludeGenericCanonicalNames() {
+  public void serviceTicketCandidatesKeepOnlyTheRequestedHostWithoutDiscoveryData() {
     assertThat(GetSpnegoTicketTask.serviceTicketCandidates("Service.Example.Internal."))
-        .containsExactly(
-            "service.example.internal",
-            "service.example.internal.local",
-            "service")
+        .containsExactly("service.example.internal")
         .inOrder();
   }
 
@@ -41,14 +38,12 @@ public final class GetSpnegoTicketTaskTest {
             "app.example.internal",
             "alias.example.local",
             "web01.example.local",
-            "web02.example.local",
-            "app.example.internal.local",
-            "app")
+            "web02.example.local")
         .inOrder();
   }
 
   @Test
-  public void serviceTicketCandidatesUseLdapDnsNamesBeforeGenericAliases() {
+  public void serviceTicketCandidatesUseLdapDnsNamesAfterDnsAndCertificateCandidates() {
     assertThat(
             GetSpnegoTicketTask.serviceTicketCandidates(
                 "app.example.internal",
@@ -59,9 +54,7 @@ public final class GetSpnegoTicketTaskTest {
             "app.example.internal",
             "alias.example.local",
             "auth01.example.local",
-            "auth02.example.local",
-            "app.example.internal.local",
-            "app")
+            "auth02.example.local")
         .inOrder();
   }
 }

@@ -21,19 +21,28 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import javax.security.auth.Subject;
+import org.ietf.jgss.GSSContext;
+import org.ietf.jgss.ChannelBinding;
+import org.ietf.jgss.GSSManager;
+import org.ietf.jgss.GSSName;
+import org.ietf.jgss.MessageProp;
+import org.ietf.jgss.Oid;
+import sun.security.jgss.GSSCaller;
+import sun.security.jgss.GSSManagerImpl;
+import sun.security.jgss.GSSUtil;
 import javax.net.SocketFactory;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
 /** Looks up HTTP service principal names in Active Directory over LDAP. */
 public final class LdapSpnDiscovery {
@@ -97,6 +106,36 @@ public final class LdapSpnDiscovery {
               String.format("LDAP SPN lookup over LDAP failed at %s as %s.", host, bindName),
               e);
         }
+      }
+    }
+    return Collections.emptyList();
+  }
+
+  /** Looks up HTTP SPNs using the caller's existing Kerberos TGT via LDAP GSSAPI. */
+  public static List<SearchResult> findHttpServicePrincipalNames(
+      Context context,
+      String realm,
+      String domainControllers,
+      Subject subject,
+      String serviceHost) {
+    if (isEmpty(realm) || subject == null || isEmpty(serviceHost)) {
+      return Collections.emptyList();
+    }
+
+    String baseDn = baseDnForRealm(realm);
+    List<String> hosts = ldapHosts(DnsKdcDiscovery.discoverLdap(context, realm));
+    if (hosts.isEmpty()) {
+      hosts = ldapHosts(domainControllers);
+    }
+    Log.i(TAG, "Kerberos LDAP SPN lookup will try " + hosts.size() + " host(s): " + hosts);
+    GSSUtil.setGlobalSubject(subject);
+    for (String host : hosts) {
+      try {
+        List<SearchResult> results = queryHostWithGssApi(context, host, baseDn, serviceHost, realm);
+        Log.i(TAG, String.format("Kerberos LDAP SPN lookup succeeded at %s.", host));
+        return results;
+      } catch (Exception e) {
+        Log.w(TAG, String.format("Kerberos LDAP SPN lookup failed at %s.", host), e);
       }
     }
     return Collections.emptyList();
@@ -189,6 +228,19 @@ public final class LdapSpnDiscovery {
                 integer(3),
                 octetString(bindName),
                 element(0x80, password.getBytes(StandardCharsets.UTF_8)))));
+  }
+
+  static byte[] buildGssApiBindRequest(int messageId, byte[] gssToken) {
+    return ldapMessage(
+        messageId,
+        element(
+            0x60,
+            concat(
+                integer(3),
+                octetString(""),
+                element(
+                    0xa3,
+                    sequence(octetString("GSSAPI"), octetString(gssToken))))));
   }
 
   static byte[] buildSearchRequest(int messageId, String baseDn, String serviceHost) {
@@ -323,6 +375,144 @@ public final class LdapSpnDiscovery {
     }
   }
 
+  private static List<SearchResult> queryHostWithGssApi(
+      Context context, String host, String baseDn, String serviceHost, String realm)
+      throws Exception {
+    try (Socket socket = openSocket(context, host, true)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      Oid kerberosOid = new Oid("1.2.840.113554.1.2.2");
+      GSSManager manager = new GSSManagerImpl(GSSCaller.CALLER_INITIATE, false);
+      GSSName ldapName = manager.createName("ldap@" + host, GSSName.NT_HOSTBASED_SERVICE);
+      GSSContext gssContext = manager.createContext(ldapName, kerberosOid, null, GSSContext.DEFAULT_LIFETIME);
+      gssContext.requestMutualAuth(true);
+      gssContext.requestInteg(true);
+      gssContext.requestConf(true);
+      if (socket instanceof SSLSocket) {
+        gssContext.setChannelBinding(tlsServerEndpointChannelBinding((SSLSocket) socket));
+      }
+
+      byte[] serverToken = new byte[0];
+      for (int round = 0; round < 5; round++) {
+        byte[] clientToken =
+            gssContext.initSecContext(serverToken, 0, serverToken.length);
+        if (clientToken == null) {
+          throw new IOException("Kerberos LDAP produced no client token.");
+        }
+        int messageId = round + 1;
+        out.write(buildGssApiBindRequest(messageId, clientToken));
+        out.flush();
+        LdapMessage response = parseMessage(readMessage(in));
+        if (response.messageId != messageId || response.protocolOpTag != 0x61) {
+          throw new IOException("Unexpected LDAP GSSAPI bind response.");
+        }
+        int resultCode = parseLdapResultCode(response.protocolOpValue);
+        byte[] nextToken = parseSaslServerCredentials(response.protocolOpValue);
+        if (gssContext.isEstablished() && (resultCode == 0 || resultCode == 14)) {
+          // RFC 4752 requires a final GSSAPI security-layer exchange before LDAP requests.
+          if (nextToken != null) {
+            byte[] securityLayerResponse = buildSecurityLayerResponse(gssContext, nextToken);
+            int securityMessageId = messageId + 1;
+            out.write(buildGssApiBindRequest(securityMessageId, securityLayerResponse));
+            out.flush();
+            LdapMessage securityResponse = parseMessage(readMessage(in));
+            if (securityResponse.messageId != securityMessageId
+                || securityResponse.protocolOpTag != 0x61
+                || parseLdapResultCode(securityResponse.protocolOpValue) != 0) {
+              throw new IOException("LDAP GSSAPI security-layer negotiation failed.");
+            }
+            messageId = securityMessageId;
+          }
+          if (resultCode != 0) {
+            throw new IOException("LDAP GSSAPI bind completed without security-layer data.");
+          }
+          return searchHost(socket, out, in, baseDn, serviceHost, messageId + 1);
+        }
+        if (resultCode != 14 || nextToken == null) {
+          throw new IOException("LDAP GSSAPI bind failed with result code " + resultCode + ".");
+        }
+        serverToken = nextToken;
+      }
+      throw new IOException("LDAP GSSAPI bind exceeded negotiation rounds for " + realm + ".");
+    }
+  }
+
+  private static List<SearchResult> searchHost(
+      Socket socket, OutputStream out, InputStream in, String baseDn, String serviceHost, int messageId)
+      throws IOException {
+    out.write(buildSearchRequest(messageId, baseDn, serviceHost));
+    out.flush();
+    List<SearchResult> results = new ArrayList<>();
+    while (true) {
+      LdapMessage message = parseMessage(readMessage(in));
+      if (message.messageId != messageId) {
+        continue;
+      }
+      if (message.protocolOpTag == 0x64) {
+        results.add(parseSearchResultEntry(message.protocolOpValue));
+      } else if (message.protocolOpTag == 0x65) {
+        int searchResult = parseLdapResultCode(message.protocolOpValue);
+        if (searchResult != 0 && searchResult != 4) {
+          throw new IOException("LDAP search failed with result code " + searchResult + ".");
+        }
+        out.write(buildUnbindRequest(messageId + 1));
+        out.flush();
+        return results;
+      }
+    }
+  }
+
+  private static byte[] parseSaslServerCredentials(byte[] protocolOpValue) throws IOException {
+    BerReader reader = new BerReader(protocolOpValue);
+    reader.readEnumeratedElement();
+    reader.readStringElement();
+    reader.readStringElement();
+    while (reader.hasRemaining()) {
+      BerElement element = reader.readElement();
+      if (element.tag == 0x87) {
+        return element.value;
+      }
+    }
+    return null;
+  }
+
+  private static byte[] buildSecurityLayerResponse(GSSContext gssContext, byte[] serverToken)
+      throws IOException {
+    try {
+      byte[] unwrapped =
+          gssContext.unwrap(serverToken, 0, serverToken.length, new MessageProp(0, false));
+      if (unwrapped.length < 4 || (unwrapped[0] & 0x01) == 0) {
+        throw new IOException("LDAP server does not permit the required no-security layer.");
+      }
+      byte[] response = new byte[] {0x01, 0x00, 0x00, 0x00};
+      return gssContext.wrap(response, 0, response.length, new MessageProp(0, false));
+    } catch (Exception e) {
+      if (e instanceof IOException) {
+        throw (IOException) e;
+      }
+      throw new IOException("Unable to negotiate LDAP GSSAPI security layer.", e);
+    }
+  }
+
+  private static ChannelBinding tlsServerEndpointChannelBinding(SSLSocket socket)
+      throws IOException, GeneralSecurityException {
+    Certificate[] peerCertificates = socket.getSession().getPeerCertificates();
+    if (peerCertificates.length == 0 || !(peerCertificates[0] instanceof X509Certificate)) {
+      throw new GeneralSecurityException("LDAPS peer did not provide an X.509 certificate.");
+    }
+    X509Certificate certificate = (X509Certificate) peerCertificates[0];
+    String signatureAlgorithm = certificate.getSigAlgName().toUpperCase(Locale.US);
+    String digestAlgorithm = "SHA-256";
+    if (signatureAlgorithm.contains("SHA512")) {
+      digestAlgorithm = "SHA-512";
+    } else if (signatureAlgorithm.contains("SHA384")) {
+      digestAlgorithm = "SHA-384";
+    }
+    byte[] digest = MessageDigest.getInstance(digestAlgorithm).digest(certificate.getEncoded());
+    byte[] prefix = "tls-server-end-point:".getBytes(StandardCharsets.US_ASCII);
+    return new ChannelBinding(null, null, concat(prefix, digest));
+  }
+
   private static void logRootDseProbe(Context context, String host) {
     try {
       queryRootDse(context, host, true);
@@ -378,7 +568,6 @@ public final class LdapSpnDiscovery {
 
     int port = ssl ? LDAPS_PORT : LDAP_PORT;
     IOException lastIOException = null;
-    GeneralSecurityException lastSecurityException = null;
     InetAddress[] addresses =
         activeNetwork == null ? InetAddress.getAllByName(host) : activeNetwork.getAllByName(host);
     for (InetAddress address : addresses) {
@@ -395,21 +584,16 @@ public final class LdapSpnDiscovery {
           return socket;
         }
 
+      SSLSocketFactory sslFactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
         SSLSocket sslSocket =
-            (SSLSocket) trustAllSocketFactory().createSocket(socket, host, port, true);
-        sslSocket.setSoTimeout(READ_TIMEOUT_MILLIS);
-        sslSocket.startHandshake();
-        return sslSocket;
+            (SSLSocket) sslFactory.createSocket(socket, host, port, true);
+      sslSocket.setSoTimeout(READ_TIMEOUT_MILLIS);
+      sslSocket.startHandshake();
+      return sslSocket;
       } catch (IOException e) {
         lastIOException = e;
         closeQuietly(socket);
-      } catch (GeneralSecurityException e) {
-        lastSecurityException = e;
-        closeQuietly(socket);
       }
-    }
-    if (lastSecurityException != null) {
-      throw lastSecurityException;
     }
     if (lastIOException != null) {
       throw lastIOException;
@@ -422,29 +606,6 @@ public final class LdapSpnDiscovery {
       socket.close();
     } catch (IOException ignored) {
     }
-  }
-
-  private static SSLSocketFactory trustAllSocketFactory() throws GeneralSecurityException {
-    TrustManager[] trustManagers =
-        new TrustManager[] {
-          new X509TrustManager() {
-            @Override
-            public void checkClientTrusted(
-                java.security.cert.X509Certificate[] chain, String authType) {}
-
-            @Override
-            public void checkServerTrusted(
-                java.security.cert.X509Certificate[] chain, String authType) {}
-
-            @Override
-            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-              return new java.security.cert.X509Certificate[0];
-            }
-          }
-        };
-    SSLContext sslContext = SSLContext.getInstance("TLS");
-    sslContext.init(null, trustManagers, new SecureRandom());
-    return sslContext.getSocketFactory();
   }
 
   private static byte[] readMessage(InputStream in) throws IOException {
@@ -573,6 +734,10 @@ public final class LdapSpnDiscovery {
 
   private static byte[] octetString(String value) {
     return element(0x04, value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static byte[] octetString(byte[] value) {
+    return element(0x04, value);
   }
 
   private static byte[] intValue(int value) {

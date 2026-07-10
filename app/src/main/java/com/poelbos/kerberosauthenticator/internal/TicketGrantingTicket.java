@@ -99,4 +99,27 @@ public final class TicketGrantingTicket {
     }
     return null;
   }
+
+  /** Renews the TGT in-place when the KDC issued it as renewable. */
+  public boolean renew() {
+    Set<Object> privateCreds = subject.getPrivateCredentials();
+    for (Object cred : privateCreds) {
+      if (!(cred instanceof KerberosTicket)) {
+        continue;
+      }
+      KerberosTicket ticket = (KerberosTicket) cred;
+      if (!ticket.isRenewable() || ticket.getRenewTill() == null) {
+        Log.i(TAG, "Stored ticket-granting-ticket is not renewable.");
+        return false;
+      }
+      try {
+        ticket.refresh();
+        return true;
+      } catch (Exception e) {
+        Log.w(TAG, "Unable to renew stored ticket-granting-ticket.", e);
+        return false;
+      }
+    }
+    return false;
+  }
 }

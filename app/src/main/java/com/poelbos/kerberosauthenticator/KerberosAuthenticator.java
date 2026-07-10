@@ -26,6 +26,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Base64;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import com.poelbos.kerberosauthenticator.internal.spnego.GetSpnegoTicketTask;
@@ -40,6 +41,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       KerberosAuthenticator::requestServiceTicket;
   private static TgtValidityChecker tgtValidityChecker =
       KerberosAuthenticator::hasValidTicketGrantingTicket;
+  private static TgtRenewer tgtRenewer = KerberosAuthenticator::renewTicketGrantingTicket;
+  private static ChromeCallerValidator chromeCallerValidator =
+      KerberosAuthenticator::isAuthorizedChromeCaller;
 
   KerberosAuthenticator(Context context) {
     super(context);
@@ -51,11 +55,21 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         Context context,
         String serviceName,
         KerberosAccount account,
-        boolean debugWithSensitiveData);
+        boolean debugWithSensitiveData,
+        byte[] incomingAuthToken,
+        byte[] spnegoContext);
+  }
+
+  interface ChromeCallerValidator {
+    boolean isAuthorized(Context context, Bundle options);
   }
 
   interface TgtValidityChecker {
     boolean hasValidTgt(KerberosAccount account);
+  }
+
+  interface TgtRenewer {
+    boolean renew(Context context, KerberosAccount account);
   }
 
   static void setServiceTicketProviderForTesting(ServiceTicketProvider provider) {
@@ -72,6 +86,22 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
   static void resetTgtValidityCheckerForTesting() {
     tgtValidityChecker = KerberosAuthenticator::hasValidTicketGrantingTicket;
+  }
+
+  static void setTgtRenewerForTesting(TgtRenewer renewer) {
+    tgtRenewer = renewer;
+  }
+
+  static void resetTgtRenewerForTesting() {
+    tgtRenewer = KerberosAuthenticator::renewTicketGrantingTicket;
+  }
+
+  static void setChromeCallerValidatorForTesting(ChromeCallerValidator validator) {
+    chromeCallerValidator = validator;
+  }
+
+  static void resetChromeCallerValidatorForTesting() {
+    chromeCallerValidator = KerberosAuthenticator::isAuthorizedChromeCaller;
   }
 
   @Override
@@ -126,10 +156,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             "Received request to obtain token %s with account %s.", authTokenType, account));
 
     // Request does not come from Chrome, deny access.
-    if (options == null
-        || !options.containsKey(AccountManager.KEY_ANDROID_PACKAGE_NAME)
-        || !Constants.CHROME_PACKAGE_NAME.equals(
-            options.get(AccountManager.KEY_ANDROID_PACKAGE_NAME))) {
+    if (!chromeCallerValidator.isAuthorized(context, options)) {
       return unsupportedOperationBundle("Unsupported caller app.");
     }
 
@@ -180,7 +207,11 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     boolean needReAuthentication = !krbAccount.getName().equals(getManagedConfigurationUsername());
 
     if (!needReAuthentication && !tgtValidityChecker.hasValidTgt(krbAccount)) {
-      needReAuthentication = true;
+      if (tgtRenewer.renew(context, krbAccount)) {
+        Log.i(TAG, String.format("Renewed ticket-granting-ticket for %s.", krbAccount.getName()));
+      } else {
+        needReAuthentication = true;
+      }
     }
     if (needReAuthentication) {
       Log.d(
@@ -194,18 +225,25 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
     Log.d(TAG, String.format("Will request service ticket for %s, account %s.",
         serviceName, krbAccount.getName()));
+    byte[] incomingAuthToken = incomingAuthToken(options);
+    byte[] spnegoContext = spnegoContext(options);
     GetSpnegoTicketTask.SpnegoTicketResult serviceTicketResult =
         serviceTicketProvider.getServiceTicket(
             context,
             serviceName,
             krbAccount,
-            getFromAccountConfiguration(AccountConfiguration::getDebugWithSensitiveData));
+            getFromAccountConfiguration(AccountConfiguration::getDebugWithSensitiveData),
+            incomingAuthToken,
+            spnegoContext);
     if (!serviceTicketResult.getRequestResult().successful()
         || serviceTicketResult.getServiceTicket() == null) {
       SharedPreferences sharedPref =
           context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
       BaseAuthenticatorActivity.ServiceTicketInfo.saveServiceTicketInfo(
-          sharedPref, null, new Date().getTime(), serviceTicketResult.getRequestResult().toString());
+          sharedPref,
+          serviceName,
+          new Date().getTime(),
+          serviceTicketResult.getRequestResult().toString());
       result.putInt(
           AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_AUTHENTICATION);
       result.putString(
@@ -216,12 +254,23 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     result.putString(AccountManager.KEY_ACCOUNT_NAME, krbAccount.getName());
     result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
     result.putString(AccountManager.KEY_AUTHTOKEN, serviceTicketResult.getServiceTicket());
-    result.putInt("spnegoResult", 0);
+    result.putInt(Constants.KEY_SPNEGO_RESULT, 0);
+    if (serviceTicketResult.getSpnegoContext() != null) {
+      Bundle contextBundle = new Bundle();
+      contextBundle.putByteArray(
+          Constants.KEY_GSS_CONTEXT_BYTES, serviceTicketResult.getSpnegoContext());
+      result.putBundle(Constants.KEY_SPNEGO_CONTEXT, contextBundle);
+    }
     krbAccount.save(context);
     SharedPreferences sharedPref =
         context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
     BaseAuthenticatorActivity.ServiceTicketInfo.saveServiceTicketInfo(
-        sharedPref, serviceName, new Date().getTime(), null);
+        sharedPref,
+        serviceTicketResult.getSelectedService() == null
+            ? serviceName
+            : serviceTicketResult.getSelectedService(),
+        new Date().getTime(),
+        null);
     return result;
   }
 
@@ -229,7 +278,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       Context context,
       String serviceName,
       KerberosAccount account,
-      boolean debugWithSensitiveData) {
+      boolean debugWithSensitiveData,
+      byte[] incomingAuthToken,
+      byte[] spnegoContext) {
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
     return GetSpnegoTicketTask.getServiceTicket(
@@ -240,13 +291,68 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         account.getName(),
         account.getPassword(),
         debugWithSensitiveData,
-        serviceName);
+        serviceName,
+        incomingAuthToken,
+        spnegoContext);
+  }
+
+  static boolean isAuthorizedChromeCaller(Context context, Bundle options) {
+    if (options == null
+        || !Constants.CHROME_PACKAGE_NAME.equals(
+            options.getString(AccountManager.KEY_ANDROID_PACKAGE_NAME))) {
+      return false;
+    }
+    int callerUid = options.getInt(AccountManager.KEY_CALLER_UID, -1);
+    if (callerUid < 0) {
+      return false;
+    }
+    String[] packages = context.getPackageManager().getPackagesForUid(callerUid);
+    if (packages == null) {
+      return false;
+    }
+    for (String packageName : packages) {
+      if (Constants.CHROME_PACKAGE_NAME.equals(packageName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static byte[] incomingAuthToken(Bundle options) {
+    String encoded = options.getString(Constants.KEY_INCOMING_AUTH_TOKEN);
+    if (encoded != null) {
+      try {
+        return Base64.decode(encoded, Base64.DEFAULT);
+      } catch (IllegalArgumentException e) {
+        Log.w(TAG, "Chrome supplied an invalid incoming SPNEGO token.", e);
+        return null;
+      }
+    }
+    return options.getByteArray(Constants.KEY_INCOMING_AUTH_TOKEN);
+  }
+
+  private static byte[] spnegoContext(Bundle options) {
+    Bundle contextBundle = options.getBundle(Constants.KEY_SPNEGO_CONTEXT);
+    return contextBundle == null
+        ? null
+        : contextBundle.getByteArray(Constants.KEY_GSS_CONTEXT_BYTES);
   }
 
   private static boolean hasValidTicketGrantingTicket(KerberosAccount account) {
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
     return tgt != null && tgt.getExpiryDate() != null && tgt.getExpiryDate().after(new Date());
+  }
+
+  private static boolean renewTicketGrantingTicket(Context context, KerberosAccount account) {
+    TicketGrantingTicket tgt =
+        TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
+    if (tgt == null || !tgt.renew()) {
+      return false;
+    }
+    account.setTicketGrantingTicket(tgt.asSerialized());
+    account.save(context);
+    return hasValidTicketGrantingTicket(account);
   }
 
   @Override

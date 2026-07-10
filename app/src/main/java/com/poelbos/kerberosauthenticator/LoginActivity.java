@@ -221,9 +221,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   private void initiateUserAuthenticationTask(KerberosAccountDetails accountDetails) {
     setRefreshingStatus(getTGTTimestampTextViewId());
     KerberosAccount account = KerberosAccount.getAccount(this);
-    if (account == null) {
-      account = new KerberosAccount(accountDetails);
-    }
+    account = accountForAuthentication(account, accountDetails);
 
     account.save(this);
     UserAuthenticationTask kinit =
@@ -237,6 +235,17 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
                 account.getDomainController()),
             accountConfiguration.getDebugWithSensitiveData());
     kinit.execute();
+  }
+
+  static KerberosAccount accountForAuthentication(
+      KerberosAccount account, KerberosAccountDetails accountDetails) {
+    if (account == null) {
+      return new KerberosAccount(accountDetails);
+    }
+    if (!java.util.Objects.equals(account.getPassword(), accountDetails.getPassword())) {
+      return account.withPassword(accountDetails.getPassword());
+    }
+    return account;
   }
 
   private void showUserLoginUI() {

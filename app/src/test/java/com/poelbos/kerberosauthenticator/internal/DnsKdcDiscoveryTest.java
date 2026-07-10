@@ -46,6 +46,11 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
+  public void discoverRealmForHostReturnsNullForMissingHost() {
+    assertThat(DnsKdcDiscovery.discoverRealmForHost(null, null)).isNull();
+  }
+
+  @Test
   public void testKerberosRealmLookupNamesUseHostSuffixes() {
     List<String> lookupNames = DnsKdcDiscovery.kerberosRealmLookupNames("portal.int.example");
 

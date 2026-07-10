@@ -92,6 +92,19 @@ public final class DnsKdcDiscovery {
     return aliases.isEmpty() ? null : aliases.get(0);
   }
 
+  public static List<String> discoverCnameChain(Context context, String host) {
+    Set<String> aliases = new LinkedHashSet<>();
+    String current = host;
+    for (int depth = 0; depth < 8; depth++) {
+      String alias = discoverCname(context, current);
+      if (alias == null || !aliases.add(alias)) {
+        break;
+      }
+      current = alias;
+    }
+    return new ArrayList<>(aliases);
+  }
+
   public static String discoverPtr(Context context, InetAddress address) {
     String queryName = reverseIpv4Name(address);
     if (queryName == null) {
@@ -108,6 +121,9 @@ public final class DnsKdcDiscovery {
   }
 
   public static String discoverRealmForHost(Context context, String host) {
+    if (host == null || host.trim().isEmpty()) {
+      return null;
+    }
     List<InetAddress> dnsServers = getDnsServers(context);
     if (dnsServers.isEmpty()) {
       Log.w(TAG, "Cannot discover Kerberos realm because the active network has no DNS servers.");

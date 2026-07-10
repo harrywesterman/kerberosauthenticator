@@ -111,7 +111,7 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
       result.putString(AccountManager.KEY_ACCOUNT_NAME, account.getName());
       result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
       result.putString(AccountManager.KEY_AUTHTOKEN, serviceTicket);
-      result.putInt("spnegoResult", 0);
+      result.putInt(Constants.KEY_SPNEGO_RESULT, 0);
       account.save(this);
       // Information about the most recent ticket to save in secure file storage.
 

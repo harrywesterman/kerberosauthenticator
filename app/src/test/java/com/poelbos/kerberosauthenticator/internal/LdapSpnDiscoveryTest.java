@@ -52,6 +52,22 @@ public final class LdapSpnDiscoveryTest {
   }
 
   @Test
+  public void gssApiBindRequestUsesGssApiMechanismAndToken() throws Exception {
+    byte[] request =
+        LdapSpnDiscovery.buildGssApiBindRequest(11, new byte[] {0x01, 0x02, 0x03});
+
+    LdapSpnDiscovery.LdapMessage message = LdapSpnDiscovery.parseMessage(request);
+
+    assertThat(message.messageId).isEqualTo(11);
+    assertThat(message.protocolOpTag).isEqualTo(0x60);
+    String requestText = asLatin1(request);
+    assertThat(requestText).contains("GSSAPI");
+    assertThat(request[request.length - 3]).isEqualTo((byte) 0x01);
+    assertThat(request[request.length - 2]).isEqualTo((byte) 0x02);
+    assertThat(request[request.length - 1]).isEqualTo((byte) 0x03);
+  }
+
+  @Test
   public void searchRequestContainsSpnFiltersAndAttributes() throws Exception {
     byte[] request =
         LdapSpnDiscovery.buildSearchRequest(8, "DC=EXAMPLE,DC=LOCAL", "Portal.Int.Example.");
