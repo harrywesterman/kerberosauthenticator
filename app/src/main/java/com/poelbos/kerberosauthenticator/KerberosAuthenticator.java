@@ -322,13 +322,17 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     String encoded = options.getString(Constants.KEY_INCOMING_AUTH_TOKEN);
     if (encoded != null) {
       try {
-        return Base64.decode(encoded, Base64.DEFAULT);
+        return normalizeIncomingAuthToken(Base64.decode(encoded, Base64.DEFAULT));
       } catch (IllegalArgumentException e) {
         Log.w(TAG, "Chrome supplied an invalid incoming SPNEGO token.", e);
         return null;
       }
     }
-    return options.getByteArray(Constants.KEY_INCOMING_AUTH_TOKEN);
+    return normalizeIncomingAuthToken(options.getByteArray(Constants.KEY_INCOMING_AUTH_TOKEN));
+  }
+
+  static byte[] normalizeIncomingAuthToken(byte[] token) {
+    return token == null || token.length == 0 ? null : token;
   }
 
   private static byte[] spnegoContext(Bundle options) {

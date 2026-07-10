@@ -139,6 +139,13 @@ public class KerberosAuthenticatorTest {
   }
 
   @Test
+  public void emptyIncomingSpnegoTokenStartsFirstRound() {
+    assertThat(KerberosAuthenticator.normalizeIncomingAuthToken(new byte[0])).isNull();
+    assertThat(KerberosAuthenticator.normalizeIncomingAuthToken(new byte[] {0x01}))
+        .isEqualTo(new byte[] {0x01});
+  }
+
+  @Test
   public void testGetAuthTokenBadServiceName() {
     String badTestToken = "SPNEGO:HOSTBASED:HTTP@.com";
     authenticator = new KerberosAuthenticator(context);
