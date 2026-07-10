@@ -57,4 +57,14 @@ public final class GetSpnegoTicketTaskTest {
             "auth02.example.local")
         .inOrder();
   }
+
+  @Test
+  public void continuationCandidatesResumeAfterPreviousFallback() {
+    assertThat(
+            GetSpnegoTicketTask.resumeCandidatesAfter(
+                Arrays.asList("requested.example", "backend01.example", "backend02.example"),
+                "backend01.example"))
+        .containsExactly("backend02.example", "requested.example", "backend01.example")
+        .inOrder();
+  }
 }

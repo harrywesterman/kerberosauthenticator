@@ -227,6 +227,13 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
               ? java.util.Collections.singletonList(normalizedService)
               : serviceTicketCandidates(
                   service, dnsAliasCandidates, certificateDnsNames, ldapCandidates);
+      if (incomingAuthToken != null && exportedContext == null) {
+        String previousService =
+            context
+                .getSharedPreferences("service_ticket_info_storage", Context.MODE_PRIVATE)
+                .getString("service_ticket_name", null);
+        candidates = resumeCandidatesAfter(candidates, previousService);
+      }
       Log.i(TAG, "SPNEGO candidates for " + service + ": " + candidates);
       for (String ticketService : candidates) {
         try {
@@ -352,6 +359,21 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     }
 
     return new ArrayList<>(candidates);
+  }
+
+  static List<String> resumeCandidatesAfter(List<String> candidates, String previousCandidate) {
+    if (candidates == null || candidates.isEmpty() || previousCandidate == null) {
+      return candidates == null ? new ArrayList<String>() : new ArrayList<>(candidates);
+    }
+    int previousIndex = candidates.indexOf(previousCandidate);
+    if (previousIndex < 0) {
+      return new ArrayList<>(candidates);
+    }
+    List<String> resumed = new ArrayList<>(candidates.size());
+    for (int offset = 1; offset <= candidates.size(); offset++) {
+      resumed.add(candidates.get((previousIndex + offset) % candidates.size()));
+    }
+    return resumed;
   }
 
   @Override
