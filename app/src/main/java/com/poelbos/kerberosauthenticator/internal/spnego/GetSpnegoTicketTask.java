@@ -223,7 +223,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
 
       GSSException lastException = null;
       List<String> candidates =
-          incomingAuthToken != null || exportedContext != null
+          exportedContext != null
               ? java.util.Collections.singletonList(normalizedService)
               : serviceTicketCandidates(
                   service, dnsAliasCandidates, certificateDnsNames, ldapCandidates);
