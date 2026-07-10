@@ -21,9 +21,6 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -32,7 +29,6 @@ import java.util.Locale;
 import java.util.Set;
 import javax.security.auth.Subject;
 import org.ietf.jgss.GSSContext;
-import org.ietf.jgss.ChannelBinding;
 import org.ietf.jgss.GSSManager;
 import org.ietf.jgss.GSSName;
 import org.ietf.jgss.MessageProp;
@@ -387,11 +383,10 @@ public final class LdapSpnDiscovery {
           manager.createName("ldap@" + host, GSSName.NT_HOSTBASED_SERVICE, kerberosOid);
       GSSContext gssContext = manager.createContext(ldapName, kerberosOid, null, GSSContext.DEFAULT_LIFETIME);
       gssContext.requestMutualAuth(true);
-      gssContext.requestInteg(true);
-      gssContext.requestConf(true);
-      if (socket instanceof SSLSocket) {
-        gssContext.setChannelBinding(tlsServerEndpointChannelBinding((SSLSocket) socket));
-      }
+      // AD does not allow a SASL integrity/confidentiality layer on top of LDAPS.
+      // TLS already protects the LDAP session; GSSAPI is used here for authentication.
+      gssContext.requestInteg(false);
+      gssContext.requestConf(false);
 
       byte[] serverToken = new byte[0];
       for (int round = 0; round < 5; round++) {
@@ -483,35 +478,15 @@ public final class LdapSpnDiscovery {
       byte[] unwrapped =
           gssContext.unwrap(serverToken, 0, serverToken.length, new MessageProp(0, false));
       if (unwrapped.length < 4 || (unwrapped[0] & 0x01) == 0) {
-        throw new IOException("LDAP server does not permit the required no-security layer.");
+        throw new IOException("LDAP server does not permit the no-security layer.");
       }
       byte[] response = new byte[] {0x01, 0x00, 0x00, 0x00};
       return gssContext.wrap(response, 0, response.length, new MessageProp(0, false));
+    } catch (IOException e) {
+      throw e;
     } catch (Exception e) {
-      if (e instanceof IOException) {
-        throw (IOException) e;
-      }
       throw new IOException("Unable to negotiate LDAP GSSAPI security layer.", e);
     }
-  }
-
-  private static ChannelBinding tlsServerEndpointChannelBinding(SSLSocket socket)
-      throws IOException, GeneralSecurityException {
-    Certificate[] peerCertificates = socket.getSession().getPeerCertificates();
-    if (peerCertificates.length == 0 || !(peerCertificates[0] instanceof X509Certificate)) {
-      throw new GeneralSecurityException("LDAPS peer did not provide an X.509 certificate.");
-    }
-    X509Certificate certificate = (X509Certificate) peerCertificates[0];
-    String signatureAlgorithm = certificate.getSigAlgName().toUpperCase(Locale.US);
-    String digestAlgorithm = "SHA-256";
-    if (signatureAlgorithm.contains("SHA512")) {
-      digestAlgorithm = "SHA-512";
-    } else if (signatureAlgorithm.contains("SHA384")) {
-      digestAlgorithm = "SHA-384";
-    }
-    byte[] digest = MessageDigest.getInstance(digestAlgorithm).digest(certificate.getEncoded());
-    byte[] prefix = "tls-server-end-point:".getBytes(StandardCharsets.US_ASCII);
-    return new ChannelBinding(null, null, concat(prefix, digest));
   }
 
   private static void logRootDseProbe(Context context, String host) {
