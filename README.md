@@ -1,8 +1,19 @@
-# Android Kerberos Authenticator
+# Bedrijfsbestanden voor Android
 
-A port of Google's archived [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) from Bazel to Gradle, with updated dependencies for modern Android.
+Een Android Enterprise-app voor Active Directory/Kerberos met twee delen in één APK:
 
-This app provides Kerberos/SPNEGO authentication for Chrome on Android Enterprise devices. It obtains Ticket Granting Tickets (TGT) from an Active Directory domain controller and exchanges them for SPNEGO service tickets.
+- een Kerberos-authenticator voor SSO en ticketbeheer
+- een bedrijfsbestanden-browser voor SMB 2/3-shares met Kerberos-only toegang
+
+De app is gebaseerd op de bestaande [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator)-codebasis en is uitgebreid met een geïntegreerde enterprise-bestandenervaring. Chrome kan nog steeds dezelfde Kerberos-account gebruiken voor HTTP Negotiate.
+
+## Bedrijfsbestanden
+
+- MDM bepaalt welke shares zichtbaar zijn; gebruikers kunnen geen eigen SMB-server toevoegen.
+- SMB gebruikt Kerberos GSS/SPNEGO, signing en minimaal SMB 2.1. Er is geen NTLM-, guest- of anonymous-fallback.
+- Browsen, downloaden/openen, uploaden, mappen maken, hernoemen en verwijderen zijn beschikbaar binnen de AD-rechten van de gebruiker.
+- Het AD-wachtwoord wordt niet uit managed configuration gelezen en niet lokaal opgeslagen. Alleen het door de KDC uitgegeven TGT wordt via Android AccountManager bewaard.
+- Screenshots zijn standaard geblokkeerd en SMB 3-encryptie kan door MDM verplicht worden.
 
 ## Differences from the original
 
@@ -14,6 +25,7 @@ This app provides Kerberos/SPNEGO authentication for Chrome on Android Enterpris
 - Manual config UI for testing without MDM
 - DNS-based KDC discovery from SRV records (`_kerberos._udp.<realm>`)
 - App version, TGT validity, and service ticket info shown in the status UI
+- Integrated enterprise file browser with managed shares, FileProvider-based external opening, and Kerberos-only SMB sessions
 - GitHub Actions release workflow that publishes APKs on push to `main`
 - Logout button that removes the account and clears local config
 
@@ -43,7 +55,7 @@ Release APK at `app/build/outputs/apk/release/app-release.apk`. Requires `releas
 ./gradlew test
 ```
 
-38 unit tests (Robolectric 4.16.1). Requires JDK 17 — the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
+Unit tests use Robolectric 4.16.1. JDK 17 is required because the openjdk-kerberos library uses `sun.security.*` internal classes that need `--add-exports` JVM flags.
 
 ## Releasing
 
@@ -70,7 +82,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-When no managed configuration is available, the app shows a local configuration screen on first launch. You can enter AD credentials manually (username, password, domain). The values are saved locally and are used as fallback in both debug and release builds.
+When no managed configuration is available, the legacy test screen can store only username and domain. Passwords are always entered into the login prompt and are never persisted.
 
 ## MDM Deployment
 
@@ -78,7 +90,7 @@ The app reads its configuration from Android's [managed configuration](https://d
 
 ### Omnissa Workspace ONE UEM
 
-Create one application configuration for this authenticator app and one for Chrome. The authenticator configuration gives the app AD credentials; the Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
+Create one application configuration for this app and one for Chrome. The app configuration provides the Kerberos identity and share definitions; the Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
 
 #### Kerberos Authenticator app
 
@@ -87,16 +99,29 @@ Create one application configuration for this authenticator app and one for Chro
 3. In the app assignment, enable **Application Configuration** / managed configuration.
 4. Enter the managed configuration keys below. If Workspace ONE UEM discovers the app restriction schema from the APK, use the generated fields. Otherwise, add the keys manually as custom key-value pairs.
 
-Example managed configuration:
+Voor de geïntegreerde bestandenapp gebruikt u bijvoorbeeld:
 
 ```json
 {
   "username": "john.doe",
-  "password": "s3cret",
-  "adDomain": "example.com",
-  "sensitiveDebugData": false
+  "ad_realm": "EXAMPLE.COM",
+  "require_smb_encryption": true,
+  "allow_local_cache": true,
+  "allow_screenshots": false,
+  "shares": [
+    {
+      "id": "documents",
+      "display_name": "Documenten",
+      "host": "files.example.com",
+      "port": 445,
+      "share_name": "Documents",
+      "start_path": ""
+    }
+  ]
 }
 ```
+
+Gebruik altijd een DNS-hostnaam met een geldige `cifs/<host>`-SPN; IP-adressen worden geweigerd. `kdc_hosts` is optioneel, anders gebruikt de app DNS SRV-discovery. Het schema staat in `app/src/main/res/xml/app_restrictions.xml` en kan door een MDM uit de APK worden ingelezen.
 
 The app discovers Kerberos KDCs from DNS SRV records such as `_kerberos._udp.example.com`.
 
@@ -115,7 +140,7 @@ After the assignment syncs, open `chrome://policy` on the device to confirm the 
 
 ### Testing managed config
 
-**Option 1** — Use the built-in debug UI (simplest): install the APK and launch the app. It shows a form to enter AD credentials manually. Credentials are stored in SharedPreferences and used as fallback when no MDM-managed config exists.
+**Option 1** — Use the built-in debug UI: install the APK and enter username and domain. The password is requested only while obtaining a ticket and is not stored.
 
 **Option 2** — Use [Test DPC](https://play.google.com/store/apps/details?id=com.afwsamples.testdpc) from Google Play. After installing:
 1. Set Test DPC as device owner
@@ -135,12 +160,16 @@ Then use the Test DPC UI to set managed configuration for the app.
 | Key | Type | Required | Description |
 |---|---|---|---|
 | `username` | string | yes | AD username |
-| `password` | string | no | AD password. If omitted, the user is prompted to enter it on first login |
-| `adDomain` | string | yes | Active Directory domain (e.g. `example.com`) |
-| `sensitiveDebugData` | bool | no | Enable debug logging that includes credentials (`true`/`false`, default `false`) |
+| `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
+| `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and start path |
+| `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
+| `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `false` |
+| `allow_local_cache` | bool | no | Permit app-private temporary files for external viewers; default `true` |
+| `allow_screenshots` | bool | no | Permit screenshots; default `false` |
+| `support_contact` | string | no | IT support text or URL |
 
 When no domain controller is specified, the app automatically discovers KDCs through DNS SRV lookups (`_kerberos._udp.<domain>` and `_kerberos._tcp.<domain>`).
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE). The implementation uses the same provider-oriented design evaluated in Material Files, but does not copy its GPL-licensed source code.

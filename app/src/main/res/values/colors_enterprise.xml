@@ -1,0 +1,10 @@
+<resources>
+    <color name="enterprise_navy">#102A43</color>
+    <color name="enterprise_navy_dark">#071A2B</color>
+    <color name="enterprise_copper">#C76D3A</color>
+    <color name="enterprise_canvas">#F5F7F8</color>
+    <color name="enterprise_surface">#FFFFFF</color>
+    <color name="enterprise_text">#14212B</color>
+    <color name="enterprise_muted">#60717E</color>
+    <color name="enterprise_line">#DCE3E7</color>
+</resources>

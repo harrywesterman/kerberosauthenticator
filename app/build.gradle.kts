@@ -17,6 +17,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        viewBinding = true
     }
 
     defaultConfig {
@@ -72,6 +73,9 @@ dependencies {
     implementation(project(":openjdk-kerberos"))
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.annotation:annotation:1.9.1")
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("com.hierynomus:smbj:0.14.0")
     implementation("com.google.guava:guava:33.4.0-android")
 
     testImplementation("junit:junit:4.13.2")

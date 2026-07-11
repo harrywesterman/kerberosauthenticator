@@ -42,6 +42,7 @@ public class AccountConfiguration {
 
   // Managed configs keys
   static final String AD_DOMAIN_KEY = "adDomain";
+  static final String AD_REALM_KEY = "ad_realm";
   static final String USERNAME_KEY = "username";
   static final String PASSWORD_KEY = "password";
   static final String SENSITIVE_DEBUG_DATA_KEY = "sensitiveDebugData";
@@ -53,6 +54,7 @@ public class AccountConfiguration {
   private String username;
   private String password;
   private String adDomain;
+  private String adDomainController;
   private boolean debugWithSensitiveData = false;
 
   AccountConfiguration(@NonNull Context context) {
@@ -71,6 +73,7 @@ public class AccountConfiguration {
     username = null;
     password = null;
     adDomain = null;
+    adDomainController = "";
     debugWithSensitiveData = false;
 
     Bundle restrictionsBundle = restrictionsManager.getApplicationRestrictions();
@@ -89,14 +92,30 @@ public class AccountConfiguration {
       }
     }
     // Obtain managed configs.
-    if (restrictionsBundle.containsKey(AD_DOMAIN_KEY)
+    String configuredDomain = restrictionsBundle.getString(AD_REALM_KEY);
+    if (Strings.isNullOrEmpty(configuredDomain)) {
+      configuredDomain = restrictionsBundle.getString(AD_DOMAIN_KEY);
+    }
+    if (!Strings.isNullOrEmpty(configuredDomain)
         && restrictionsBundle.containsKey(USERNAME_KEY)) {
-      adDomain = restrictionsBundle.getString(AD_DOMAIN_KEY);
+      adDomain = configuredDomain;
       username = restrictionsBundle.getString(USERNAME_KEY);
     }
-    if (restrictionsBundle.containsKey(PASSWORD_KEY)) {
+    // Enterprise file deployments deliberately never accept a password through MDM. Retain the
+    // legacy key only for existing authenticator-only deployments without managed shares.
+    if (!restrictionsBundle.containsKey("shares") && restrictionsBundle.containsKey(PASSWORD_KEY)) {
       // Password may either be supplied by managed config or user input.
       password = restrictionsBundle.getString(PASSWORD_KEY);
+    }
+    String[] configuredKdcs = restrictionsBundle.getStringArray("kdc_hosts");
+    if (configuredKdcs != null && configuredKdcs.length > 0
+        && !Strings.isNullOrEmpty(configuredKdcs[0])) {
+      adDomainController = configuredKdcs[0].trim();
+    } else {
+      String configuredKdcList = restrictionsBundle.getString("kdc_hosts");
+      if (!Strings.isNullOrEmpty(configuredKdcList)) {
+        adDomainController = configuredKdcList.split(",", 2)[0].trim();
+      }
     }
 
     debugWithSensitiveData = restrictionsBundle.getBoolean(SENSITIVE_DEBUG_DATA_KEY, false);
@@ -106,7 +125,7 @@ public class AccountConfiguration {
     if (!hasManagedConfigs()) {
       return null;
     }
-    return new KerberosAccountDetails(username, password, adDomain, "");
+    return new KerberosAccountDetails(username, password, adDomain, adDomainController);
   }
 
   boolean getDebugWithSensitiveData() {
