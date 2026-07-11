@@ -43,13 +43,15 @@ public class EditConfigurationActivity extends Activity {
 
     SharedPreferences prefs = getSharedPreferences(LOCAL_CONFIG_PREFS_NAME, MODE_PRIVATE);
     usernameField.setText(prefs.getString("username", ""));
-    passwordField.setText(prefs.getString("password", ""));
+    // Passwords are intentionally never restored from disk. The login flow asks for it when a
+    // fresh TGT is required.
+    passwordField.setText("");
     domainField.setText(prefs.getString("adDomain", ""));
 
     findViewById(R.id.btn_save).setOnClickListener(v -> {
       SharedPreferences.Editor editor = prefs.edit();
       editor.putString("username", usernameField.getText().toString().trim());
-      editor.putString("password", passwordField.getText().toString().trim());
+      editor.remove("password");
       editor.putString("adDomain", domainField.getText().toString().trim());
       editor.apply();
 

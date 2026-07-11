@@ -1,0 +1,65 @@
+package com.poelbos.kerberosauthenticator.files;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import android.os.Bundle;
+import android.os.Parcelable;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
+@RunWith(RobolectricTestRunner.class)
+@Config(sdk = 35)
+public final class EnterpriseConfigurationTest {
+  @Test public void parsesManagedShareAndSecurityPolicy() {
+    Bundle share = new Bundle();
+    share.putString("id", "documents");
+    share.putString("display_name", "Documenten");
+    share.putString("host", "files.example.com");
+    share.putString("share_name", "Documents");
+    Bundle restrictions = new Bundle();
+    restrictions.putString("ad_realm", "example.com");
+    restrictions.putString("username", "alex");
+    restrictions.putParcelableArray("shares", new Parcelable[] {share});
+    restrictions.putBoolean("require_smb_encryption", true);
+
+    EnterpriseConfiguration configuration = EnterpriseConfiguration.from(restrictions);
+
+    assertTrue(configuration.isValid());
+    assertEquals("EXAMPLE.COM", configuration.getRealm());
+    assertEquals(1, configuration.getShares().size());
+    assertEquals(445, configuration.getShares().get(0).getPort());
+    assertTrue(configuration.isRequireEncryption());
+    assertFalse(configuration.isAllowScreenshots());
+  }
+
+  @Test public void invalidConfigurationExplainsAllMissingInputs() {
+    EnterpriseConfiguration configuration = EnterpriseConfiguration.from(new Bundle());
+    assertFalse(configuration.isValid());
+    assertEquals(3, configuration.getErrors().size());
+  }
+
+  @Test public void duplicateShareIdsFailClosed() {
+    Bundle first = share("same", "Eerste");
+    Bundle second = share("same", "Tweede");
+    Bundle restrictions = new Bundle();
+    restrictions.putString("ad_realm", "EXAMPLE.COM");
+    restrictions.putString("username", "alex");
+    restrictions.putParcelableArray("shares", new Parcelable[] {first, second});
+    EnterpriseConfiguration configuration = EnterpriseConfiguration.from(restrictions);
+    assertFalse(configuration.isValid());
+    assertEquals(1, configuration.getShares().size());
+  }
+
+  private static Bundle share(String id, String name) {
+    Bundle share = new Bundle();
+    share.putString("id", id);
+    share.putString("display_name", name);
+    share.putString("host", "files.example.com");
+    share.putString("share_name", "Documents");
+    return share;
+  }
+}

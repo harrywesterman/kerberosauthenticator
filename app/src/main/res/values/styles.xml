@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.KerberosFiles" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/enterprise_navy</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/enterprise_copper</item>
+        <item name="colorSurface">@color/enterprise_surface</item>
+        <item name="android:colorBackground">@color/enterprise_canvas</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:navigationBarColor">@color/enterprise_canvas</item>
+        <item name="android:statusBarColor">@color/enterprise_navy_dark</item>
+    </style>
+</resources>

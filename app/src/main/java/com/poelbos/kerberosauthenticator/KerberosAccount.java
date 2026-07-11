@@ -86,7 +86,7 @@ public class KerberosAccount {
    * @return the account, or null if none is configured.
    * @throws IllegalStateException if more than one account is configured.
    */
-  static KerberosAccount getAccount(Context context) {
+  public static KerberosAccount getAccount(Context context) {
     AccountManager am = AccountManager.get(context);
     Account[] accounts = am.getAccountsByType(KERBEROS_ACCOUNT_TYPE);
     if (accounts.length > 1) {
@@ -117,7 +117,7 @@ public class KerberosAccount {
         userData.getString(KEY_TGT));
   }
 
-  byte[] getTicketGrantingTicket() {
+  public byte[] getTicketGrantingTicket() {
     return Base64.decode(userData.getString(KEY_TGT), Base64.NO_WRAP);
   }
 
@@ -201,7 +201,7 @@ public class KerberosAccount {
     return userData.getString(KEY_AD_DC);
   }
 
-  String getDomain() {
+  public String getDomain() {
     return userData.getString(KEY_AD_DOMAIN);
   }
 
