@@ -28,6 +28,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
@@ -100,7 +101,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
     // Initialise the UI with corresponding values.
     initUI(false /*isUserInitiated*/, serviceName);
-    showLogoutBtn(accountConfiguration.hasManagedConfigs());
+    showLogoutBtn(KerberosAccount.getAccount(this) != null);
 
     // Generate or renew a TGT. Do not attempt recovering from a bad password if we are in the
     // process of adding a new account.
@@ -125,7 +126,23 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (successGettingTgt && account != null) {
       TicketGrantingTicket tgt = new TicketGrantingTicket(ticket);
       account.setTicketGrantingTicket(tgt.asSerialized());
+      char[] password = account.getPassword().toCharArray();
+      boolean stored;
+      try {
+        stored = new CredentialVault(this).store(
+            account.getName(), account.getDomain(), password);
+      } finally {
+        java.util.Arrays.fill(password, '\0');
+      }
       account.save(this);
+      if (stored) {
+        TgtRefreshScheduler.schedule(this);
+      } else {
+        TgtRefreshScheduler.cancel(this);
+        Toast.makeText(this,
+            "Automatisch vernieuwen is op dit toestel niet veilig beschikbaar",
+            Toast.LENGTH_LONG).show();
+      }
       isPasswordRetry = false;
     } else {
       if (ticketRequestResult.isPasswordBad() && !isPasswordRetry) {
@@ -133,10 +150,10 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
             Constants.TAG,
             String.format(
                 "Bad password for user %s, removing and attempting re-authentication.",
-                account.getName()));
+                account == null ? "onbekend" : account.getName()));
         KerberosAccount.removeAccount(this);
         isPasswordRetry = true;
-        authenticateAccount(true /*shouldAddAccount*/);
+        showUserLoginUI();
       } else {
         setErrorResultAndFinish(
             AccountManager.ERROR_CODE_BAD_AUTHENTICATION, ticketRequestResult.toString());
@@ -179,43 +196,56 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     }
 
     KerberosAccount account = KerberosAccount.getAccount(this);
-    // Remove the old account if the username in the from the managed configuration is different
-    // to the saved account.
+    if (account != null && !account.getDomain().equalsIgnoreCase(accountDetails.getActiveDirectoryDomain())) {
+      Log.i(Constants.TAG, "Managed realm changed; removing the obsolete work account.");
+      KerberosAccount.removeAccount(this);
+      account = null;
+    }
     if (account != null) {
-      boolean accountNameDiffers = !account.getName().equals(accountDetails.getUsername());
-      if (accountNameDiffers) {
-        Log.i(
-            Constants.TAG,
-            String.format("Removing obsolete account for user" + " %s.", account.getName()));
-        KerberosAccount.removeAccount(this);
-        account = null;
-      }      // Fall through to the logic for creating and saving a new account as the old
-      // one was just removed.
-    } else if (!shouldAddAccount) {
-      throw new IllegalStateException(
-          "No account is defined and not in a flow for adding accounts.");
+      char[] stored = new CredentialVault(this).load(account.getName(), account.getDomain());
+      if (stored != null) {
+        try {
+          initiateUserAuthenticationTask(account.withPassword(new String(stored)), accountDetails);
+          return;
+        } finally {
+          java.util.Arrays.fill(stored, '\0');
+        }
+      }
     }
-
-    boolean hasUserPassword = account != null && !TextUtils.isEmpty(account.getPassword());
-    if (accountConfiguration.hasManagedConfigPassword() || hasUserPassword) {
-      // We have all data required to authenticate.
-      initiateUserAuthenticationTask(buildKerberosAccountDetails(accountDetails, account));
-    } else {
-      showPasswordEntryPrompt(account);
-    }
+    showPasswordEntryPrompt(account);
   }
 
   private void saveUserCredentials() {
     hideUserLoginUI();
-    KerberosAccountDetails detailsWithoutPassword = accountConfiguration.getAccountDetails();
+    KerberosAccountDetails configured = accountConfiguration.getAccountDetails();
+    KerberosAccount existing = KerberosAccount.getAccount(this);
+    String username = ((TextView) findViewById(R.id.editTextUser)).getText().toString().trim();
+    if (username.isEmpty() && existing != null) username = existing.getName();
+    if (username.isEmpty() && configured != null) username = configured.getUsername();
     String password = ((TextView) findViewById(R.id.editTextPw)).getText().toString();
+    if (TextUtils.isEmpty(username) || TextUtils.isEmpty(password)) {
+      Toast.makeText(this, "Vul uw gebruikersnaam en wachtwoord in", Toast.LENGTH_LONG).show();
+      showUserLoginUI();
+      return;
+    }
+    if (existing != null && !existing.getName().equals(username)) {
+      KerberosAccount.removeAccount(this);
+    }
+    hideUserLoginUI();
     KerberosAccountDetails detailsWithPassword =
         new KerberosAccountDetails(
-            detailsWithoutPassword.getUsername(),
+            username,
             password,
-            detailsWithoutPassword.getActiveDirectoryDomain(),
-            detailsWithoutPassword.getAdDomainController());
+            configured.getActiveDirectoryDomain(),
+            configured.getAdDomainController());
     initiateUserAuthenticationTask(detailsWithPassword);
+  }
+
+  private void initiateUserAuthenticationTask(
+      KerberosAccount account, KerberosAccountDetails configured) {
+    initiateUserAuthenticationTask(new KerberosAccountDetails(
+        account.getName(), account.getPassword(), configured.getActiveDirectoryDomain(),
+        configured.getAdDomainController()));
   }
 
   private void initiateUserAuthenticationTask(KerberosAccountDetails accountDetails) {
@@ -249,6 +279,13 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   }
 
   private void showUserLoginUI() {
+    TextView username = findViewById(R.id.editTextUser);
+    KerberosAccount existing = KerberosAccount.getAccount(this);
+    if (existing != null) username.setText(existing.getName());
+    username.setVisibility(View.VISIBLE);
+    TextView realm = findViewById(R.id.managedRealm);
+    realm.setText("Bedrijfsomgeving: " + accountConfiguration.getRealm());
+    realm.setVisibility(View.VISIBLE);
     View pwField = findViewById(R.id.editTextPw);
     pwField.setVisibility(View.VISIBLE);
     Button loginBtn = findViewById(R.id.ok_btn);
@@ -258,8 +295,10 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   }
 
   private void hideUserLoginUI() {
-    findViewById(R.id.editTextPw).setVisibility(View.INVISIBLE);
-    findViewById(R.id.ok_btn).setVisibility(View.INVISIBLE);
+    findViewById(R.id.editTextUser).setVisibility(View.GONE);
+    findViewById(R.id.managedRealm).setVisibility(View.GONE);
+    findViewById(R.id.editTextPw).setVisibility(View.GONE);
+    findViewById(R.id.ok_btn).setVisibility(View.GONE);
     setText(getTGTTimestampTextViewId(), getText(R.string.not_available).toString());
     setRefreshingStatus(getTGTTimestampTextViewId());
   }
@@ -267,12 +306,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   private void showPasswordEntryPrompt(KerberosAccount account) {
     // Activity was created to generate a TGT.
     // Prepare to check if we have the user password available.
-    boolean missingAccountPassword = account == null || TextUtils.isEmpty(account.getPassword());
-    if (!accountConfiguration.hasManagedConfigPassword() && missingAccountPassword) {
-      // User needs to log in if there is no managed config password and the Account Manager
-      // does not hold any password.
-      showUserLoginUI();
-    }
+    showUserLoginUI();
     if (account != null) {
       // If the TGT is being renewed for the same account, check if there is any service ticket
       // information available already.

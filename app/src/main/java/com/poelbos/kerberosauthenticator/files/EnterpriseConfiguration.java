@@ -13,7 +13,6 @@ import java.util.Set;
 /** Strict parser for Android Enterprise managed configuration. */
 public final class EnterpriseConfiguration {
   public static final String REALM = "ad_realm";
-  public static final String USERNAME = "username";
   public static final String SHARES = "shares";
   public static final String KDC_HOSTS = "kdc_hosts";
   public static final String REQUIRE_ENCRYPTION = "require_smb_encryption";
@@ -22,7 +21,6 @@ public final class EnterpriseConfiguration {
   public static final String SUPPORT_CONTACT = "support_contact";
 
   private final String realm;
-  private final String username;
   private final List<ManagedShare> shares;
   private final List<String> kdcHosts;
   private final boolean requireEncryption;
@@ -43,9 +41,7 @@ public final class EnterpriseConfiguration {
     String realm = clean(bundle.getString(REALM));
     // Backwards compatibility with the existing authenticator MDM key.
     if (realm.isEmpty()) realm = clean(bundle.getString("adDomain"));
-    String username = clean(bundle.getString(USERNAME));
     if (realm.isEmpty()) errors.add("Active Directory-realm ontbreekt");
-    if (username.isEmpty()) errors.add("Gebruikersnaam ontbreekt");
 
     List<ManagedShare> shares = new ArrayList<>();
     Set<String> ids = new LinkedHashSet<>();
@@ -84,18 +80,17 @@ public final class EnterpriseConfiguration {
       }
     }
     return new EnterpriseConfiguration(
-        realm.toUpperCase(), username, shares, kdcs,
+        realm.toUpperCase(), shares, kdcs,
         bundle.getBoolean(REQUIRE_ENCRYPTION, false),
         bundle.getBoolean(ALLOW_CACHE, true),
         bundle.getBoolean(ALLOW_SCREENSHOTS, false), clean(bundle.getString(SUPPORT_CONTACT)), errors);
   }
 
   private EnterpriseConfiguration(
-      String realm, String username, List<ManagedShare> shares, List<String> kdcHosts,
+      String realm, List<ManagedShare> shares, List<String> kdcHosts,
       boolean requireEncryption, boolean allowCache, boolean allowScreenshots,
       String supportContact, List<String> errors) {
     this.realm = realm;
-    this.username = username;
     this.shares = Collections.unmodifiableList(new ArrayList<>(shares));
     this.kdcHosts = Collections.unmodifiableList(new ArrayList<>(kdcHosts));
     this.requireEncryption = requireEncryption;
@@ -108,7 +103,6 @@ public final class EnterpriseConfiguration {
   private static String clean(String value) { return value == null ? "" : value.trim(); }
   public boolean isValid() { return errors.isEmpty(); }
   public String getRealm() { return realm; }
-  public String getUsername() { return username; }
   public List<ManagedShare> getShares() { return shares; }
   public List<String> getKdcHosts() { return kdcHosts; }
   public boolean isRequireEncryption() { return requireEncryption; }

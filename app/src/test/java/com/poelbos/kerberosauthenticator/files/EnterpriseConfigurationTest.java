@@ -22,7 +22,6 @@ public final class EnterpriseConfigurationTest {
     share.putString("share_name", "Documents");
     Bundle restrictions = new Bundle();
     restrictions.putString("ad_realm", "example.com");
-    restrictions.putString("username", "alex");
     restrictions.putParcelableArray("shares", new Parcelable[] {share});
     restrictions.putBoolean("require_smb_encryption", true);
 
@@ -39,7 +38,7 @@ public final class EnterpriseConfigurationTest {
   @Test public void invalidConfigurationExplainsAllMissingInputs() {
     EnterpriseConfiguration configuration = EnterpriseConfiguration.from(new Bundle());
     assertFalse(configuration.isValid());
-    assertEquals(3, configuration.getErrors().size());
+    assertEquals(2, configuration.getErrors().size());
   }
 
   @Test public void duplicateShareIdsFailClosed() {
@@ -47,7 +46,6 @@ public final class EnterpriseConfigurationTest {
     Bundle second = share("same", "Tweede");
     Bundle restrictions = new Bundle();
     restrictions.putString("ad_realm", "EXAMPLE.COM");
-    restrictions.putString("username", "alex");
     restrictions.putParcelableArray("shares", new Parcelable[] {first, second});
     EnterpriseConfiguration configuration = EnterpriseConfiguration.from(restrictions);
     assertFalse(configuration.isValid());

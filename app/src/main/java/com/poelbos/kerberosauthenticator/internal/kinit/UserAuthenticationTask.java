@@ -38,6 +38,18 @@ import javax.security.auth.login.LoginException;
  * ticket-granting-ticket for the user.
  */
 public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestResult> {
+  public static final class AuthenticationOutcome {
+    private final TicketRequestResult result;
+    private final Subject subject;
+
+    AuthenticationOutcome(TicketRequestResult result, Subject subject) {
+      this.result = result;
+      this.subject = subject;
+    }
+
+    public TicketRequestResult getResult() { return result; }
+    public Subject getSubject() { return subject; }
+  }
   private static final String REFRESH_KRB5_CONFIG = "refreshKrb5Config";
   private static final String STORE_KEY = "storeKey";
   private static final String USE_FIRST_PASS = "useFirstPass";
@@ -68,17 +80,33 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
 
   @Override
   protected TicketRequestResult doInBackground(Void... voids) {
+    AuthenticationOutcome outcome = authenticate(
+        context, new KerberosAccountDetails(username, password, adDomain, domainController),
+        debugWithCredentials);
+    subject = outcome.getSubject();
+    return outcome.getResult();
+  }
+
+  /** Performs a synchronous kinit. Intended for WorkManager and tests. */
+  public static AuthenticationOutcome authenticate(
+      Context context, KerberosAccountDetails details, boolean debugWithCredentials) {
+    String username = details.getUsername();
+    String password = details.getPassword();
+    String adDomain = details.getActiveDirectoryDomain();
+    String domainController = details.getAdDomainController();
     Log.i(TAG, String.format("Authenticating user %s to domain %s via %s",
         username, adDomain, domainController));
     try {
-      KerberosEnvironment.configure(context, adDomain, domainController, debugWithCredentials);
+      KerberosEnvironment.configure(
+          context.getApplicationContext(), adDomain, domainController, debugWithCredentials);
     } catch (IOException e) {
       Log.w(TAG, "Failure configuring Kerberos environment", e);
-      return new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage());
+      return new AuthenticationOutcome(
+          new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage()), null);
     }
 
     Krb5LoginModule lm = new Krb5LoginModule();
-    subject = new Subject();
+    Subject subject = new Subject();
     CallbackHandler handler = new UsernamePasswordCallbackHandler(username, password);
     Map<String, String> sharedState = new HashMap<>();
     sharedState.put(REFRESH_KRB5_CONFIG, "true");
@@ -91,11 +119,13 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
     lm.initialize(subject, handler, sharedState, options);
     try {
       if (!lm.login()) {
-        return new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, "Login failed");
+        return new AuthenticationOutcome(
+            new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, "Login failed"), null);
       }
 
       if (!lm.commit()) {
-        return new TicketRequestResult(ResultCode.ERROR_COMMIT_FAILED, "Commit failed");
+        return new AuthenticationOutcome(
+            new TicketRequestResult(ResultCode.ERROR_COMMIT_FAILED, "Commit failed"), null);
       }
 
       Log.i(TAG, String.format("Successfully authenticated %s to %s", username, adDomain));
@@ -105,9 +135,11 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
     } catch (LoginException e) {
       Log.w(TAG, "Failure logging in", e);
       if (e.getMessage().contains("Pre-authentication information was invalid")) {
-        return new TicketRequestResult(ResultCode.ERROR_BAD_PASSWORD, e.getMessage());
+        return new AuthenticationOutcome(
+            new TicketRequestResult(ResultCode.ERROR_BAD_PASSWORD, e.getMessage()), null);
       } else {
-        return new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage());
+        return new AuthenticationOutcome(
+            new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage()), null);
       }
     }
 
@@ -121,7 +153,8 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
       infoBuilder.append("Credential type: ").append(credential.getClass()).append("\n");
     }
 
-    return new TicketRequestResult(ResultCode.SUCCESS, infoBuilder.toString());
+    return new AuthenticationOutcome(
+        new TicketRequestResult(ResultCode.SUCCESS, infoBuilder.toString()), subject);
   }
 
   @Override

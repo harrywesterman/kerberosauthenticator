@@ -280,6 +280,7 @@ public class KerberosAuthenticatorTest {
         (RestrictionsManager)
             context.getSystemService(context.getSystemServiceName(RestrictionsManager.class));
     Bundle restrictionsBundle = TestHelper.makeRestrictionsBundle();
+    restrictionsBundle.putString(AccountConfiguration.AD_REALM_KEY, "CHANGED.EXAMPLE.COM");
     shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
 
     Account[] accounts = AccountManager.get(context).getAccounts();

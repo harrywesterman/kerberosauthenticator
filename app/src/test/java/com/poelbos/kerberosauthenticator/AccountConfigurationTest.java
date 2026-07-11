@@ -75,7 +75,7 @@ public class AccountConfigurationTest {
 
   @Test
   public void testPartialConfigSetupIsConsideredFalse() {
-    Set<String> testKeys = Sets.newHashSet("adDomain", "username");
+    Set<String> testKeys = Sets.newHashSet("adDomain");
     for (String key : testKeys) {
       restrictionsBundle = TestHelper.makeRestrictionsBundle();
       restrictionsBundle.remove(key);
@@ -83,6 +83,14 @@ public class AccountConfigurationTest {
       accConfig = new AccountConfiguration(context);
       assertFalse(accConfig.hasManagedConfigs());
     }
+  }
+
+  @Test
+  public void testManagedRealmDoesNotRequireUsername() {
+    restrictionsBundle.remove(AccountConfiguration.USERNAME_KEY);
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+    accConfig = new AccountConfiguration(context);
+    assertTrue(accConfig.hasManagedConfigs());
   }
 
   @Test

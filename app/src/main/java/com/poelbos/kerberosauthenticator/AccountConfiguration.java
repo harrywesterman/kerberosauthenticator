@@ -34,9 +34,7 @@ import com.google.common.base.Strings;
  * <p>When a password is not supplied through managed restrictions, this class will obtain it from
  * the user interface, which will prompt the user to enter a password.
  *
- * <p>A DPC can set account details in managed restrictions and this is the only way through which
- * the Kerberos Authenticator will obtain credentials to generate tickets. Users cannot add their
- * own authentication credentials.
+ * <p>A DPC supplies the realm and KDC policy. The user supplies their own username and password.
  */
 public class AccountConfiguration {
 
@@ -96,8 +94,7 @@ public class AccountConfiguration {
     if (Strings.isNullOrEmpty(configuredDomain)) {
       configuredDomain = restrictionsBundle.getString(AD_DOMAIN_KEY);
     }
-    if (!Strings.isNullOrEmpty(configuredDomain)
-        && restrictionsBundle.containsKey(USERNAME_KEY)) {
+    if (!Strings.isNullOrEmpty(configuredDomain)) {
       adDomain = configuredDomain;
       username = restrictionsBundle.getString(USERNAME_KEY);
     }
@@ -119,6 +116,16 @@ public class AccountConfiguration {
     }
 
     debugWithSensitiveData = restrictionsBundle.getBoolean(SENSITIVE_DEBUG_DATA_KEY, false);
+
+    // A persisted enterprise password is bound to the managed realm. Removing or changing that
+    // realm invalidates the complete account atomically.
+    KerberosAccount account = KerberosAccount.getAccount(context);
+    CredentialVault vault = new CredentialVault(context);
+    if (account != null && vault.hasCredentials()
+        && (Strings.isNullOrEmpty(adDomain) || !account.getDomain().equalsIgnoreCase(adDomain))) {
+      Log.i(Constants.TAG, "Managed realm removed or changed; clearing enterprise credentials.");
+      KerberosAccount.removeAccount(context);
+    }
   }
 
   KerberosAccountDetails getAccountDetails() {
@@ -142,22 +149,25 @@ public class AccountConfiguration {
   }
 
   boolean hasManagedConfigs() {
-    // If any restriction string is empty, the configs are assumed to be missing.
-    boolean emptyUsername = Strings.isNullOrEmpty(username);
+    // A managed deployment only needs to publish the realm. Username is entered by the user.
     boolean emptyDomain = Strings.isNullOrEmpty(adDomain);
-    boolean hasManagedConfigs = !(emptyUsername || emptyDomain);
+    boolean hasManagedConfigs = !emptyDomain;
     if (!hasManagedConfigs) {
-      Log.d(
-          Constants.TAG,
-          String.format(
-              "Missing managed configuration: username? %s, domain? %s.",
-              emptyUsername, emptyDomain));
+      Log.d(Constants.TAG, "Missing managed configuration: domain is empty.");
     }
     return hasManagedConfigs;
   }
 
   boolean hasManagedConfigPassword() {
     return !Strings.isNullOrEmpty(password);
+  }
+
+  String getRealm() {
+    return adDomain;
+  }
+
+  String getDomainController() {
+    return adDomainController;
   }
 
   class ManagedConfigsBroadcastReceiver extends BroadcastReceiver {

@@ -75,6 +75,12 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       currentPath = "";
     }
     configuration = updated;
+    KerberosAccount account = KerberosAccount.getAccount(this);
+    if (account != null && (updated.getRealm().isEmpty()
+        || !account.getDomain().equalsIgnoreCase(updated.getRealm()))) {
+      KerberosAccount.removeAccount(this);
+      closeSession();
+    }
     showOverview();
   }
 

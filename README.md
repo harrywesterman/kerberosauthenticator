@@ -12,7 +12,9 @@ De app is gebaseerd op de bestaande [android-kerberos-authenticator](https://git
 - MDM bepaalt welke shares zichtbaar zijn; gebruikers kunnen geen eigen SMB-server toevoegen.
 - SMB gebruikt Kerberos GSS/SPNEGO, signing en minimaal SMB 2.1. Er is geen NTLM-, guest- of anonymous-fallback.
 - Browsen, downloaden/openen, uploaden, mappen maken, hernoemen en verwijderen zijn beschikbaar binnen de AD-rechten van de gebruiker.
-- Het AD-wachtwoord wordt niet uit managed configuration gelezen en niet lokaal opgeslagen. Alleen het door de KDC uitgegeven TGT wordt via Android AccountManager bewaard.
+- De gebruiker voert zelf zijn AD-gebruikersnaam en wachtwoord in. MDM levert nooit credentials.
+- Op een beheerd toestel met veilige schermvergrendeling wordt het wachtwoord apparaatgebonden versleuteld met een hardware-backed Android Keystore-sleutel. Daarmee vraagt de app dagelijks een volledig nieuw TGT aan.
+- Als veilige hardware-opslag niet beschikbaar is, blijft aanmelden mogelijk maar wordt het wachtwoord niet langdurig bewaard.
 - Screenshots zijn standaard geblokkeerd en SMB 3-encryptie kan door MDM verplicht worden.
 
 ## Differences from the original
@@ -82,7 +84,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-When no managed configuration is available, the legacy test screen can store only username and domain. Passwords are always entered into the login prompt and are never persisted.
+Langdurige credential-opslag werkt uitsluitend met managed configuration. Zonder MDM kan het legacy testscherm gebruikersnaam en domein bewaren, maar nooit het wachtwoord.
 
 ## MDM Deployment
 
@@ -90,7 +92,7 @@ The app reads its configuration from Android's [managed configuration](https://d
 
 ### Omnissa Workspace ONE UEM
 
-Create one application configuration for this app and one for Chrome. The app configuration provides the Kerberos identity and share definitions; the Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
+Create one application configuration for this app and one for Chrome. MDM provides the Kerberos realm and share definitions; the user enters their own username and password. The Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
 
 #### Kerberos Authenticator app
 
@@ -103,7 +105,6 @@ Voor de geïntegreerde bestandenapp gebruikt u bijvoorbeeld:
 
 ```json
 {
-  "username": "john.doe",
   "ad_realm": "EXAMPLE.COM",
   "require_smb_encryption": true,
   "allow_local_cache": true,
@@ -123,7 +124,7 @@ Voor de geïntegreerde bestandenapp gebruikt u bijvoorbeeld:
 
 Gebruik altijd een DNS-hostnaam met een geldige `cifs/<host>`-SPN; IP-adressen worden geweigerd. `kdc_hosts` is optioneel, anders gebruikt de app DNS SRV-discovery. Het schema staat in `app/src/main/res/xml/app_restrictions.xml` en kan door een MDM uit de APK worden ingelezen.
 
-The app discovers Kerberos KDCs from DNS SRV records such as `_kerberos._udp.example.com`.
+De gebruiker meldt zich in de app aan met zijn eigen AD-gebruikersnaam en wachtwoord. Na een succesvolle login vraagt de app dagelijks via WorkManager een nieuw TGT aan. Android kan door Doze het exacte uitvoeringstijdstip uitstellen. De app ontdekt KDC's via DNS SRV-records zoals `_kerberos._udp.example.com`.
 
 #### Chrome app
 
@@ -140,7 +141,7 @@ After the assignment syncs, open `chrome://policy` on the device to confirm the 
 
 ### Testing managed config
 
-**Option 1** — Use the built-in debug UI: install the APK and enter username and domain. The password is requested only while obtaining a ticket and is not stored.
+**Option 1** — Use the built-in debug UI: install the APK and enter username and domain. Zonder managed configuration wordt het wachtwoord niet langdurig opgeslagen.
 
 **Option 2** — Use [Test DPC](https://play.google.com/store/apps/details?id=com.afwsamples.testdpc) from Google Play. After installing:
 1. Set Test DPC as device owner
@@ -159,7 +160,6 @@ Then use the Test DPC UI to set managed configuration for the app.
 
 | Key | Type | Required | Description |
 |---|---|---|---|
-| `username` | string | yes | AD username |
 | `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
 | `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
@@ -169,6 +169,14 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `support_contact` | string | no | IT support text or URL |
 
 When no domain controller is specified, the app automatically discovers KDCs through DNS SRV lookups (`_kerberos._udp.<domain>` and `_kerberos._tcp.<domain>`).
+
+### Credential- en ticketbeleid
+
+- De app ondersteunt één AD-account per Android-profiel.
+- Ciphertext staat in app-private opslag; de AES-256-GCM-sleutel is niet exporteerbaar en hardware-backed. Android-backup en device-transfer zijn uitgeschakeld.
+- Iedere 24 uur wordt met een netwerkconstraint en een flexvenster van twee uur een nieuw TGT aangevraagd. Tijdelijke netwerk-, VPN-, DNS- en KDC-storingen krijgen oplopende retries.
+- Bij een gewijzigd/fout wachtwoord, verlopen of ingetrokken account worden wachtwoord en tickets gewist en vraagt de app om opnieuw aanmelden.
+- Logout, een gewijzigde/verwijderde MDM-realm en het wissen van app- of work-profiledata verwijderen credentials, tickets en geplande vernieuwing.
 
 ## License
 
