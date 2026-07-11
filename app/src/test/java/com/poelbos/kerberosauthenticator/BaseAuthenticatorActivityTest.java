@@ -81,7 +81,10 @@ public class BaseAuthenticatorActivityTest {
         BaseAuthenticatorActivity.class).create().start();
     BaseAuthenticatorActivity baseAuthenticatorActivity = controller.get();
     AccountConfiguration accConfigs = baseAuthenticatorActivity.accountConfiguration;
-    assertThat(accConfigs.getAccountDetails()).isNull();
+    assertThat(accConfigs.getAccountDetails()).isNotNull();
+    assertThat(accConfigs.getAccountDetails().getUsername()).isNull();
+    assertThat(accConfigs.getAccountDetails().getActiveDirectoryDomain())
+        .isEqualTo(TestHelper.TEST_AD_DOMAIN);
   }
 
   @Test

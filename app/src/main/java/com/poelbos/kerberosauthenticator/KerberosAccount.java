@@ -71,7 +71,9 @@ public class KerberosAccount {
         accountDetails.getAdDomainController());
   }
 
-  static void removeAccount(Context context) {
+  public static void removeAccount(Context context) {
+    new CredentialVault(context).delete();
+    TgtRefreshScheduler.cancel(context);
     AccountManager am = AccountManager.get(context);
     Account[] accounts = am.getAccountsByType(KERBEROS_ACCOUNT_TYPE);
     if (accounts.length > 0) {

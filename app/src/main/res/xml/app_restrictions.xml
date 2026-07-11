@@ -6,11 +6,6 @@
         android:description="@string/mdm_realm_description"
         android:restrictionType="string" />
     <restriction
-        android:key="username"
-        android:title="@string/username"
-        android:description="@string/mdm_username_description"
-        android:restrictionType="string" />
-    <restriction
         android:key="shares"
         android:title="@string/mdm_shares_title"
         android:description="@string/mdm_shares_description"

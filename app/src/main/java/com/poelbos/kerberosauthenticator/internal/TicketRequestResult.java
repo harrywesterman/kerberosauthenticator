@@ -51,6 +51,19 @@ public class TicketRequestResult {
     return resultCode == ResultCode.ERROR_BAD_PASSWORD;
   }
 
+  /** AD/KDC errors for which retrying the same stored password is unsafe or pointless. */
+  public boolean isCredentialRejected() {
+    if (isPasswordBad()) return true;
+    String normalized = message == null ? "" : message.toLowerCase(java.util.Locale.ROOT);
+    return normalized.contains("client's credentials have been revoked")
+        || normalized.contains("client credentials have been revoked")
+        || normalized.contains("client not found")
+        || normalized.contains("account expired")
+        || normalized.contains("password has expired")
+        || normalized.contains("account locked")
+        || normalized.contains("clients credentials have been revoked");
+  }
+
   @Override
   public String toString() {
     if (successful()) {

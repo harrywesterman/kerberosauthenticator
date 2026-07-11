@@ -204,7 +204,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     // Check if the account details via managed config have changed from what's stored in the
     // AccountManager. If there's a mismatch and the account needs to be updated, also call
     // getAuthenticateIntent as it will remove the old account and add a new one.
-    boolean needReAuthentication = !krbAccount.getName().equals(getManagedConfigurationUsername());
+    String configuredRealm = getManagedConfigurationRealm();
+    boolean needReAuthentication = configuredRealm == null
+        || !krbAccount.getDomain().equalsIgnoreCase(configuredRealm);
 
     if (!needReAuthentication && !tgtValidityChecker.hasValidTgt(krbAccount)) {
       if (tgtRenewer.renew(context, krbAccount)) {
@@ -345,10 +347,34 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
   private static boolean hasValidTicketGrantingTicket(KerberosAccount account) {
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
-    return tgt != null && tgt.getExpiryDate() != null && tgt.getExpiryDate().after(new Date());
+    return tgt != null && tgt.getExpiryDate() != null
+        && tgt.getExpiryDate().after(new Date(System.currentTimeMillis() + 15 * 60 * 1000L));
   }
 
   private static boolean renewTicketGrantingTicket(Context context, KerberosAccount account) {
+    char[] stored = new CredentialVault(context).load(account.getName(), account.getDomain());
+    if (stored != null) {
+      try {
+        com.poelbos.kerberosauthenticator.internal.kinit.UserAuthenticationTask.AuthenticationOutcome
+            outcome = com.poelbos.kerberosauthenticator.internal.kinit.UserAuthenticationTask.authenticate(
+                context,
+                new com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails(
+                    account.getName(), new String(stored), account.getDomain(),
+                    account.getDomainController()), false);
+        if (outcome.getResult().successful() && outcome.getSubject() != null) {
+          account.setTicketGrantingTicket(
+              new TicketGrantingTicket(outcome.getSubject()).asSerialized());
+          account.save(context);
+          return true;
+        }
+        if (outcome.getResult().isPasswordBad()) {
+          new CredentialVault(context).delete();
+          return false;
+        }
+      } finally {
+        Arrays.fill(stored, '\0');
+      }
+    }
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
     if (tgt == null || !tgt.renew()) {
@@ -416,14 +442,13 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     return getFromAccountConfiguration(AccountConfiguration::hasManagedConfigs);
   }
 
-  private String getManagedConfigurationUsername() {
+  private String getManagedConfigurationRealm() {
     return getFromAccountConfiguration(
         (config) -> {
           if (!config.hasManagedConfigs()) {
-            return "";
+            return null;
           }
-
-          return config.getAccountDetails().getUsername();
+          return config.getRealm();
         });
   }
 }

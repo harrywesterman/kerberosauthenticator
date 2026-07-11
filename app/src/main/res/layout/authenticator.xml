@@ -65,6 +65,29 @@
           />
 
       <EditText
+          android:id="@+id/editTextUser"
+          android:hint="@string/username"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:inputType="textEmailAddress"
+          android:visibility="gone" />
+
+      <TextView
+          android:id="@+id/managedRealm"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:textColor="@color/material_grey_600"
+          android:visibility="gone" />
+
+      <TextView
+          android:id="@+id/automatic_refresh_status"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:paddingTop="12dp"
+          android:textColor="@color/material_grey_600"
+          android:visibility="gone" />
+
+      <EditText
           android:id = "@+id/editTextPw"
           android:hint = "@string/enter_pw"
           android:paddingTop="@dimen/padding_top_header"
@@ -72,7 +95,7 @@
           android:layout_height = "wrap_content"
           android:fontFamily="sans-serif"
           android:inputType = "textPassword"
-          android:visibility="invisible"
+          android:visibility="gone"
           />
     </LinearLayout>
   </ScrollView>
