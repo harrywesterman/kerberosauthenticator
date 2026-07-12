@@ -19,6 +19,8 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
@@ -55,9 +57,10 @@ public final class LdapSpnDiscovery {
       String realm,
       String domainControllers,
       String username,
-      String password,
+      char[] password,
       String serviceHost) {
-    if (isEmpty(realm) || isEmpty(username) || isEmpty(password) || isEmpty(serviceHost)) {
+    if (isEmpty(realm) || isEmpty(username) || password == null || password.length == 0
+        || isEmpty(serviceHost)) {
       return Collections.emptyList();
     }
 
@@ -87,19 +90,6 @@ public final class LdapSpnDiscovery {
           Log.w(
               TAG,
               String.format("LDAP SPN lookup over LDAPS failed at %s as %s.", host, bindName),
-              e);
-        }
-        try {
-          List<SearchResult> results =
-              queryHost(context, host, false, bindName, password, baseDn, serviceHost);
-          Log.i(
-              TAG,
-              String.format("LDAP SPN lookup succeeded over LDAP at %s as %s.", host, bindName));
-          return results;
-        } catch (Exception e) {
-          Log.w(
-              TAG,
-              String.format("LDAP SPN lookup over LDAP failed at %s as %s.", host, bindName),
               e);
         }
       }
@@ -202,14 +192,22 @@ public final class LdapSpnDiscovery {
   }
 
   static byte[] buildBindRequest(int messageId, String bindName, String password) {
-    return ldapMessage(
-        messageId,
-        element(
-            0x60,
-            concat(
-                integer(3),
-                octetString(bindName),
-                element(0x80, password.getBytes(StandardCharsets.UTF_8)))));
+    return buildBindRequest(messageId, bindName, password.toCharArray());
+  }
+
+  static byte[] buildBindRequest(int messageId, String bindName, char[] password) {
+    ByteBuffer encoded = StandardCharsets.UTF_8.encode(CharBuffer.wrap(password));
+    byte[] passwordBytes = new byte[encoded.remaining()];
+    encoded.get(passwordBytes);
+    try {
+      return ldapMessage(
+          messageId,
+          element(
+              0x60,
+              concat(integer(3), octetString(bindName), element(0x80, passwordBytes))));
+    } finally {
+      java.util.Arrays.fill(passwordBytes, (byte) 0);
+    }
   }
 
   static byte[] buildGssApiBindRequest(int messageId, byte[] gssToken) {
@@ -315,7 +313,7 @@ public final class LdapSpnDiscovery {
       String host,
       boolean ssl,
       String bindName,
-      String password,
+      char[] password,
       String baseDn,
       String serviceHost)
       throws IOException, GeneralSecurityException {
