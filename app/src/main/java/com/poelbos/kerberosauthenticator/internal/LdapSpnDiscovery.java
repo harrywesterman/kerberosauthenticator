@@ -23,6 +23,8 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -38,6 +40,7 @@ import org.ietf.jgss.Oid;
 import sun.security.jgss.GSSCaller;
 import sun.security.jgss.GSSManagerImpl;
 import sun.security.jgss.GSSUtil;
+import sun.security.jgss.krb5.internal.TlsChannelBindingImpl;
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -402,8 +405,15 @@ public final class LdapSpnDiscovery {
       gssContext.requestMutualAuth(true);
       // AD does not allow a SASL integrity/confidentiality layer on top of LDAPS.
       // TLS already protects the LDAP session; GSSAPI is used here for authentication.
-      gssContext.requestInteg(false);
+      gssContext.requestInteg(true);
       gssContext.requestConf(false);
+      if (!(socket instanceof SSLSocket)) {
+        throw new IOException("LDAP GSSAPI channel binding requires TLS.");
+      }
+      X509Certificate serverCertificate =
+          (X509Certificate) ((SSLSocket) socket).getSession().getPeerCertificates()[0];
+      gssContext.setChannelBinding(
+          new TlsChannelBindingImpl(tlsServerEndPointChannelBinding(serverCertificate)));
 
       byte[] serverToken = new byte[0];
       for (int round = 0; round < 5; round++) {
@@ -435,6 +445,7 @@ public final class LdapSpnDiscovery {
               throw new IOException("LDAP GSSAPI security-layer negotiation failed.");
             }
             messageId = securityMessageId;
+            resultCode = 0;
           }
           if (resultCode != 0) {
             throw new IOException("LDAP GSSAPI bind completed without security-layer data.");
@@ -504,6 +515,37 @@ public final class LdapSpnDiscovery {
     } catch (Exception e) {
       throw new IOException("Unable to negotiate LDAP GSSAPI security layer.", e);
     }
+  }
+
+  static byte[] tlsServerEndPointChannelBinding(X509Certificate certificate)
+      throws GeneralSecurityException, IOException {
+    return tlsServerEndPointChannelBinding(certificate.getEncoded(), certificate.getSigAlgName());
+  }
+
+  static byte[] tlsServerEndPointChannelBinding(
+      byte[] encodedCertificate, String signatureAlgorithm) throws GeneralSecurityException {
+    byte[] prefix = "tls-server-end-point:".getBytes(StandardCharsets.US_ASCII);
+    byte[] digest =
+        MessageDigest.getInstance(signatureDigestAlgorithm(signatureAlgorithm))
+            .digest(encodedCertificate);
+    byte[] result = java.util.Arrays.copyOf(prefix, prefix.length + digest.length);
+    System.arraycopy(digest, 0, result, prefix.length, digest.length);
+    return result;
+  }
+
+  static String signatureDigestAlgorithm(String signatureAlgorithm) {
+    String normalized = signatureAlgorithm == null
+        ? ""
+        : signatureAlgorithm.toUpperCase(Locale.US).replace("-", "");
+    int with = normalized.indexOf("WITH");
+    String digest = with > 0 ? normalized.substring(0, with) : "SHA256";
+    if (digest.equals("MD5") || digest.equals("SHA1")) {
+      return "SHA-256";
+    }
+    if (digest.startsWith("SHA") && digest.length() > 3) {
+      return "SHA-" + digest.substring(3);
+    }
+    return "SHA-256";
   }
 
   private static void logRootDseProbe(Context context, String host) {

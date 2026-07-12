@@ -36,6 +36,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import sun.security.krb5.*;
 import sun.security.krb5.internal.Krb5;
+import sun.security.jgss.krb5.internal.TlsChannelBindingImpl;
 
 abstract class InitialToken extends Krb5Token {
 
@@ -60,6 +61,7 @@ abstract class InitialToken extends Krb5Token {
     private static final int CHANNEL_BINDING_AF_INET = 2;
     private static final int CHANNEL_BINDING_AF_INET6 = 24;
     private static final int CHANNEL_BINDING_AF_NULL_ADDR = 255;
+    private static final int CHANNEL_BINDING_AF_UNSPEC = 0;
 
     private static final int Inet4_ADDRSZ = 4;
     private static final int Inet6_ADDRSZ = 16;
@@ -375,8 +377,12 @@ abstract class InitialToken extends Krb5Token {
         InetAddress acceptorAddress = channelBinding.getAcceptorAddress();
         int size = 5*4;
 
-        int initiatorAddressType = getAddrType(initiatorAddress);
-        int acceptorAddressType = getAddrType(acceptorAddress);
+        int defaultAddressType = channelBinding instanceof TlsChannelBindingImpl
+                ? CHANNEL_BINDING_AF_UNSPEC : CHANNEL_BINDING_AF_NULL_ADDR;
+        int initiatorAddressType = initiatorAddress == null
+                ? defaultAddressType : getAddrType(initiatorAddress);
+        int acceptorAddressType = acceptorAddress == null
+                ? defaultAddressType : getAddrType(acceptorAddress);
 
         byte[] initiatorAddressBytes = null;
         if (initiatorAddress != null) {

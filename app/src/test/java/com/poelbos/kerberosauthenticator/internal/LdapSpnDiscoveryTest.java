@@ -9,6 +9,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import org.junit.Test;
 
 public final class LdapSpnDiscoveryTest {
@@ -58,6 +59,26 @@ public final class LdapSpnDiscoveryTest {
     assertThat(request[request.length - 3]).isEqualTo((byte) 0x01);
     assertThat(request[request.length - 2]).isEqualTo((byte) 0x02);
     assertThat(request[request.length - 1]).isEqualTo((byte) 0x03);
+  }
+
+  @Test
+  public void tlsServerEndPointBindingUsesPrefixAndCertificateDigest() throws Exception {
+    byte[] certificate = new byte[] {0x01, 0x02, 0x03};
+
+    byte[] binding =
+        LdapSpnDiscovery.tlsServerEndPointChannelBinding(certificate, "SHA256withRSA");
+
+    byte[] prefix = "tls-server-end-point:".getBytes(StandardCharsets.US_ASCII);
+    assertThat(java.util.Arrays.copyOf(binding, prefix.length)).isEqualTo(prefix);
+    assertThat(java.util.Arrays.copyOfRange(binding, prefix.length, binding.length))
+        .isEqualTo(MessageDigest.getInstance("SHA-256").digest(certificate));
+  }
+
+  @Test
+  public void tlsServerEndPointBindingUpgradesWeakCertificateHashes() {
+    assertThat(LdapSpnDiscovery.signatureDigestAlgorithm("SHA1withRSA")).isEqualTo("SHA-256");
+    assertThat(LdapSpnDiscovery.signatureDigestAlgorithm("MD5withRSA")).isEqualTo("SHA-256");
+    assertThat(LdapSpnDiscovery.signatureDigestAlgorithm("SHA384withRSA")).isEqualTo("SHA-384");
   }
 
   @Test
