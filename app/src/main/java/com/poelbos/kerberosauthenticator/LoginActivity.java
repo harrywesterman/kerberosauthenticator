@@ -46,6 +46,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
   boolean isPasswordRetry = false;
   private boolean refreshStatusAfterAuth = false;
+  private char[] pendingPassword;
 
   /** Returns an intent that can be used to authenticate an account. */
   public static Intent getAuthenticateIntent(
@@ -126,13 +127,12 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (successGettingTgt && account != null) {
       TicketGrantingTicket tgt = new TicketGrantingTicket(ticket);
       account.setTicketGrantingTicket(tgt.asSerialized());
-      char[] password = account.getPassword().toCharArray();
       boolean stored;
       try {
-        stored = new CredentialVault(this).store(
-            account.getName(), account.getDomain(), password);
+        stored = pendingPassword != null && new CredentialVault(this).store(
+            account.getName(), account.getDomain(), pendingPassword);
       } finally {
-        java.util.Arrays.fill(password, '\0');
+        clearPendingPassword();
       }
       account.save(this);
       if (stored) {
@@ -145,6 +145,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       }
       isPasswordRetry = false;
     } else {
+      clearPendingPassword();
       if (ticketRequestResult.isPasswordBad() && !isPasswordRetry) {
         Log.i(
             Constants.TAG,
@@ -250,6 +251,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
   private void initiateUserAuthenticationTask(KerberosAccountDetails accountDetails) {
     setRefreshingStatus(getTGTTimestampTextViewId());
+    clearPendingPassword();
+    pendingPassword = accountDetails.getPassword().toCharArray();
     KerberosAccount account = KerberosAccount.getAccount(this);
     account = accountForAuthentication(account, accountDetails);
 
@@ -265,6 +268,19 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
                 account.getDomainController()),
             accountConfiguration.getDebugWithSensitiveData());
     kinit.execute();
+  }
+
+  private void clearPendingPassword() {
+    if (pendingPassword != null) {
+      java.util.Arrays.fill(pendingPassword, '\0');
+      pendingPassword = null;
+    }
+  }
+
+  @Override
+  protected void onDestroy() {
+    clearPendingPassword();
+    super.onDestroy();
   }
 
   static KerberosAccount accountForAuthentication(

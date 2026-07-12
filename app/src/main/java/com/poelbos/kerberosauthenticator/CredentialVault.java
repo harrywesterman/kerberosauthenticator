@@ -114,8 +114,7 @@ public final class CredentialVault {
         (RestrictionsManager) context.getSystemService(Context.RESTRICTIONS_SERVICE);
     Bundle restrictions = manager == null ? null : manager.getApplicationRestrictions();
     boolean managed = restrictions != null
-        && !restrictions.getString("ad_realm", "").trim().isEmpty()
-        && restrictions.containsKey("shares");
+        && !restrictions.getString("ad_realm", "").trim().isEmpty();
     KeyguardManager keyguard = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
     return managed && keyguard != null && keyguard.isDeviceSecure();
   }
