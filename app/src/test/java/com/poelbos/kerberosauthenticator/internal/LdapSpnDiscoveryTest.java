@@ -86,6 +86,15 @@ public final class LdapSpnDiscoveryTest {
   }
 
   @Test
+  public void ldapResultDiagnosticMessageIsParsed() throws Exception {
+    byte[] response =
+        new byte[] {0x0a, 0x01, 0x35, 0x04, 0x00, 0x04, 0x0b,
+            'n', 'o', 't', ' ', 'a', 'l', 'l', 'o', 'w', 'e', 'd'};
+
+    assertThat(LdapSpnDiscovery.parseLdapDiagnosticMessage(response)).isEqualTo("not allowed");
+  }
+
+  @Test
   public void saslBindRequestSupportsGssSpnegoMechanism() throws Exception {
     byte[] request =
         LdapSpnDiscovery.buildSaslBindRequest(12, new byte[] {0x04, 0x05}, "GSS-SPNEGO");
