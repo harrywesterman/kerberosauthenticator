@@ -291,6 +291,13 @@ public final class LdapSpnDiscovery {
     return reader.readEnumeratedElement();
   }
 
+  static String parseLdapDiagnosticMessage(byte[] protocolOpValue) throws IOException {
+    BerReader reader = new BerReader(protocolOpValue);
+    reader.readEnumeratedElement();
+    reader.readStringElement();
+    return reader.readStringElement();
+  }
+
   static SearchResult parseSearchResultEntry(byte[] protocolOpValue) throws IOException {
     BerReader reader = new BerReader(protocolOpValue);
     String objectName = reader.readStringElement();
@@ -405,7 +412,7 @@ public final class LdapSpnDiscovery {
       gssContext.requestMutualAuth(true);
       // AD does not allow a SASL integrity/confidentiality layer on top of LDAPS.
       // TLS already protects the LDAP session; GSSAPI is used here for authentication.
-      gssContext.requestInteg(true);
+      gssContext.requestInteg(false);
       gssContext.requestConf(false);
       if (!(socket instanceof SSLSocket)) {
         throw new IOException("LDAP GSSAPI channel binding requires TLS.");
@@ -453,7 +460,11 @@ public final class LdapSpnDiscovery {
           return searchHost(socket, out, in, baseDn, serviceHost, messageId + 1);
         }
         if (resultCode != 14 || nextToken == null) {
-          throw new IOException("LDAP GSSAPI bind failed with result code " + resultCode + ".");
+          throw new IOException(
+              "LDAP GSSAPI bind failed with result code "
+                  + resultCode
+                  + ": "
+                  + parseLdapDiagnosticMessage(response.protocolOpValue));
         }
         serverToken = nextToken;
       }
