@@ -142,7 +142,7 @@ public class KerberosAccount {
 
     final Account account;
     if (hasNoAccount) {
-      Log.i(TAG, String.format("Adding account %s.", name));
+      Log.i(TAG, "Adding Kerberos account.");
       account = new Account(name, KERBEROS_ACCOUNT_TYPE);
       am.addAccountExplicitly(account, null, userData);
       allowChromeToSeeAccount(am, account);
@@ -150,7 +150,7 @@ public class KerberosAccount {
     }
 
     account = accounts[0];
-    Log.i(TAG, String.format("Updating TGT for account %s.", account.name));
+    Log.i(TAG, "Updating stored TGT.");
     am.setUserData(account, KEY_TGT, userData.getString(KEY_TGT));
 
     // The account manager persists the TGT and account metadata, never the AD password.
@@ -159,19 +159,14 @@ public class KerberosAccount {
     final String domain = userData.getString(KEY_AD_DOMAIN);
     final String currentDomain = am.getUserData(account, KEY_AD_DOMAIN);
     if (!Objects.equals(currentDomain, domain)) {
-      Log.i(TAG, String.format("Updating domain for account %s from %s to %s.", account.name,
-          currentDomain, domain));
+      Log.i(TAG, "Updating configured Kerberos realm.");
       am.setUserData(account, KEY_AD_DOMAIN, domain);
     }
 
     final String domainController = userData.getString(KEY_AD_DC);
     String currentDomainController = am.getUserData(account, KEY_AD_DC);
     if (!Objects.equals(currentDomainController, domainController)) {
-      Log.i(
-          TAG,
-          String.format(
-              "Updating domain controller for account %s from %s to %s",
-              account.name, currentDomainController, domainController));
+      Log.i(TAG, "Updating configured KDC.");
       am.setUserData(account, KEY_AD_DC, domainController);
     }
     allowChromeToSeeAccount(am, account);
@@ -185,7 +180,7 @@ public class KerberosAccount {
             Constants.CHROME_PACKAGE_NAME,
             AccountManager.VISIBILITY_VISIBLE);
     if (!visible) {
-      Log.w(TAG, String.format("Could not make account %s visible to Chrome.", account.name));
+      Log.w(TAG, "Could not make Kerberos account visible to Chrome.");
     }
   }
 
