@@ -56,6 +56,10 @@ public final class LdapSpnDiscoveryTest {
     assertThat(message.protocolOpTag).isEqualTo(0x60);
     String requestText = asLatin1(request);
     assertThat(requestText).contains("GSSAPI");
+    int mechanismOffset = requestText.indexOf("GSSAPI");
+    assertThat(request[mechanismOffset - 2]).isEqualTo((byte) 0x04);
+    // SaslCredentials [3] directly contains mechanism and credentials; no nested SEQUENCE.
+    assertThat(request[mechanismOffset - 4]).isNotEqualTo((byte) 0x30);
     assertThat(request[request.length - 3]).isEqualTo((byte) 0x01);
     assertThat(request[request.length - 2]).isEqualTo((byte) 0x02);
     assertThat(request[request.length - 1]).isEqualTo((byte) 0x03);
