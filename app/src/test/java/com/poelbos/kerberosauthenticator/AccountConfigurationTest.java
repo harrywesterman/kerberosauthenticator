@@ -118,29 +118,4 @@ public class AccountConfigurationTest {
     assertFalse(accConfig.hasManagedConfigPassword());
   }
 
-  @Test
-  public void testDebugWithSensitiveDataOffByDefault() {
-    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
-    accConfig = new AccountConfiguration(context);
-    assertFalse(accConfig.getDebugWithSensitiveData());
-  }
-
-  @Test
-  public void testCanSetDebugWithSensitiveDataRegardlessOfConfig() {
-    Bundle bundle = new Bundle();
-    bundle.putBoolean(AccountConfiguration.SENSITIVE_DEBUG_DATA_KEY, true);
-    shadowOf(restrictionsManager).setApplicationRestrictions(bundle);
-
-    accConfig = new AccountConfiguration(context);
-    assertTrue(accConfig.getDebugWithSensitiveData());
-  }
-
-  @Test
-  public void testCanSetDebugWithSensitiveDataWithValidConfig() {
-    restrictionsBundle.putBoolean(AccountConfiguration.SENSITIVE_DEBUG_DATA_KEY, false);
-    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
-
-    accConfig = new AccountConfiguration(context);
-    assertFalse(accConfig.getDebugWithSensitiveData());
-  }
 }

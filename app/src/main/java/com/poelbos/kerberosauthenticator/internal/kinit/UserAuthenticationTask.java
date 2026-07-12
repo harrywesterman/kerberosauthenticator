@@ -59,7 +59,6 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
   private final String password;
   private final String adDomain;
   private final String domainController;
-  private final boolean debugWithCredentials;
   private final UserAuthenticationResultListener listener;
   private final Context context;
   private Subject subject = null;
@@ -67,38 +66,34 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
   public UserAuthenticationTask(
       Context context,
       UserAuthenticationResultListener listener,
-      KerberosAccountDetails accountDetails,
-      boolean debugWithCredentials) {
+      KerberosAccountDetails accountDetails) {
     this.context = context.getApplicationContext();
     this.listener = listener;
     this.username = accountDetails.getUsername();
     this.password = accountDetails.getPassword();
     this.adDomain = accountDetails.getActiveDirectoryDomain();
     this.domainController = accountDetails.getAdDomainController();
-    this.debugWithCredentials = debugWithCredentials;
   }
 
   @Override
   protected TicketRequestResult doInBackground(Void... voids) {
     AuthenticationOutcome outcome = authenticate(
-        context, new KerberosAccountDetails(username, password, adDomain, domainController),
-        debugWithCredentials);
+        context, new KerberosAccountDetails(username, password, adDomain, domainController));
     subject = outcome.getSubject();
     return outcome.getResult();
   }
 
   /** Performs a synchronous kinit. Intended for WorkManager and tests. */
   public static AuthenticationOutcome authenticate(
-      Context context, KerberosAccountDetails details, boolean debugWithCredentials) {
+      Context context, KerberosAccountDetails details) {
     String username = details.getUsername();
     String password = details.getPassword();
     String adDomain = details.getActiveDirectoryDomain();
     String domainController = details.getAdDomainController();
-    Log.i(TAG, String.format("Authenticating user %s to domain %s via %s",
-        username, adDomain, domainController));
+    Log.i(TAG, String.format("TGT_REQUEST realm=%s configuredKdc=%s",
+        adDomain, domainController != null && !domainController.isEmpty()));
     try {
-      KerberosEnvironment.configure(
-          context.getApplicationContext(), adDomain, domainController, debugWithCredentials);
+      KerberosEnvironment.configure(context.getApplicationContext(), adDomain, domainController);
     } catch (IOException e) {
       Log.w(TAG, "Failure configuring Kerberos environment", e);
       return new AuthenticationOutcome(
@@ -112,7 +107,7 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
     sharedState.put(REFRESH_KRB5_CONFIG, "true");
     sharedState.put(STORE_KEY, "true");
     sharedState.put(USE_FIRST_PASS, "true");
-    sharedState.put(DEBUG, Boolean.toString(debugWithCredentials));
+    sharedState.put(DEBUG, "false");
 
     Map<String, Object> options = new HashMap<>();
 

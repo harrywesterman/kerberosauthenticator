@@ -25,18 +25,18 @@ public final class KerberosEnvironment {
   private KerberosEnvironment() {}
 
   public static String configure(
-      Context context, String adDomain, String configuredDomainController, boolean debug)
+      Context context, String adDomain, String configuredDomainController)
       throws IOException {
-    return configure(context, adDomain, configuredDomainController, debug, null);
+    return configure(context, adDomain, configuredDomainController, null);
   }
 
   public static String configure(
       Context context,
       String adDomain,
       String configuredDomainController,
-      boolean debug,
       String serviceHost)
       throws IOException {
+    disableSensitiveDebug();
     String realm = Ascii.toUpperCase(adDomain);
     String domainController = trimToNull(configuredDomainController);
     if (domainController == null) {
@@ -68,14 +68,17 @@ public final class KerberosEnvironment {
     System.setProperty("java.security.krb5.conf", krb5ConfigFile.getAbsolutePath());
     System.setProperty("java.security.krb5.kdc", domainController);
     System.setProperty("java.security.krb5.realm", realm);
-    System.setProperty("sun.security.jgss.debug", Boolean.toString(debug));
-    System.setProperty("sun.security.krb5.debug", Boolean.toString(debug));
     try {
       Config.refresh();
     } catch (KrbException e) {
       throw new IOException("Failure refreshing Kerberos configuration.", e);
     }
     return domainController;
+  }
+
+  static void disableSensitiveDebug() {
+    System.setProperty("sun.security.jgss.debug", "false");
+    System.setProperty("sun.security.krb5.debug", "false");
   }
 
   static String inferRealmFromServiceHost(String serviceHost, String defaultRealm) {

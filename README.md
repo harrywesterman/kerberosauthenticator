@@ -13,16 +13,14 @@ De authenticator bewaart het gebruikerswachtwoord na de eerste geslaagde login a
 toestel een veilige schermvergrendeling en hardware-backed Android Keystore biedt. Daarmee kan
 de app zonder nieuwe invoer TGT's vernieuwen.
 
-Voor HTTP gebruikt de app GSS-SPNEGO/Kerberos over LDAPS voor AD-discovery. De LDAP-bind bevat
-TLS channel binding (`tls-server-end-point`), gebruikt correcte SASL BER-encoding en voert de
-SPN-filters afzonderlijk uit (`HTTP/`, `HOST/`, `dNSHostName` en
-`msDS-AdditionalDnsHostName`). Dat voorkomt een gecombineerd OR-filter over grote AD-directories.
+Voor HTTP gebruikt de app Android AccountManager en GSS-SPNEGO. Chrome levert de oorspronkelijke
+URL-host aan; de app vraagt vervolgens rechtstreeks bij de KDC een ticket aan voor een exacte
+MDM-mapping, de oorspronkelijke host en daarna iedere naam uit de DNS CNAME-keten. Alleen
+`KDC_ERR_S_PRINCIPAL_UNKNOWN` gaat door naar de volgende kandidaat.
 
-De live test met een interne alias op versie 1.33 bevestigde dat TLS, CBT, GSS-SPNEGO en de
-AD-bind werken, maar AD leverde voor de exacte filters geen object/SPN op. De uiteindelijke
-Kerberos-aanvraag eindigt dan terecht met `KDC_ERR_S_PRINCIPAL_UNKNOWN`. Windows kan in zo'n
-scenario nog een andere canonieke hostnaam of NTLM-fallback gebruiken; de Android-app
-implementeert bewust geen NTLM-fallback.
+De browserroute gebruikt geen LDAP- of NTLM-fallback. Daardoor blijft een ontbrekende SPN
+zichtbaar en stopt een mislukte aanvraag snel. Interne Kerberos/JGSS-debug staat permanent uit;
+wachtwoorden, tickets, sessiesleutels en SPNEGO-tokenbytes worden nooit gelogd.
 
 ## Bedrijfsbestanden
 
@@ -153,11 +151,12 @@ Chrome must also be managed. Add or edit the managed Google Play assignment for 
 |---|---|---|---|
 | `AuthAndroidNegotiateAccountType` | string | `AndroidEnterpriseKerberos` | Account type exposed by this authenticator app. Without this, Chrome disables HTTP Negotiate on Android. |
 | `AuthServerAllowlist` | string | `*.example.com,example.com` | Internal sites where Chrome may answer Kerberos/Negotiate challenges. |
-| `AuthSchemes` | string | `basic,digest,ntlm,negotiate` | Optional. Include `negotiate` if you restrict authentication schemes. |
+| `AuthSchemes` | string | `negotiate` | Optional. Include `negotiate` if you restrict authentication schemes. |
 | `AuthNegotiateDelegateAllowlist` | string | `*.example.com` | Optional. Only needed if credential delegation is required. |
-| `DisableAuthNegotiateCnameLookup` | bool | `false` | Use the canonical DNS CNAME target when Chrome constructs the Kerberos SPN. |
+| `DisableAuthNegotiateCnameLookup` | bool | `true` | Preserve the original URL host for the Kerberos request. The app can then try that host before its CNAME chain. |
 
-After the assignment syncs, open `chrome://policy` on the device to confirm the Chrome policies are present.
+After the assignment syncs, fully stop and restart Chrome, then open `chrome://policy` on the
+device to confirm the policies are present. This policy does not refresh dynamically.
 
 ### Testing managed config
 
@@ -191,11 +190,10 @@ Then use the Test DPC UI to set managed configuration for the app.
 
 When no domain controller is specified, the app automatically discovers KDCs through DNS SRV lookups (`_kerberos._udp.<domain>` and `_kerberos._tcp.<domain>`).
 
-HTTP Kerberos normally tries the requested host, its complete DNS CNAME chain and exact
-`HTTP/` or `HOST/` matches found in Active Directory. Certificate SAN and reverse-DNS names are
-diagnostic only and are never trusted as SPN targets. For an exceptional alias, configure an exact
-override; wildcards, IP addresses and URLs are rejected. A Kerberos realm and DNS namespace do
-not have to be identical:
+HTTP Kerberos tries an exact managed override, the original host supplied by Chrome and then its
+complete DNS CNAME chain. The app does not use LDAP, certificate SAN or reverse-DNS names to invent
+additional targets. For an exceptional alias, configure an exact override; wildcards, IP addresses
+and URLs are rejected. A Kerberos realm and DNS namespace do not have to be identical:
 
 ```json
 {

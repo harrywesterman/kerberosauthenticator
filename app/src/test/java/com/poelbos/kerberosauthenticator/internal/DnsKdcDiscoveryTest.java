@@ -28,15 +28,6 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
-  public void testParseSrvResponseAcceptsConfiguredSrvPort() throws Exception {
-    byte[] response = buildLdapResponse();
-
-    List<String> hosts = DnsKdcDiscovery.parseSrvResponse(response, 0x1234, 389);
-
-    assertThat(hosts).containsExactly("ldap01.example.com", "ldap02.example.com").inOrder();
-  }
-
-  @Test
   public void testParseTxtResponseReturnsRealmStrings() throws Exception {
     byte[] response = buildTxtResponse("INT.EXAMPLE");
 
@@ -70,12 +61,32 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
-  public void testParsePtrResponseReturnsHostNames() throws Exception {
-    byte[] response = buildPtrResponse("web01.example.local");
+  public void followsCompleteCnameChain() {
+    List<String> aliases =
+        DnsKdcDiscovery.followCnameChain(
+            "portal.example.local",
+            host -> {
+              if (host.equals("portal.example.local")) return "edge.example.local";
+              if (host.equals("edge.example.local")) return "web01.example.local";
+              return null;
+            });
 
-    List<String> hosts = DnsKdcDiscovery.parsePtrResponse(response, 0x1234);
+    assertThat(aliases)
+        .containsExactly("edge.example.local", "web01.example.local")
+        .inOrder();
+  }
 
-    assertThat(hosts).containsExactly("web01.example.local");
+  @Test
+  public void stopsCnameCyclesWithoutRepeatingRequestedHost() {
+    List<String> aliases =
+        DnsKdcDiscovery.followCnameChain(
+            "portal.example.local",
+            host ->
+                host.equals("portal.example.local")
+                    ? "edge.example.local"
+                    : "portal.example.local");
+
+    assertThat(aliases).containsExactly("edge.example.local");
   }
 
   private static byte[] buildResponse() throws Exception {
@@ -91,22 +102,6 @@ public class DnsKdcDiscoveryTest {
     writeShort(out, 1);
     writeSrvAnswer(out, 0, 0, "dc01.example.com");
     writeSrvAnswer(out, 1, 0, "dc02.example.com");
-    return out.toByteArray();
-  }
-
-  private static byte[] buildLdapResponse() throws Exception {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    writeShort(out, 0x1234);
-    writeShort(out, 0x8180);
-    writeShort(out, 1);
-    writeShort(out, 2);
-    writeShort(out, 0);
-    writeShort(out, 0);
-    writeName(out, "_ldap._tcp.example.com");
-    writeShort(out, 33);
-    writeShort(out, 1);
-    writeSrvAnswer(out, 0, 0, 389, "ldap01.example.com");
-    writeSrvAnswer(out, 1, 0, 389, "ldap02.example.com");
     return out.toByteArray();
   }
 
@@ -137,21 +132,6 @@ public class DnsKdcDiscoveryTest {
     writeShort(out, 1);
     writeShort(out, 1);
     writeCnameAnswer(out, alias);
-    return out.toByteArray();
-  }
-
-  private static byte[] buildPtrResponse(String hostName) throws Exception {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    writeShort(out, 0x1234);
-    writeShort(out, 0x8180);
-    writeShort(out, 1);
-    writeShort(out, 1);
-    writeShort(out, 0);
-    writeShort(out, 0);
-    writeName(out, "27.17.151.10.in-addr.arpa");
-    writeShort(out, 12);
-    writeShort(out, 1);
-    writePtrAnswer(out, hostName);
     return out.toByteArray();
   }
 
@@ -201,21 +181,6 @@ public class DnsKdcDiscoveryTest {
 
     ByteArrayOutputStream data = new ByteArrayOutputStream();
     writeName(data, alias);
-
-    byte[] bytes = data.toByteArray();
-    writeShort(out, bytes.length);
-    out.write(bytes);
-  }
-
-  private static void writePtrAnswer(ByteArrayOutputStream out, String hostName) throws Exception {
-    out.write(0xc0);
-    out.write(0x0c);
-    writeShort(out, 12);
-    writeShort(out, 1);
-    writeInt(out, 60);
-
-    ByteArrayOutputStream data = new ByteArrayOutputStream();
-    writeName(data, hostName);
 
     byte[] bytes = data.toByteArray();
     writeShort(out, bytes.length);

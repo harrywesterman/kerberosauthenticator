@@ -54,12 +54,6 @@
     <string name="ad_domain">Active Directory Domain</string>
     <!-- [CHAR_LIMIT=300] -->
     <string name="ad_domain_description">The organization’s Active Directory domain.</string>
-    <!-- Name of the managed configuration field for controlling debugging -->
-    <!-- [CHAR_LIMIT=100] -->
-    <string name="sensitive_debug_data">Sensitive Debug Data</string>
-    <!-- Description of the managed configuration field for controlling debugging -->
-    <!-- [CHAR_LIMIT=300] -->
-    <string name="sensitive_debug_data_description">Whether to emit debugging statements that include credentials.</string>
     <!-- [CHAR_LIMIT=100] -->
     <string name="account_type" translatable="false">com.goog.afw.KerberosAuthenticator</string>
     <!-- [CHAR_LIMIT=20] -->

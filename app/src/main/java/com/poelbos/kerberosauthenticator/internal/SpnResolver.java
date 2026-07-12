@@ -34,8 +34,7 @@ public final class SpnResolver {
       Context context,
       String realm,
       String requestedHost,
-      List<String> cnameChain,
-      List<String> ldapHosts) {
+      List<String> cnameChain) {
     String requested = normalizeHost(requestedHost, realm);
     if (requested == null) {
       Log.w(TAG, "SPN_RESOLUTION rejected requested host=" + requestedHost);
@@ -48,9 +47,6 @@ public final class SpnResolver {
     addCandidate(candidates, requested, realm, "requested");
     for (String cname : safeList(cnameChain)) {
       addCandidate(candidates, cname, realm, "cname");
-    }
-    for (String ldapHost : safeList(ldapHosts)) {
-      addCandidate(candidates, ldapHost, realm, "ldap");
     }
     List<String> result = new ArrayList<>(candidates);
     Log.i(TAG, "SPN_RESOLUTION requested=" + requested + " candidates=" + result);

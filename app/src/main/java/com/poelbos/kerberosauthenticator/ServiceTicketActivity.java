@@ -81,9 +81,6 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
             tgt.asSubject(),
             account.getDomain(),
             account.getDomainController(),
-            account.getName(),
-            account.getPassword(),
-            accountConfiguration.getDebugWithSensitiveData(),
             this);
     spnego.execute(serviceName);
   }
@@ -91,13 +88,8 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
   @Override
   public void onServiceTicketResult(String service, TicketRequestResult requestResult,
       String serviceTicket) {
-    if (accountConfiguration.getDebugWithSensitiveData()) {
-      Log.d(
-          TAG,
-          String.format(
-              "Result of attempt to obtain service ticket to %s: %s , valid ticket? %s.",
-              service, requestResult, serviceTicket != null));
-    }
+    Log.i(TAG, String.format("SPNEGO_RESULT host=%s code=%s tokenPresent=%s",
+        service, requestResult.getResultCode(), serviceTicket != null));
 
     if (!requestResult.successful() || (serviceTicket == null)) {
       setErrorResultAndFinish(AccountManager.ERROR_CODE_BAD_AUTHENTICATION,

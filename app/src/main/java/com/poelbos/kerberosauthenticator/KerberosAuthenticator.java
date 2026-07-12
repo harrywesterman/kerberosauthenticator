@@ -55,7 +55,6 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         Context context,
         String serviceName,
         KerberosAccount account,
-        boolean debugWithSensitiveData,
         byte[] incomingAuthToken,
         byte[] spnegoContext);
   }
@@ -150,11 +149,6 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
   @Override
   public Bundle getAuthToken(AccountAuthenticatorResponse response, Account account,
       String authTokenType, Bundle options) {
-    Log.d(
-        TAG,
-        String.format(
-            "Received request to obtain token %s with account %s.", authTokenType, account));
-
     // Request does not come from Chrome, deny access.
     if (!chromeCallerValidator.isAuthorized(context, options)) {
       return unsupportedOperationBundle("Unsupported caller app.");
@@ -183,6 +177,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
           String.format("Invalid auth token format for %s.", authTokenType));
       return result;
     }
+    Log.i(TAG, "SPNEGO_REQUEST host=" + serviceName + " caller=chrome");
 
     KerberosAccount krbAccount = KerberosAccount.getAccount(context);
     // No account, this is a deviation from the protocol, return an error.
@@ -210,7 +205,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
     if (!needReAuthentication && !tgtValidityChecker.hasValidTgt(krbAccount)) {
       if (tgtRenewer.renew(context, krbAccount)) {
-        Log.i(TAG, String.format("Renewed ticket-granting-ticket for %s.", krbAccount.getName()));
+        Log.i(TAG, "TGT_RENEWAL result=success");
       } else {
         needReAuthentication = true;
       }
@@ -225,8 +220,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       return result;
     }
 
-    Log.d(TAG, String.format("Will request service ticket for %s, account %s.",
-        serviceName, krbAccount.getName()));
+    Log.i(TAG, "SPNEGO_TICKET_REQUEST host=" + serviceName);
     byte[] incomingAuthToken = incomingAuthToken(options);
     byte[] spnegoContext = spnegoContext(options);
     GetSpnegoTicketTask.SpnegoTicketResult serviceTicketResult =
@@ -234,7 +228,6 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             context,
             serviceName,
             krbAccount,
-            getFromAccountConfiguration(AccountConfiguration::getDebugWithSensitiveData),
             incomingAuthToken,
             spnegoContext);
     if (!serviceTicketResult.getRequestResult().successful()
@@ -280,7 +273,6 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       Context context,
       String serviceName,
       KerberosAccount account,
-      boolean debugWithSensitiveData,
       byte[] incomingAuthToken,
       byte[] spnegoContext) {
     TicketGrantingTicket tgt =
@@ -290,9 +282,6 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         tgt.asSubject(),
         account.getDomain(),
         account.getDomainController(),
-        account.getName(),
-        account.getPassword(),
-        debugWithSensitiveData,
         serviceName,
         incomingAuthToken,
         spnegoContext);
@@ -360,7 +349,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
                 context,
                 new com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails(
                     account.getName(), new String(stored), account.getDomain(),
-                    account.getDomainController()), false);
+                    account.getDomainController()));
         if (outcome.getResult().successful() && outcome.getSubject() != null) {
           account.setTicketGrantingTicket(
               new TicketGrantingTicket(outcome.getSubject()).asSerialized());
