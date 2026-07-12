@@ -231,6 +231,10 @@ public final class LdapSpnDiscovery {
   }
 
   static byte[] buildSearchRequest(int messageId, String baseDn, String serviceHost) {
+    return buildSearchRequest(messageId, baseDn, buildSpnFilter(serviceHost));
+  }
+
+  private static byte[] buildSearchRequest(int messageId, String baseDn, byte[] filter) {
     return ldapMessage(
         messageId,
         element(
@@ -242,7 +246,7 @@ public final class LdapSpnDiscovery {
                 integer(MAX_SEARCH_RESULTS),
                 integer(20),
                 bool(false),
-                buildSpnFilter(serviceHost),
+                filter,
                 sequence(
                     octetString("distinguishedName"),
                     octetString("sAMAccountName"),
@@ -486,26 +490,34 @@ public final class LdapSpnDiscovery {
   private static List<SearchResult> searchHost(
       Socket socket, OutputStream out, InputStream in, String baseDn, String serviceHost, int messageId)
       throws IOException {
-    out.write(buildSearchRequest(messageId, baseDn, serviceHost));
-    out.flush();
     List<SearchResult> results = new ArrayList<>();
-    while (true) {
-      LdapMessage message = parseMessage(readMessage(in));
-      if (message.messageId != messageId) {
-        continue;
-      }
-      if (message.protocolOpTag == 0x64) {
-        results.add(parseSearchResultEntry(message.protocolOpValue));
-      } else if (message.protocolOpTag == 0x65) {
-        int searchResult = parseLdapResultCode(message.protocolOpValue);
-        if (searchResult != 0 && searchResult != 3 && searchResult != 4) {
-          throw new IOException("LDAP search failed with result code " + searchResult + ".");
+    int nextMessageId = messageId;
+    for (byte[] filter : buildExactSpnFilters(serviceHost)) {
+      int searchMessageId = nextMessageId++;
+      out.write(buildSearchRequest(searchMessageId, baseDn, filter));
+      out.flush();
+      while (true) {
+        LdapMessage message = parseMessage(readMessage(in));
+        if (message.messageId != searchMessageId) {
+          continue;
         }
-        out.write(buildUnbindRequest(messageId + 1));
-        out.flush();
-        return results;
+        if (message.protocolOpTag == 0x64) {
+          results.add(parseSearchResultEntry(message.protocolOpValue));
+        } else if (message.protocolOpTag == 0x65) {
+          int searchResult = parseLdapResultCode(message.protocolOpValue);
+          if (searchResult != 0 && searchResult != 3 && searchResult != 4) {
+            throw new IOException("LDAP search failed with result code " + searchResult + ".");
+          }
+          break;
+        }
+      }
+      if (!results.isEmpty()) {
+        break;
       }
     }
+    out.write(buildUnbindRequest(nextMessageId));
+    out.flush();
+    return results;
   }
 
   private static byte[] parseSaslServerCredentials(byte[] protocolOpValue) throws IOException {
@@ -712,6 +724,14 @@ public final class LdapSpnDiscovery {
   }
 
   private static byte[] buildSpnFilter(String serviceHost) {
+    List<byte[]> filters = buildExactSpnFilters(serviceHost);
+    if (filters.size() == 1) {
+      return filters.get(0);
+    }
+    return element(0xa1, concat(filters.toArray(new byte[0][])));
+  }
+
+  private static List<byte[]> buildExactSpnFilters(String serviceHost) {
     List<byte[]> filters = new ArrayList<>();
     String normalizedHost = normalizeHost(serviceHost);
     if (normalizedHost != null) {
@@ -720,10 +740,7 @@ public final class LdapSpnDiscovery {
       filters.add(equalityFilter("dNSHostName", normalizedHost));
       filters.add(equalityFilter("msDS-AdditionalDnsHostName", normalizedHost));
     }
-    if (filters.size() == 1) {
-      return filters.get(0);
-    }
-    return element(0xa1, concat(filters.toArray(new byte[0][])));
+    return filters;
   }
 
   private static String normalizeHost(String serviceHost) {
