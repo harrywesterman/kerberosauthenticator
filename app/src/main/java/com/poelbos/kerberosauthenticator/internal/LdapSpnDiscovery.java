@@ -227,7 +227,7 @@ public final class LdapSpnDiscovery {
                 octetString(""),
                 element(
                     0xa3,
-                    sequence(octetString(mechanism), octetString(gssToken))))));
+                    concat(octetString(mechanism), octetString(gssToken))))));
   }
 
   static byte[] buildSearchRequest(int messageId, String baseDn, String serviceHost) {
