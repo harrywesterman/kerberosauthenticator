@@ -747,7 +747,7 @@ public final class LdapSpnDiscovery {
   }
 
   private static byte[] equalityFilter(String attribute, String value) {
-    return element(0xa3, sequence(octetString(attribute), octetString(value)));
+    return element(0xa3, concat(octetString(attribute), octetString(value)));
   }
 
   private static byte[] presentFilter(String attribute) {
