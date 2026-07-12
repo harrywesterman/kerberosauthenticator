@@ -440,7 +440,7 @@ public final class LdapSpnDiscovery {
         byte[] nextToken = parseSaslServerCredentials(response.protocolOpValue);
         // On LDAPS, AD can complete GSS-SPNEGO with LDAP success and no final AP-REP or SASL
         // security-layer token. TLS already protects the session, so LDAP result 0 is decisive.
-        if (resultCode == 0 && nextToken == null) {
+        if (resultCode == 0) {
           return searchHost(socket, out, in, baseDn, serviceHost, messageId + 1);
         }
         if (gssContext.isEstablished() && (resultCode == 0 || resultCode == 14)) {
