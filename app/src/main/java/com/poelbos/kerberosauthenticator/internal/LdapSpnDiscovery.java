@@ -357,7 +357,7 @@ public final class LdapSpnDiscovery {
           results.add(parseSearchResultEntry(message.protocolOpValue));
         } else if (message.protocolOpTag == 0x65) {
           int searchResult = parseLdapResultCode(message.protocolOpValue);
-          if (searchResult != 0 && searchResult != 4) {
+          if (searchResult != 0 && searchResult != 3 && searchResult != 4) {
             throw new IOException("LDAP search failed with result code " + searchResult + ".");
           }
           break;
@@ -498,7 +498,7 @@ public final class LdapSpnDiscovery {
         results.add(parseSearchResultEntry(message.protocolOpValue));
       } else if (message.protocolOpTag == 0x65) {
         int searchResult = parseLdapResultCode(message.protocolOpValue);
-        if (searchResult != 0 && searchResult != 4) {
+        if (searchResult != 0 && searchResult != 3 && searchResult != 4) {
           throw new IOException("LDAP search failed with result code " + searchResult + ".");
         }
         out.write(buildUnbindRequest(messageId + 1));
