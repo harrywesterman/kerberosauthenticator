@@ -438,6 +438,11 @@ public final class LdapSpnDiscovery {
         }
         int resultCode = parseLdapResultCode(response.protocolOpValue);
         byte[] nextToken = parseSaslServerCredentials(response.protocolOpValue);
+        // On LDAPS, AD can complete GSS-SPNEGO with LDAP success and no final AP-REP or SASL
+        // security-layer token. TLS already protects the session, so LDAP result 0 is decisive.
+        if (resultCode == 0 && nextToken == null) {
+          return searchHost(socket, out, in, baseDn, serviceHost, messageId + 1);
+        }
         if (gssContext.isEstablished() && (resultCode == 0 || resultCode == 14)) {
           // RFC 4752 requires a final GSSAPI security-layer exchange before LDAP requests.
           if (nextToken != null) {
