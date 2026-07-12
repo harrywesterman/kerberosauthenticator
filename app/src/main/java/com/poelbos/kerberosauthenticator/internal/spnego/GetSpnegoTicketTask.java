@@ -23,6 +23,7 @@ import android.net.Network;
 import android.os.AsyncTask;
 import android.util.Base64;
 import android.util.Log;
+import com.poelbos.kerberosauthenticator.CredentialVault;
 import com.poelbos.kerberosauthenticator.internal.DnsKdcDiscovery;
 import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
 import com.poelbos.kerberosauthenticator.internal.LdapSpnDiscovery;
@@ -213,15 +214,25 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       // Certificate names are diagnostics only. A certificate does not prove ownership of an AD
       // service principal and must never influence the Kerberos target.
       getServerCertificateDnsNames(service, debugWithSensitiveData);
-      List<String> ldapCandidates =
-          getLdapServiceCandidates(
-              context,
-              domain,
-              activeDomainControllers,
-              subject,
-              service,
-              dnsAliasCandidates,
-              debugWithSensitiveData);
+      char[] ldapPassword = new CredentialVault(context).load(username, domain);
+      List<String> ldapCandidates;
+      try {
+        ldapCandidates =
+            getLdapServiceCandidates(
+                context,
+                domain,
+                activeDomainControllers,
+                subject,
+                username,
+                ldapPassword,
+                service,
+                dnsAliasCandidates,
+                debugWithSensitiveData);
+      } finally {
+        if (ldapPassword != null) {
+          java.util.Arrays.fill(ldapPassword, '\0');
+        }
+      }
 
       GSSException lastException = null;
       String previousService =
@@ -415,6 +426,8 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String domain,
       String domainControllers,
       Subject subject,
+      String username,
+      char[] password,
       String service,
       List<String> dnsAliasCandidates,
       boolean debugWithSensitiveData) {
@@ -427,9 +440,16 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     lookupHosts.add(service);
     lookupHosts.addAll(dnsAliasCandidates);
     for (String lookupHost : lookupHosts) {
-      results.addAll(
+      List<LdapSpnDiscovery.SearchResult> hostResults =
           LdapSpnDiscovery.findHttpServicePrincipalNames(
-              context, domain, domainControllers, subject, lookupHost));
+              context, domain, domainControllers, subject, lookupHost);
+      if (hostResults.isEmpty() && password != null) {
+        Log.i(TAG, "Kerberos LDAP lookup produced no result; retrying exact lookup over LDAPS.");
+        hostResults =
+            LdapSpnDiscovery.findHttpServicePrincipalNames(
+                context, domain, domainControllers, username, password, lookupHost);
+      }
+      results.addAll(hostResults);
     }
     if (debugWithSensitiveData) {
       if (results.isEmpty()) {
