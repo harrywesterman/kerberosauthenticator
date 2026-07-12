@@ -121,6 +121,9 @@ public final class LdapSpnDiscoveryTest {
     assertThat(requestText).contains("msDS-AdditionalDnsHostName");
     assertThat(requestText).contains("servicePrincipalName");
     assertThat(requestText).contains("sAMAccountName");
+    int httpOffset = requestText.indexOf("HTTP/portal.int.example");
+    assertThat(request[httpOffset - "servicePrincipalName".length() - 6])
+        .isNotEqualTo((byte) 0x30);
   }
 
   @Test
