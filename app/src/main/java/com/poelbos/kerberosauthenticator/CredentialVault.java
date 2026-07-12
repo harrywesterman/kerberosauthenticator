@@ -2,9 +2,7 @@ package com.poelbos.kerberosauthenticator;
 
 import android.app.KeyguardManager;
 import android.content.Context;
-import android.content.RestrictionsManager;
 import android.os.Build;
-import android.os.Bundle;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyInfo;
 import android.security.keystore.KeyProperties;
@@ -34,7 +32,7 @@ public final class CredentialVault {
   }
 
   public boolean store(String username, String realm, char[] password) {
-    if (password == null || password.length == 0 || !isManagedAndDeviceSecure()) return false;
+    if (password == null || password.length == 0 || !isDeviceSecure()) return false;
     try {
       SecretKey key = getOrCreateKey(true);
       if (!isHardwareBacked(key)) {
@@ -109,14 +107,9 @@ public final class CredentialVault {
     }
   }
 
-  private boolean isManagedAndDeviceSecure() {
-    RestrictionsManager manager =
-        (RestrictionsManager) context.getSystemService(Context.RESTRICTIONS_SERVICE);
-    Bundle restrictions = manager == null ? null : manager.getApplicationRestrictions();
-    boolean managed = restrictions != null
-        && !restrictions.getString("ad_realm", "").trim().isEmpty();
+  private boolean isDeviceSecure() {
     KeyguardManager keyguard = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
-    return managed && keyguard != null && keyguard.isDeviceSecure();
+    return keyguard != null && keyguard.isDeviceSecure();
   }
 
   private SecretKey getOrCreateKey(boolean create) throws Exception {

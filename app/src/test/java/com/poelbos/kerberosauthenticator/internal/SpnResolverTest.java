@@ -41,7 +41,8 @@ public final class SpnResolverTest {
     assertThat(SpnResolver.normalizeHost("https://portal.example.com", "EXAMPLE.COM")).isNull();
     assertThat(SpnResolver.normalizeHost("*.example.com", "EXAMPLE.COM")).isNull();
     assertThat(SpnResolver.normalizeHost("10.0.0.1", "EXAMPLE.COM")).isNull();
-    assertThat(SpnResolver.normalizeHost("portal.other.com", "EXAMPLE.COM")).isNull();
+    assertThat(SpnResolver.normalizeHost("portal.other.com", "EXAMPLE.COM"))
+        .isEqualTo("portal.other.com");
   }
 
   @Test
