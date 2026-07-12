@@ -125,8 +125,10 @@ public final class SpnResolver {
     } catch (IllegalArgumentException e) {
       return null;
     }
-    if (!host.contains(".")
-        || !(host.equals(normalizedRealm) || host.endsWith("." + normalizedRealm))) {
+    // An AD Kerberos realm is not necessarily the DNS suffix used by web services. The KDC
+    // remains fixed by the account configuration, so accepting another valid FQDN here does not
+    // permit cross-realm authentication.
+    if (!host.contains(".")) {
       return null;
     }
     return host;
