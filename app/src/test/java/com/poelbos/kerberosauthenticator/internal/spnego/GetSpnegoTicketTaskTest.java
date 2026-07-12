@@ -9,55 +9,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import java.util.Arrays;
 import org.junit.Test;
+import org.ietf.jgss.GSSException;
 
 public final class GetSpnegoTicketTaskTest {
-  @Test
-  public void serviceTicketCandidatesKeepOnlyTheRequestedHostWithoutDiscoveryData() {
-    assertThat(GetSpnegoTicketTask.serviceTicketCandidates("Service.Example.Internal."))
-        .containsExactly("service.example.internal")
-        .inOrder();
-  }
-
-  @Test
-  public void serviceTicketCandidatesKeepIpAddressExact() {
-    assertThat(GetSpnegoTicketTask.serviceTicketCandidates("10.151.17.27"))
-        .containsExactly("10.151.17.27");
-  }
-
-  @Test
-  public void serviceTicketCandidatesUseDnsAliasesBeforeCertificateDnsNames() {
-    assertThat(
-            GetSpnegoTicketTask.serviceTicketCandidates(
-                "app.example.internal",
-                Arrays.asList("alias.example.local"),
-                Arrays.asList(
-                    "app.example.internal",
-                    "web01.example.local",
-                    "web02.example.local")))
-        .containsExactly(
-            "app.example.internal",
-            "alias.example.local",
-            "web01.example.local",
-            "web02.example.local")
-        .inOrder();
-  }
-
-  @Test
-  public void serviceTicketCandidatesUseLdapDnsNamesAfterDnsAndCertificateCandidates() {
-    assertThat(
-            GetSpnegoTicketTask.serviceTicketCandidates(
-                "app.example.internal",
-                Arrays.asList("alias.example.local"),
-                Arrays.asList("app.example.internal"),
-                Arrays.asList("auth01.example.local", "auth02.example.local")))
-        .containsExactly(
-            "app.example.internal",
-            "alias.example.local",
-            "auth01.example.local",
-            "auth02.example.local")
-        .inOrder();
-  }
-
   @Test
   public void continuationCandidatesResumeAfterPreviousFallback() {
     assertThat(
@@ -69,13 +23,13 @@ public final class GetSpnegoTicketTaskTest {
   }
 
   @Test
-  public void wildcardCertificateNamesAreNotKerberosCandidates() {
-    assertThat(
-            GetSpnegoTicketTask.serviceTicketCandidates(
-                "service.example.internal",
-                Arrays.asList("*.service.example.internal", "backend.example.internal"),
-                Arrays.asList("*.backend.example.internal")))
-        .containsExactly("service.example.internal", "backend.example.internal")
-        .inOrder();
+  public void onlyUnknownPrincipalErrorsPermitAnotherCandidate() {
+    GSSException unknown = new GSSException(GSSException.FAILURE);
+    unknown.initCause(new Exception("KDC_ERR_S_PRINCIPAL_UNKNOWN"));
+    GSSException wrongKey = new GSSException(GSSException.FAILURE);
+    wrongKey.initCause(new Exception("Checksum failed"));
+
+    assertThat(GetSpnegoTicketTask.isUnknownPrincipal(unknown)).isTrue();
+    assertThat(GetSpnegoTicketTask.isUnknownPrincipal(wrongKey)).isFalse();
   }
 }

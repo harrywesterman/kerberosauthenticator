@@ -30,6 +30,11 @@
     <string name="mdm_share_start_path">Startmap</string>
     <string name="mdm_kdc_hosts">KDC-hosts</string>
     <string name="mdm_kdc_hosts_description">Optionele expliciete KDC-lijst; leeg gebruikt DNS SRV.</string>
+    <string name="mdm_http_spn_mappings">HTTP SPN-toewijzingen</string>
+    <string name="mdm_http_spn_mappings_description">Exacte host-naar-SPN-host uitzonderingen voor interne websites.</string>
+    <string name="mdm_http_spn_mapping">HTTP SPN-toewijzing</string>
+    <string name="mdm_http_request_host">Aangevraagde websitehost</string>
+    <string name="mdm_http_spn_host">Kerberos SPN-host</string>
     <string name="mdm_require_encryption">SMB-encryptie verplicht</string>
     <string name="mdm_require_encryption_description">Weiger shares zonder SMB 3-encryptie.</string>
     <string name="mdm_allow_cache">Lokale versleutelde cache toestaan</string>

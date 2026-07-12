@@ -136,6 +136,7 @@ Chrome must also be managed. Add or edit the managed Google Play assignment for 
 | `AuthServerAllowlist` | string | `*.example.com,example.com` | Internal sites where Chrome may answer Kerberos/Negotiate challenges. |
 | `AuthSchemes` | string | `basic,digest,ntlm,negotiate` | Optional. Include `negotiate` if you restrict authentication schemes. |
 | `AuthNegotiateDelegateAllowlist` | string | `*.example.com` | Optional. Only needed if credential delegation is required. |
+| `DisableAuthNegotiateCnameLookup` | bool | `false` | Use the canonical DNS CNAME target when Chrome constructs the Kerberos SPN. |
 
 After the assignment syncs, open `chrome://policy` on the device to confirm the Chrome policies are present.
 
@@ -163,12 +164,32 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
 | `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
+| `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
 | `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `false` |
 | `allow_local_cache` | bool | no | Permit app-private temporary files for external viewers; default `true` |
 | `allow_screenshots` | bool | no | Permit screenshots; default `false` |
 | `support_contact` | string | no | IT support text or URL |
 
 When no domain controller is specified, the app automatically discovers KDCs through DNS SRV lookups (`_kerberos._udp.<domain>` and `_kerberos._tcp.<domain>`).
+
+HTTP Kerberos normally tries the requested host, its complete DNS CNAME chain and exact
+`HTTP/` or `HOST/` matches found in Active Directory. Certificate SAN and reverse-DNS names are
+diagnostic only and are never trusted as SPN targets. For an exceptional alias, configure an exact
+realm-local override; wildcards, IP addresses, URLs and cross-realm targets are rejected:
+
+```json
+{
+  "http_spn_mappings": [
+    {
+      "request_host": "mobiel.int.politie",
+      "spn_host": "werkelijke-webserver.int.politie"
+    }
+  ]
+}
+```
+
+This requests `HTTP/werkelijke-webserver.int.politie` when Chrome asks for
+`mobiel.int.politie`; the app never creates or changes SPNs in Active Directory.
 
 ### Credential- en ticketbeleid
 

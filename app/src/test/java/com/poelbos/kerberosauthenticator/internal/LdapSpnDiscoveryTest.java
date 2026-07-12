@@ -26,13 +26,6 @@ public final class LdapSpnDiscoveryTest {
   }
 
   @Test
-  public void searchTermsIncludeHostAndFirstLabel() {
-    assertThat(LdapSpnDiscovery.searchTerms("Portal.Int.Example."))
-        .containsExactly("portal.int.example", "portal")
-        .inOrder();
-  }
-
-  @Test
   public void bindNamesIncludeUpnDownLevelAndShortForms() {
     assertThat(LdapSpnDiscovery.bindNames("USER123", "EXAMPLE.LOCAL"))
         .containsExactly("USER123@EXAMPLE.LOCAL", "EXAMPLE\\USER123", "USER123")
@@ -89,6 +82,9 @@ public final class LdapSpnDiscoveryTest {
     String requestText = asLatin1(request);
     assertThat(requestText).contains("DC=EXAMPLE,DC=LOCAL");
     assertThat(requestText).contains("HTTP/portal.int.example");
+    assertThat(requestText).contains("HOST/portal.int.example");
+    assertThat(requestText).contains("dNSHostName");
+    assertThat(requestText).contains("msDS-AdditionalDnsHostName");
     assertThat(requestText).contains("servicePrincipalName");
     assertThat(requestText).contains("sAMAccountName");
   }
@@ -128,6 +124,7 @@ public final class LdapSpnDiscoveryTest {
                     sequence(
                         attribute("sAMAccountName", "svc-web"),
                         attribute("dNSHostName", "web01.example.local"),
+                        attribute("msDS-AdditionalDnsHostName", "portal.int.example"),
                         attribute(
                             "servicePrincipalName",
                             "HTTP/portal.int.example",
@@ -140,6 +137,7 @@ public final class LdapSpnDiscoveryTest {
     assertThat(result.getDistinguishedName()).isEqualTo("CN=web,CN=Users,DC=EXAMPLE,DC=LOCAL");
     assertThat(result.getAccountName()).isEqualTo("svc-web");
     assertThat(result.getDnsHostName()).isEqualTo("web01.example.local");
+    assertThat(result.getAdditionalDnsHostNames()).containsExactly("portal.int.example");
     assertThat(result.getServicePrincipalNames())
         .containsExactly("HTTP/portal.int.example", "HTTP/web01.example.local")
         .inOrder();
