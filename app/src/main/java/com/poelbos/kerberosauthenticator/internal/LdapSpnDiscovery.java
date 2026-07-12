@@ -50,7 +50,7 @@ public final class LdapSpnDiscovery {
   private static final int LDAP_PORT = 389;
   private static final int LDAPS_PORT = 636;
   private static final int CONNECT_TIMEOUT_MILLIS = 6000;
-  private static final int READ_TIMEOUT_MILLIS = 15000;
+  private static final int READ_TIMEOUT_MILLIS = 30000;
   private static final int MAX_SEARCH_RESULTS = 25;
 
   private LdapSpnDiscovery() {}
