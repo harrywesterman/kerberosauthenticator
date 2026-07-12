@@ -123,7 +123,7 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
             new TicketRequestResult(ResultCode.ERROR_COMMIT_FAILED, "Commit failed"), null);
       }
 
-      Log.i(TAG, String.format("Successfully authenticated %s to %s", username, adDomain));
+      Log.i(TAG, "Kerberos authentication succeeded.");
       // Never stringify a Subject: it contains the TGT and session key material.
     } catch (LoginException e) {
       Log.w(TAG, "Failure logging in", e);
