@@ -11,6 +11,17 @@ import org.junit.Test;
 
 public final class KerberosEnvironmentTest {
   @Test
+  public void sensitiveKerberosDebugIsAlwaysDisabled() {
+    System.setProperty("sun.security.jgss.debug", "true");
+    System.setProperty("sun.security.krb5.debug", "true");
+
+    KerberosEnvironment.disableSensitiveDebug();
+
+    assertThat(System.getProperty("sun.security.jgss.debug")).isEqualTo("false");
+    assertThat(System.getProperty("sun.security.krb5.debug")).isEqualTo("false");
+  }
+
+  @Test
   public void inferRealmFromServiceHostUsesDnsDomain() {
     assertThat(
             KerberosEnvironment.inferRealmFromServiceHost(

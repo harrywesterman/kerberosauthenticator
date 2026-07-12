@@ -18,7 +18,7 @@ public final class SpnResolverTest {
   private final Context context = ApplicationProvider.getApplicationContext();
 
   @Test
-  public void resolveUsesManagedMappingThenRequestCnameAndLdap() {
+  public void resolveUsesManagedMappingThenRequestAndCname() {
     setMappings(mapping("Portal.Example.Com.", "WEB01.EXAMPLE.COM"));
 
     assertThat(
@@ -26,13 +26,11 @@ public final class SpnResolverTest {
                 context,
                 "EXAMPLE.COM",
                 "Portal.Example.Com.",
-                Arrays.asList("edge.example.com", "web01.example.com"),
-                Arrays.asList("web02.example.com", "edge.example.com")))
+                Arrays.asList("edge.example.com", "web01.example.com")))
         .containsExactly(
             "web01.example.com",
             "portal.example.com",
-            "edge.example.com",
-            "web02.example.com")
+            "edge.example.com")
         .inOrder();
   }
 
@@ -58,8 +56,7 @@ public final class SpnResolverTest {
         mapping("PORTAL.EXAMPLE.COM", "web02.example.com"));
 
     assertThat(
-            SpnResolver.resolve(
-                context, "EXAMPLE.COM", "portal.example.com", null, null))
+            SpnResolver.resolve(context, "EXAMPLE.COM", "portal.example.com", null))
         .containsExactly("portal.example.com");
   }
 

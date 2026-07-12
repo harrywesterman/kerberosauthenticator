@@ -38,7 +38,7 @@ public final class TgtRefreshWorker extends Worker {
       UserAuthenticationTask.AuthenticationOutcome outcome = UserAuthenticationTask.authenticate(
           context,
           new KerberosAccountDetails(account.getName(), new String(password), account.getDomain(),
-              account.getDomainController()), false);
+              account.getDomainController()));
       if (outcome.getResult().successful() && outcome.getSubject() != null) {
         TicketGrantingTicket tgt = new TicketGrantingTicket(outcome.getSubject());
         account.setTicketGrantingTicket(tgt.asSerialized());

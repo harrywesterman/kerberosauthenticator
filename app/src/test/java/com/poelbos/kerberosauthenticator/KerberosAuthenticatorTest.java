@@ -193,7 +193,7 @@ public class KerberosAuthenticatorTest {
   @Test
   public void testGetAuthTokenValidTGT() {
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, debugWithSensitiveData, incoming, contextBytes) ->
+        (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
                 "test-spnego-token"));
@@ -234,7 +234,7 @@ public class KerberosAuthenticatorTest {
   @Test
   public void testGetAuthTokenRenewsExpiredTgtBeforePromptingForPassword() {
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, debugWithSensitiveData, incoming, contextBytes) ->
+        (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
                 "test-spnego-token"));

@@ -43,7 +43,6 @@ public class AccountConfiguration {
   static final String AD_REALM_KEY = "ad_realm";
   static final String USERNAME_KEY = "username";
   static final String PASSWORD_KEY = "password";
-  static final String SENSITIVE_DEBUG_DATA_KEY = "sensitiveDebugData";
   // Managed configuration
   private final Context context;
   private final RestrictionsManager restrictionsManager;
@@ -53,7 +52,6 @@ public class AccountConfiguration {
   private String password;
   private String adDomain;
   private String adDomainController;
-  private boolean debugWithSensitiveData = false;
 
   AccountConfiguration(@NonNull Context context) {
     // Managed configs initialisation and listener definition
@@ -72,7 +70,6 @@ public class AccountConfiguration {
     password = null;
     adDomain = null;
     adDomainController = "";
-    debugWithSensitiveData = false;
 
     Bundle restrictionsBundle = restrictionsManager.getApplicationRestrictions();
     if (restrictionsBundle == null) {
@@ -115,8 +112,6 @@ public class AccountConfiguration {
       }
     }
 
-    debugWithSensitiveData = restrictionsBundle.getBoolean(SENSITIVE_DEBUG_DATA_KEY, false);
-
     // A persisted enterprise password is bound to the managed realm. Removing or changing that
     // realm invalidates the complete account atomically.
     KerberosAccount account = KerberosAccount.getAccount(context);
@@ -133,10 +128,6 @@ public class AccountConfiguration {
       return null;
     }
     return new KerberosAccountDetails(username, password, adDomain, adDomainController);
-  }
-
-  boolean getDebugWithSensitiveData() {
-    return debugWithSensitiveData;
   }
 
   @VisibleForTesting

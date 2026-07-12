@@ -34,7 +34,6 @@ public final class DnsKdcDiscovery {
   private static final int DNS_MAX_PACKET_SIZE = 1500;
   private static final int DNS_TYPE_A = 1;
   private static final int DNS_TYPE_CNAME = 5;
-  private static final int DNS_TYPE_PTR = 12;
   private static final int DNS_TYPE_TXT = 16;
   private static final int DNS_TYPE_SRV = 33;
   private static final int DNS_CLASS_IN = 1;
@@ -60,27 +59,6 @@ public final class DnsKdcDiscovery {
     return null;
   }
 
-  public static String discoverLdap(Context context, String realm) {
-    List<InetAddress> dnsServers = getDnsServers(context);
-    if (dnsServers.isEmpty()) {
-      Log.w(TAG, "Cannot discover LDAP servers because the active network has no DNS servers.");
-      return null;
-    }
-
-    String normalizedRealm = normalizeRealm(realm);
-    for (String queryName :
-        new String[] {
-          "_ldap._tcp." + normalizedRealm,
-          "_ldap._tcp.dc._msdcs." + normalizedRealm
-        }) {
-      List<String> ldapServers = queryDnsServers(dnsServers, queryName, 389);
-      if (!ldapServers.isEmpty()) {
-        return joinHosts(ldapServers);
-      }
-    }
-    return null;
-  }
-
   public static String discoverCname(Context context, String host) {
     List<InetAddress> dnsServers = getDnsServers(context);
     if (dnsServers.isEmpty()) {
@@ -93,31 +71,31 @@ public final class DnsKdcDiscovery {
   }
 
   public static List<String> discoverCnameChain(Context context, String host) {
+    return followCnameChain(host, current -> discoverCname(context, current));
+  }
+
+  static List<String> followCnameChain(String host, CnameResolver resolver) {
     Set<String> aliases = new LinkedHashSet<>();
-    String current = host;
+    Set<String> seen = new LinkedHashSet<>();
+    String current = normalizeRealm(host);
+    seen.add(current);
     for (int depth = 0; depth < 8; depth++) {
-      String alias = discoverCname(context, current);
-      if (alias == null || !aliases.add(alias)) {
+      String alias = resolver.resolve(current);
+      if (alias == null) {
         break;
       }
+      alias = normalizeRealm(alias);
+      if (!seen.add(alias)) {
+        break;
+      }
+      aliases.add(alias);
       current = alias;
     }
     return new ArrayList<>(aliases);
   }
 
-  public static String discoverPtr(Context context, InetAddress address) {
-    String queryName = reverseIpv4Name(address);
-    if (queryName == null) {
-      return null;
-    }
-    List<InetAddress> dnsServers = getDnsServers(context);
-    if (dnsServers.isEmpty()) {
-      Log.w(TAG, "Cannot discover reverse DNS because the active network has no DNS servers.");
-      return null;
-    }
-
-    List<String> hosts = queryPtrDnsServers(dnsServers, queryName);
-    return hosts.isEmpty() ? null : hosts.get(0);
+  interface CnameResolver {
+    String resolve(String host);
   }
 
   public static String discoverRealmForHost(Context context, String host) {
@@ -205,22 +183,6 @@ public final class DnsKdcDiscovery {
     return Collections.emptyList();
   }
 
-  private static List<String> queryPtrDnsServers(List<InetAddress> dnsServers, String queryName) {
-    for (InetAddress dnsServer : dnsServers) {
-      try {
-        List<String> values = queryPtr(dnsServer, queryName);
-        if (!values.isEmpty()) {
-          return values;
-        }
-      } catch (SocketTimeoutException e) {
-        Log.w(TAG, String.format("DNS PTR lookup timed out at %s for %s.", dnsServer, queryName));
-      } catch (IOException e) {
-        Log.w(TAG, String.format("DNS PTR lookup failed at %s for %s.", dnsServer, queryName), e);
-      }
-    }
-    return Collections.emptyList();
-  }
-
   static List<String> querySrv(InetAddress dnsServer, String queryName) throws IOException {
     return querySrv(dnsServer, queryName, 88);
   }
@@ -254,22 +216,6 @@ public final class DnsKdcDiscovery {
     }
   }
 
-  static List<String> queryPtr(InetAddress dnsServer, String queryName) throws IOException {
-    int queryId = RANDOM.nextInt(0x10000);
-    byte[] query = buildPtrQuery(queryId, queryName);
-    byte[] response = new byte[DNS_MAX_PACKET_SIZE];
-
-    try (DatagramSocket socket = new DatagramSocket()) {
-      socket.setSoTimeout(DNS_TIMEOUT_MILLIS);
-      socket.send(new DatagramPacket(query, query.length, new InetSocketAddress(dnsServer, DNS_PORT)));
-      DatagramPacket packet = new DatagramPacket(response, response.length);
-      socket.receive(packet);
-      byte[] message = new byte[packet.getLength()];
-      System.arraycopy(packet.getData(), 0, message, 0, packet.getLength());
-      return parsePtrResponse(message, queryId);
-    }
-  }
-
   private static List<String> queryRecord(
       InetAddress dnsServer, byte[] query, int queryId, boolean srv, int expectedSrvPort)
       throws IOException {
@@ -294,10 +240,6 @@ public final class DnsKdcDiscovery {
 
   static byte[] buildAddressQuery(int queryId, String queryName) throws IOException {
     return buildQuery(queryId, queryName, DNS_TYPE_A);
-  }
-
-  static byte[] buildPtrQuery(int queryId, String queryName) throws IOException {
-    return buildQuery(queryId, queryName, DNS_TYPE_PTR);
   }
 
   static byte[] buildTxtQuery(int queryId, String queryName) throws IOException {
@@ -418,10 +360,6 @@ public final class DnsKdcDiscovery {
     return parseNameRecordResponse(message, expectedQueryId, DNS_TYPE_CNAME);
   }
 
-  static List<String> parsePtrResponse(byte[] message, int expectedQueryId) throws IOException {
-    return parseNameRecordResponse(message, expectedQueryId, DNS_TYPE_PTR);
-  }
-
   private static List<String> parseNameRecordResponse(
       byte[] message, int expectedQueryId, int expectedType) throws IOException {
     if (message.length < 12) {
@@ -495,21 +433,6 @@ public final class DnsKdcDiscovery {
       currentOffset += chunkLength;
     }
     return text.toString();
-  }
-
-  private static String reverseIpv4Name(InetAddress address) {
-    byte[] bytes = address.getAddress();
-    if (bytes.length != 4) {
-      return null;
-    }
-    return (bytes[3] & 0xff)
-        + "."
-        + (bytes[2] & 0xff)
-        + "."
-        + (bytes[1] & 0xff)
-        + "."
-        + (bytes[0] & 0xff)
-        + ".in-addr.arpa";
   }
 
   private static void writeDnsName(ByteArrayOutputStream out, String name) throws IOException {

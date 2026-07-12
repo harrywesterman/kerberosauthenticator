@@ -30,7 +30,6 @@ public class TicketRequestResult {
     ERROR_COMMIT_FAILED,
     ERROR_DNS_FAILURE,
     ERROR_NO_SPN,
-    ERROR_LDAP_FAILURE,
     ERROR_SPNEGO_CONTINUATION,
     ERROR_GSS_FAILURE
   };
@@ -45,6 +44,10 @@ public class TicketRequestResult {
 
   public boolean successful() {
     return resultCode == ResultCode.SUCCESS;
+  }
+
+  public ResultCode getResultCode() {
+    return resultCode;
   }
 
   public boolean isPasswordBad() {

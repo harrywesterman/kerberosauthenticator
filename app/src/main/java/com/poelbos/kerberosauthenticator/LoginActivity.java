@@ -116,10 +116,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   @Override
   public void onTicketGrantingTicketResult(
       TicketRequestResult ticketRequestResult, Subject ticket) {
-    if (accountConfiguration.getDebugWithSensitiveData()) {
-      Log.d(TAG, String.format("Result of attempt to authenticate user: %s , valid ticket? %s",
-          ticketRequestResult, ticket != null));
-    }
+    Log.i(TAG, String.format("TGT_RESULT code=%s valid=%s",
+        ticketRequestResult.getResultCode(), ticket != null));
     Bundle result = new Bundle();
     KerberosAccount account = KerberosAccount.getAccount(this);
     boolean successGettingTgt = ticketRequestResult.successful() && ticket != null;
@@ -265,8 +263,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
                 account.getName(),
                 account.getPassword(),
                 account.getDomain(),
-                account.getDomainController()),
-            accountConfiguration.getDebugWithSensitiveData());
+                account.getDomainController()));
     kinit.execute();
   }
 
