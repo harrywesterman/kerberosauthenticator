@@ -213,16 +213,6 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       // Certificate names are diagnostics only. A certificate does not prove ownership of an AD
       // service principal and must never influence the Kerberos target.
       getServerCertificateDnsNames(service, debugWithSensitiveData);
-      List<String> ldapCandidates =
-          getLdapServiceCandidates(
-              context,
-              domain,
-              activeDomainControllers,
-              subject,
-              service,
-              dnsAliasCandidates,
-              debugWithSensitiveData);
-
       GSSException lastException = null;
       String previousService =
           context
@@ -235,51 +225,27 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
                       ? normalizedService
                       : SpnResolver.normalizeHost(previousService, domain))
               : SpnResolver.resolve(
-                  context, domain, service, dnsAliasCandidates, ldapCandidates);
+                  context,
+                  domain,
+                  service,
+                  dnsAliasCandidates,
+                  java.util.Collections.<String>emptyList());
       if (incomingAuthToken != null && exportedContext == null) {
         candidates = resumeCandidatesAfter(candidates, previousService);
       }
-      Log.i(TAG, "SPNEGO candidates for " + service + ": " + candidates);
+      Log.i(TAG, "Direct SPNEGO candidates for " + service + ": " + candidates);
+      LinkedHashSet<String> attemptedCandidates = new LinkedHashSet<>();
       for (String ticketService : candidates) {
+        attemptedCandidates.add(ticketService);
         try {
-          serverName =
-              manager.createName("HTTP@" + ticketService, GSSName.NT_HOSTBASED_SERVICE, spnegoOid);
-          if (debugWithSensitiveData) {
-            Log.i(TAG, "Created SPNEGO GSSName: " + serverName);
-          }
-
-          GSSContext gssContext =
-              exportedContext == null
-                  ? manager.createContext(serverName, spnegoOid, null, GSSContext.DEFAULT_LIFETIME)
-                  : manager.createContext(exportedContext);
-          byte[] spnegoToken = incomingAuthToken == null ? new byte[0] : incomingAuthToken;
-          spnegoToken = gssContext.initSecContext(spnegoToken, 0, spnegoToken.length);
-
-          Log.d(
-              TAG,
-              String.format(
-                  "GSS context established? %s service ticket is null? %s",
-                  gssContext.isEstablished(), spnegoToken != null));
-
-          if (spnegoToken != null) {
-            serviceSpnegoTicket = Base64.encodeToString(spnegoToken, Base64.NO_WRAP);
-          }
-          byte[] nextContext = null;
-          if (spnegoToken != null && !gssContext.isEstablished()) {
-            nextContext = gssContext.export();
-          }
-          if (!ticketService.equals(service)) {
-            Log.i(
-                TAG,
-                String.format(
-                    "Using fallback SPNEGO service %s for requested service %s.",
-                    ticketService, service));
-          }
-          return new SpnegoTicketResult(
-              new TicketRequestResult(ResultCode.SUCCESS, "HTTP ticket for " + serverName),
-              serviceSpnegoTicket,
-              nextContext,
-              ticketService);
+          return requestCandidate(
+              manager,
+              spnegoOid,
+              ticketService,
+              service,
+              incomingAuthToken,
+              exportedContext,
+              debugWithSensitiveData);
         } catch (GSSException e) {
           lastException = e;
           Log.w(
@@ -290,6 +256,53 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
           if (!isUnknownPrincipal(e)) {
             return new SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, e.getMessage()), null);
+          }
+        }
+      }
+
+      // Directory discovery is deliberately deferred until every URL/DNS candidate was rejected
+      // by the KDC as unknown. This keeps the normal browser authentication path independent of
+      // LDAP latency and prevents directory failures from blocking a valid HTTP SPN.
+      if (exportedContext == null && lastException != null && isUnknownPrincipal(lastException)) {
+        Log.i(TAG, "Direct SPNEGO candidates were unknown; starting LDAP SPN fallback.");
+        List<String> ldapCandidates =
+            getLdapServiceCandidates(
+                context,
+                domain,
+                activeDomainControllers,
+                subject,
+                service,
+                dnsAliasCandidates,
+                debugWithSensitiveData);
+        List<String> fallbackCandidates =
+            SpnResolver.resolve(context, domain, service, dnsAliasCandidates, ldapCandidates);
+        if (incomingAuthToken != null) {
+          fallbackCandidates = resumeCandidatesAfter(fallbackCandidates, previousService);
+        }
+        fallbackCandidates = untriedCandidates(fallbackCandidates, attemptedCandidates);
+        Log.i(TAG, "LDAP fallback SPNEGO candidates for " + service + ": " + fallbackCandidates);
+        for (String ticketService : fallbackCandidates) {
+          attemptedCandidates.add(ticketService);
+          try {
+            return requestCandidate(
+                manager,
+                spnegoOid,
+                ticketService,
+                service,
+                incomingAuthToken,
+                null,
+                debugWithSensitiveData);
+          } catch (GSSException e) {
+            lastException = e;
+            Log.w(
+                TAG,
+                String.format(
+                    "SPN_TICKET_FAILED host=%s major=%d minor=%d unknownPrincipal=%s",
+                    ticketService, e.getMajor(), e.getMinor(), isUnknownPrincipal(e)));
+            if (!isUnknownPrincipal(e)) {
+              return new SpnegoTicketResult(
+                  new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, e.getMessage()), null);
+            }
           }
         }
       }
@@ -344,6 +357,68 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       resumed.add(candidates.get((previousIndex + offset) % candidates.size()));
     }
     return resumed;
+  }
+
+  static List<String> untriedCandidates(
+      List<String> candidates, Collection<String> attemptedCandidates) {
+    List<String> remaining = new ArrayList<>();
+    if (candidates == null) {
+      return remaining;
+    }
+    for (String candidate : candidates) {
+      if (attemptedCandidates == null || !attemptedCandidates.contains(candidate)) {
+        remaining.add(candidate);
+      }
+    }
+    return remaining;
+  }
+
+  private static SpnegoTicketResult requestCandidate(
+      GSSManager manager,
+      Oid spnegoOid,
+      String ticketService,
+      String requestedService,
+      byte[] incomingAuthToken,
+      byte[] exportedContext,
+      boolean debugWithSensitiveData)
+      throws GSSException {
+    GSSName serverName =
+        manager.createName("HTTP@" + ticketService, GSSName.NT_HOSTBASED_SERVICE, spnegoOid);
+    if (debugWithSensitiveData) {
+      Log.i(TAG, "Created SPNEGO GSSName: " + serverName);
+    }
+
+    GSSContext gssContext =
+        exportedContext == null
+            ? manager.createContext(serverName, spnegoOid, null, GSSContext.DEFAULT_LIFETIME)
+            : manager.createContext(exportedContext);
+    byte[] spnegoToken = incomingAuthToken == null ? new byte[0] : incomingAuthToken;
+    spnegoToken = gssContext.initSecContext(spnegoToken, 0, spnegoToken.length);
+
+    Log.d(
+        TAG,
+        String.format(
+            "GSS context established? %s service ticket is null? %s",
+            gssContext.isEstablished(), spnegoToken != null));
+
+    String encodedTicket =
+        spnegoToken == null ? null : Base64.encodeToString(spnegoToken, Base64.NO_WRAP);
+    byte[] nextContext = null;
+    if (spnegoToken != null && !gssContext.isEstablished()) {
+      nextContext = gssContext.export();
+    }
+    if (!ticketService.equals(requestedService)) {
+      Log.i(
+          TAG,
+          String.format(
+              "Using fallback SPNEGO service %s for requested service %s.",
+              ticketService, requestedService));
+    }
+    return new SpnegoTicketResult(
+        new TicketRequestResult(ResultCode.SUCCESS, "HTTP ticket for " + serverName),
+        encodedTicket,
+        nextContext,
+        ticketService);
   }
 
   @Override
