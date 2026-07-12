@@ -7,13 +7,30 @@ Een Android Enterprise-app voor Active Directory/Kerberos met twee delen in éé
 
 De app is gebaseerd op de bestaande [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator)-codebasis en is uitgebreid met een geïntegreerde enterprise-bestandenervaring. Chrome kan nog steeds dezelfde Kerberos-account gebruiken voor HTTP Negotiate.
 
+## Huidige status van HTTP Kerberos
+
+De authenticator bewaart het gebruikerswachtwoord na de eerste geslaagde login alleen als het
+toestel een veilige schermvergrendeling en hardware-backed Android Keystore biedt. Daarmee kan
+de app zonder nieuwe invoer TGT's vernieuwen.
+
+Voor HTTP gebruikt de app GSS-SPNEGO/Kerberos over LDAPS voor AD-discovery. De LDAP-bind bevat
+TLS channel binding (`tls-server-end-point`), gebruikt correcte SASL BER-encoding en voert de
+SPN-filters afzonderlijk uit (`HTTP/`, `HOST/`, `dNSHostName` en
+`msDS-AdditionalDnsHostName`). Dat voorkomt een gecombineerd OR-filter over grote AD-directories.
+
+De live test met een interne alias op versie 1.33 bevestigde dat TLS, CBT, GSS-SPNEGO en de
+AD-bind werken, maar AD leverde voor de exacte filters geen object/SPN op. De uiteindelijke
+Kerberos-aanvraag eindigt dan terecht met `KDC_ERR_S_PRINCIPAL_UNKNOWN`. Windows kan in zo'n
+scenario nog een andere canonieke hostnaam of NTLM-fallback gebruiken; de Android-app
+implementeert bewust geen NTLM-fallback.
+
 ## Bedrijfsbestanden
 
 - MDM bepaalt welke shares zichtbaar zijn; gebruikers kunnen geen eigen SMB-server toevoegen.
 - SMB gebruikt Kerberos GSS/SPNEGO, signing en minimaal SMB 2.1. Er is geen NTLM-, guest- of anonymous-fallback.
 - Browsen, downloaden/openen, uploaden, mappen maken, hernoemen en verwijderen zijn beschikbaar binnen de AD-rechten van de gebruiker.
 - De gebruiker voert zelf zijn AD-gebruikersnaam en wachtwoord in. MDM levert nooit credentials.
-- Op een beheerd toestel met veilige schermvergrendeling wordt het wachtwoord apparaatgebonden versleuteld met een hardware-backed Android Keystore-sleutel. Daarmee vraagt de app dagelijks een volledig nieuw TGT aan.
+- Op een toestel met veilige schermvergrendeling wordt het wachtwoord apparaatgebonden versleuteld met een hardware-backed Android Keystore-sleutel. Daarmee vraagt de app dagelijks een volledig nieuw TGT aan. De opslag vereist niet langer dat de realm via één specifieke Android RestrictionsManager-bron is aangeleverd.
 - Als veilige hardware-opslag niet beschikbaar is, blijft aanmelden mogelijk maar wordt het wachtwoord niet langdurig bewaard.
 - Screenshots zijn standaard geblokkeerd en SMB 3-encryptie kan door MDM verplicht worden.
 
@@ -84,7 +101,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-Langdurige credential-opslag werkt uitsluitend met managed configuration. Zonder MDM kan het legacy testscherm gebruikersnaam en domein bewaren, maar nooit het wachtwoord.
+Langdurige credential-opslag werkt alleen wanneer het toestel beveiligd is met een schermvergrendeling en
+hardware-backed Android Keystore. Zonder veilige hardwareopslag blijft aanmelden mogelijk, maar wordt
+het wachtwoord niet langdurig bewaard.
 
 ## MDM Deployment
 
@@ -175,21 +194,22 @@ When no domain controller is specified, the app automatically discovers KDCs thr
 HTTP Kerberos normally tries the requested host, its complete DNS CNAME chain and exact
 `HTTP/` or `HOST/` matches found in Active Directory. Certificate SAN and reverse-DNS names are
 diagnostic only and are never trusted as SPN targets. For an exceptional alias, configure an exact
-realm-local override; wildcards, IP addresses, URLs and cross-realm targets are rejected:
+override; wildcards, IP addresses and URLs are rejected. A Kerberos realm and DNS namespace do
+not have to be identical:
 
 ```json
 {
   "http_spn_mappings": [
     {
-      "request_host": "mobiel.int.politie",
-      "spn_host": "werkelijke-webserver.int.politie"
+      "request_host": "portal.example.com",
+      "spn_host": "web01.example.com"
     }
   ]
 }
 ```
 
-This requests `HTTP/werkelijke-webserver.int.politie` when Chrome asks for
-`mobiel.int.politie`; the app never creates or changes SPNs in Active Directory.
+This requests `HTTP/web01.example.com` when Chrome asks for `portal.example.com`; the app never
+creates or changes SPNs in Active Directory.
 
 ### Credential- en ticketbeleid
 
