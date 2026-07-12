@@ -8,6 +8,7 @@ package com.poelbos.kerberosauthenticator.internal.spnego;
 import static com.google.common.truth.Truth.assertThat;
 
 import java.util.Arrays;
+import java.util.Collections;
 import org.junit.Test;
 import org.ietf.jgss.GSSException;
 
@@ -31,5 +32,23 @@ public final class GetSpnegoTicketTaskTest {
 
     assertThat(GetSpnegoTicketTask.isUnknownPrincipal(unknown)).isTrue();
     assertThat(GetSpnegoTicketTask.isUnknownPrincipal(wrongKey)).isFalse();
+  }
+
+  @Test
+  public void removesDirectCandidatesFromLdapFallback() {
+    assertThat(
+            GetSpnegoTicketTask.untriedCandidates(
+                Arrays.asList("alias.example.test", "canonical.example.test", "ldap.example.test"),
+                Arrays.asList("alias.example.test", "canonical.example.test")))
+        .containsExactly("ldap.example.test")
+        .inOrder();
+  }
+
+  @Test
+  public void acceptsEmptyAttemptedSetForLdapFallback() {
+    assertThat(
+            GetSpnegoTicketTask.untriedCandidates(
+                Arrays.asList("canonical.example.test"), Collections.<String>emptyList()))
+        .containsExactly("canonical.example.test");
   }
 }
