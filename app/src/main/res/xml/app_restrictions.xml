@@ -25,6 +25,16 @@
         android:description="@string/mdm_kdc_hosts_description"
         android:restrictionType="string" />
     <restriction
+        android:key="http_spn_mappings"
+        android:title="@string/mdm_http_spn_mappings"
+        android:description="@string/mdm_http_spn_mappings_description"
+        android:restrictionType="bundle_array">
+        <restriction android:key="http_spn_mapping" android:title="@string/mdm_http_spn_mapping" android:restrictionType="bundle">
+            <restriction android:key="request_host" android:title="@string/mdm_http_request_host" android:restrictionType="string" />
+            <restriction android:key="spn_host" android:title="@string/mdm_http_spn_host" android:restrictionType="string" />
+        </restriction>
+    </restriction>
+    <restriction
         android:key="require_smb_encryption"
         android:title="@string/mdm_require_encryption"
         android:description="@string/mdm_require_encryption_description"

@@ -201,20 +201,6 @@ public final class LdapSpnDiscovery {
     return new ArrayList<>(names);
   }
 
-  static List<String> searchTerms(String serviceHost) {
-    String normalized = normalizeHost(serviceHost);
-    if (normalized == null) {
-      return Collections.emptyList();
-    }
-    Set<String> terms = new LinkedHashSet<>();
-    terms.add(normalized);
-    int dot = normalized.indexOf('.');
-    if (dot > 0) {
-      terms.add(normalized.substring(0, dot));
-    }
-    return new ArrayList<>(terms);
-  }
-
   static byte[] buildBindRequest(int messageId, String bindName, String password) {
     return ldapMessage(
         messageId,
@@ -260,6 +246,7 @@ public final class LdapSpnDiscovery {
                     octetString("distinguishedName"),
                     octetString("sAMAccountName"),
                     octetString("dNSHostName"),
+                    octetString("msDS-AdditionalDnsHostName"),
                     octetString("servicePrincipalName")))));
   }
 
@@ -667,9 +654,9 @@ public final class LdapSpnDiscovery {
     String normalizedHost = normalizeHost(serviceHost);
     if (normalizedHost != null) {
       filters.add(equalityFilter("servicePrincipalName", "HTTP/" + normalizedHost));
-    }
-    for (String term : searchTerms(serviceHost)) {
-      filters.add(substringFilter("servicePrincipalName", "HTTP/", term, null));
+      filters.add(equalityFilter("servicePrincipalName", "HOST/" + normalizedHost));
+      filters.add(equalityFilter("dNSHostName", normalizedHost));
+      filters.add(equalityFilter("msDS-AdditionalDnsHostName", normalizedHost));
     }
     if (filters.size() == 1) {
       return filters.get(0);
@@ -703,21 +690,6 @@ public final class LdapSpnDiscovery {
 
   private static byte[] presentFilter(String attribute) {
     return element(0x87, attribute.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private static byte[] substringFilter(
-      String attribute, String initial, String any, String fin) {
-    List<byte[]> substrings = new ArrayList<>();
-    if (initial != null) {
-      substrings.add(element(0x80, initial.getBytes(StandardCharsets.UTF_8)));
-    }
-    if (any != null) {
-      substrings.add(element(0x81, any.getBytes(StandardCharsets.UTF_8)));
-    }
-    if (fin != null) {
-      substrings.add(element(0x82, fin.getBytes(StandardCharsets.UTF_8)));
-    }
-    return element(0xa4, concat(octetString(attribute), sequence(concat(substrings.toArray(new byte[0][])))));
   }
 
   private static byte[] ldapMessage(int messageId, byte[] protocolOp) {
@@ -819,6 +791,7 @@ public final class LdapSpnDiscovery {
     private final String distinguishedName;
     private String accountName;
     private String dnsHostName;
+    private final List<String> additionalDnsHostNames = new ArrayList<>();
     private final List<String> servicePrincipalNames = new ArrayList<>();
 
     SearchResult(String distinguishedName) {
@@ -833,6 +806,8 @@ public final class LdapSpnDiscovery {
         accountName = value;
       } else if ("dNSHostName".equalsIgnoreCase(name)) {
         dnsHostName = value;
+      } else if ("msDS-AdditionalDnsHostName".equalsIgnoreCase(name)) {
+        additionalDnsHostNames.add(value);
       } else if ("servicePrincipalName".equalsIgnoreCase(name)) {
         servicePrincipalNames.add(value);
       }
@@ -854,6 +829,10 @@ public final class LdapSpnDiscovery {
       return Collections.unmodifiableList(servicePrincipalNames);
     }
 
+    public List<String> getAdditionalDnsHostNames() {
+      return Collections.unmodifiableList(additionalDnsHostNames);
+    }
+
     @Override
     public String toString() {
       return "SearchResult{"
@@ -866,6 +845,8 @@ public final class LdapSpnDiscovery {
           + ", dnsHostName='"
           + dnsHostName
           + '\''
+          + ", additionalDnsHostNames="
+          + additionalDnsHostNames
           + ", servicePrincipalNames="
           + servicePrincipalNames
           + '}';

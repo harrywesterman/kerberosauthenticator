@@ -26,6 +26,7 @@ import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.DnsKdcDiscovery;
 import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
 import com.poelbos.kerberosauthenticator.internal.LdapSpnDiscovery;
+import com.poelbos.kerberosauthenticator.internal.SpnResolver;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
 import java.io.IOException;
@@ -38,7 +39,6 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import javax.security.auth.Subject;
 import javax.net.ssl.HttpsURLConnection;
 import org.ietf.jgss.GSSContext;
@@ -210,8 +210,9 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
             null);
       }
       List<String> dnsAliasCandidates = getDnsAliasCandidates(context, service);
-      List<String> certificateDnsNames =
-          getServerCertificateDnsNames(service, debugWithSensitiveData);
+      // Certificate names are diagnostics only. A certificate does not prove ownership of an AD
+      // service principal and must never influence the Kerberos target.
+      getServerCertificateDnsNames(service, debugWithSensitiveData);
       List<String> ldapCandidates =
           getLdapServiceCandidates(
               context,
@@ -219,19 +220,23 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
               activeDomainControllers,
               subject,
               service,
+              dnsAliasCandidates,
               debugWithSensitiveData);
 
       GSSException lastException = null;
+      String previousService =
+          context
+              .getSharedPreferences("service_ticket_info_storage", Context.MODE_PRIVATE)
+              .getString("service_ticket_name", null);
       List<String> candidates =
           exportedContext != null
-              ? java.util.Collections.singletonList(normalizedService)
-              : serviceTicketCandidates(
-                  service, dnsAliasCandidates, certificateDnsNames, ldapCandidates);
+              ? java.util.Collections.singletonList(
+                  SpnResolver.normalizeHost(previousService, domain) == null
+                      ? normalizedService
+                      : SpnResolver.normalizeHost(previousService, domain))
+              : SpnResolver.resolve(
+                  context, domain, service, dnsAliasCandidates, ldapCandidates);
       if (incomingAuthToken != null && exportedContext == null) {
-        String previousService =
-            context
-                .getSharedPreferences("service_ticket_info_storage", Context.MODE_PRIVATE)
-                .getString("service_ticket_name", null);
         candidates = resumeCandidatesAfter(candidates, previousService);
       }
       Log.i(TAG, "SPNEGO candidates for " + service + ": " + candidates);
@@ -279,14 +284,18 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
           lastException = e;
           Log.w(
               TAG,
-              String.format("SPNEGO service ticket failed for HTTP@%s.", ticketService),
-              e);
+              String.format(
+                  "SPN_TICKET_FAILED host=%s major=%d minor=%d unknownPrincipal=%s",
+                  ticketService, e.getMajor(), e.getMinor(), isUnknownPrincipal(e)));
+          if (!isUnknownPrincipal(e)) {
+            return new SpnegoTicketResult(
+                new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, e.getMessage()), null);
+          }
         }
       }
       if (serviceSpnegoTicket == null && lastException != null) {
         ResultCode resultCode =
-            lastException.getMessage() != null
-                    && lastException.getMessage().contains("Server not found in Kerberos database")
+            isUnknownPrincipal(lastException)
                 ? ResultCode.ERROR_NO_SPN
                 : ResultCode.ERROR_GSS_FAILURE;
         return new SpnegoTicketResult(
@@ -307,58 +316,19 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
         serviceSpnegoTicket);
   }
 
-  static List<String> serviceTicketCandidates(String service) {
-    return serviceTicketCandidates(service, new ArrayList<String>());
-  }
-
-  static List<String> serviceTicketCandidates(String service, List<String> certificateDnsNames) {
-    return serviceTicketCandidates(
-        service, new ArrayList<String>(), certificateDnsNames, new ArrayList<String>());
-  }
-
-  static List<String> serviceTicketCandidates(
-      String service, List<String> dnsAliasNames, List<String> certificateDnsNames) {
-    return serviceTicketCandidates(service, dnsAliasNames, certificateDnsNames, new ArrayList<String>());
-  }
-
-  static List<String> serviceTicketCandidates(
-      String service,
-      List<String> dnsAliasNames,
-      List<String> certificateDnsNames,
-      List<String> ldapDnsNames) {
-    String normalizedService = normalizeService(service);
-    if (normalizedService == null) {
-      return new ArrayList<>();
-    }
-
-    Set<String> candidates = new LinkedHashSet<>();
-    candidates.add(normalizedService);
-    if (isIpv4Address(normalizedService)) {
-      return new ArrayList<>(candidates);
-    }
-
-    for (String dnsAliasName : dnsAliasNames) {
-      String normalizedDnsAliasName = normalizeService(dnsAliasName);
-      if (normalizedDnsAliasName != null && !isWildcardHost(normalizedDnsAliasName)) {
-        candidates.add(normalizedDnsAliasName);
+  static boolean isUnknownPrincipal(Throwable error) {
+    for (Throwable current = error; current != null; current = current.getCause()) {
+      String message = current.getMessage();
+      if (message != null) {
+        String normalized = message.toLowerCase(Locale.US);
+        if (normalized.contains("server not found in kerberos database")
+            || normalized.contains("kdc_err_s_principal_unknown")
+            || normalized.contains("s_principal_unknown")) {
+          return true;
+        }
       }
     }
-
-    for (String certificateDnsName : certificateDnsNames) {
-      String normalizedCertificateDnsName = normalizeService(certificateDnsName);
-      if (normalizedCertificateDnsName != null && !isWildcardHost(normalizedCertificateDnsName)) {
-        candidates.add(normalizedCertificateDnsName);
-      }
-    }
-
-    for (String ldapDnsName : ldapDnsNames) {
-      String normalizedLdapDnsName = normalizeService(ldapDnsName);
-      if (normalizedLdapDnsName != null) {
-        candidates.add(normalizedLdapDnsName);
-      }
-    }
-
-    return new ArrayList<>(candidates);
+    return false;
   }
 
   static List<String> resumeCandidatesAfter(List<String> candidates, String previousCandidate) {
@@ -374,10 +344,6 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       resumed.add(candidates.get((previousIndex + offset) % candidates.size()));
     }
     return resumed;
-  }
-
-  private static boolean isWildcardHost(String host) {
-    return host.startsWith("*.");
   }
 
   @Override
@@ -450,14 +416,21 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String domainControllers,
       Subject subject,
       String service,
+      List<String> dnsAliasCandidates,
       boolean debugWithSensitiveData) {
     Log.i(
         TAG,
         String.format(
             "Starting LDAP SPN lookup for %s using controllers %s.", service, domainControllers));
-    List<LdapSpnDiscovery.SearchResult> results =
-        LdapSpnDiscovery.findHttpServicePrincipalNames(
-            context, domain, domainControllers, subject, service);
+    List<LdapSpnDiscovery.SearchResult> results = new ArrayList<>();
+    LinkedHashSet<String> lookupHosts = new LinkedHashSet<>();
+    lookupHosts.add(service);
+    lookupHosts.addAll(dnsAliasCandidates);
+    for (String lookupHost : lookupHosts) {
+      results.addAll(
+          LdapSpnDiscovery.findHttpServicePrincipalNames(
+              context, domain, domainControllers, subject, lookupHost));
+    }
     if (debugWithSensitiveData) {
       if (results.isEmpty()) {
         Log.i(TAG, "LDAP SPN lookup found no HTTP service principal names for " + service);
@@ -473,13 +446,25 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     }
     LinkedHashSet<String> candidates = new LinkedHashSet<>();
     for (LdapSpnDiscovery.SearchResult result : results) {
+      LinkedHashSet<String> resultHosts = new LinkedHashSet<>();
+      for (String lookupHost : lookupHosts) {
+        String normalizedLookup = normalizeService(lookupHost);
+        if (normalizedLookup != null) {
+          resultHosts.add(normalizedLookup);
+        }
+      }
       String dnsHostName = result.getDnsHostName();
       if (dnsHostName != null) {
         candidates.add(dnsHostName);
+        resultHosts.add(normalizeService(dnsHostName));
+      }
+      candidates.addAll(result.getAdditionalDnsHostNames());
+      for (String additionalHost : result.getAdditionalDnsHostNames()) {
+        resultHosts.add(normalizeService(additionalHost));
       }
       for (String servicePrincipalName : result.getServicePrincipalNames()) {
         String candidate = ldapServiceCandidateFromPrincipal(servicePrincipalName);
-        if (candidate != null) {
+        if (candidate != null && resultHosts.contains(candidate)) {
           candidates.add(candidate);
         }
       }
@@ -497,7 +482,9 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       return null;
     }
     String normalized = servicePrincipalName.trim();
-    if (!normalized.regionMatches(true, 0, "HTTP/", 0, 5)) {
+    boolean http = normalized.regionMatches(true, 0, "HTTP/", 0, 5);
+    boolean host = normalized.regionMatches(true, 0, "HOST/", 0, 5);
+    if (!http && !host) {
       return null;
     }
     normalized = normalized.substring(5);
