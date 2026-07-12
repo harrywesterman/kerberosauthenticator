@@ -129,9 +129,7 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
       }
 
       Log.i(TAG, String.format("Successfully authenticated %s to %s", username, adDomain));
-      if (debugWithCredentials) {
-        Log.i(TAG, String.format("Subject: %s", subject));
-      }
+      // Never stringify a Subject: it contains the TGT and session key material.
     } catch (LoginException e) {
       Log.w(TAG, "Failure logging in", e);
       if (e.getMessage().contains("Pre-authentication information was invalid")) {
