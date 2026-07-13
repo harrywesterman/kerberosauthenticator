@@ -49,14 +49,22 @@ public final class DnsKdcDiscovery {
     }
 
     String normalizedRealm = normalizeRealm(realm);
-    for (String protocol : new String[] {"_udp", "_tcp"}) {
-      String queryName = "_kerberos." + protocol + "." + normalizedRealm;
+    for (String queryName : kdcSrvLookupNames(normalizedRealm)) {
       List<String> kdcs = queryDnsServers(dnsServers, queryName, 88);
       if (!kdcs.isEmpty()) {
         return joinHosts(kdcs);
       }
     }
     return null;
+  }
+
+  static List<String> kdcSrvLookupNames(String realm) {
+    String normalizedRealm = normalizeRealm(realm);
+    List<String> lookupNames = new ArrayList<>();
+    lookupNames.add("_kerberos._udp." + normalizedRealm);
+    lookupNames.add("_kerberos._tcp." + normalizedRealm);
+    lookupNames.add("_kerberos._tcp.dc._msdcs." + normalizedRealm);
+    return lookupNames;
   }
 
   public static String discoverCname(Context context, String host) {

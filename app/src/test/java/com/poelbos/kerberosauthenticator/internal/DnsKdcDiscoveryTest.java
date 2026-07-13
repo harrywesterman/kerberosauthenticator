@@ -61,6 +61,18 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
+  public void testKdcSrvLookupNamesIncludeActiveDirectoryDcLocator() {
+    List<String> lookupNames = DnsKdcDiscovery.kdcSrvLookupNames("POLITIE.LOCAL");
+
+    assertThat(lookupNames)
+        .containsExactly(
+            "_kerberos._udp.politie.local",
+            "_kerberos._tcp.politie.local",
+            "_kerberos._tcp.dc._msdcs.politie.local")
+        .inOrder();
+  }
+
+  @Test
   public void testParseCnameResponseReturnsAliases() throws Exception {
     byte[] response = buildCnameResponse("web01.example.local");
 
