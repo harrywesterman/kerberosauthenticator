@@ -28,6 +28,15 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
+  public void testDescribeResponseExposesOnlyRcodeAndRecordCounts() throws Exception {
+    byte[] response = buildResponse();
+
+    String description = DnsKdcDiscovery.describeResponse(response, 0x1234);
+
+    assertThat(description).isEqualTo("rcode=0 questions=1 answers=2 authority=0 additional=0");
+  }
+
+  @Test
   public void testParseTxtResponseReturnsRealmStrings() throws Exception {
     byte[] response = buildTxtResponse("INT.EXAMPLE");
 
