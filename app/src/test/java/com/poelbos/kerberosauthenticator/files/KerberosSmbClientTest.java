@@ -33,7 +33,8 @@ public final class KerberosSmbClientTest {
     assertEquals(
         "dc01.politie.local",
         KerberosSmbClient.initialConnectionHost(
-            "politie.local", "POLITIE.LOCAL", "dc01.politie.local"));
+            "politie.local", "POLITIE.LOCAL",
+            "dc01.politie.local dc02.politie.local"));
   }
 
   @Test public void keepsShareHostForNonDomainNamespace() {
