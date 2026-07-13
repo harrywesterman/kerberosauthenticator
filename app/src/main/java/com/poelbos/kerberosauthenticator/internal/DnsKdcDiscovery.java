@@ -55,6 +55,12 @@ public final class DnsKdcDiscovery {
         return joinHosts(kdcs);
       }
     }
+    for (String queryName : dcLocatorSrvLookupNames(normalizedRealm)) {
+      List<String> domainControllers = queryDnsServers(dnsServers, queryName, 389);
+      if (!domainControllers.isEmpty()) {
+        return joinHosts(domainControllers);
+      }
+    }
     return null;
   }
 
@@ -64,6 +70,14 @@ public final class DnsKdcDiscovery {
     lookupNames.add("_kerberos._udp." + normalizedRealm);
     lookupNames.add("_kerberos._tcp." + normalizedRealm);
     lookupNames.add("_kerberos._tcp.dc._msdcs." + normalizedRealm);
+    return lookupNames;
+  }
+
+  static List<String> dcLocatorSrvLookupNames(String realm) {
+    String normalizedRealm = normalizeRealm(realm);
+    List<String> lookupNames = new ArrayList<>();
+    lookupNames.add("_ldap._tcp.dc._msdcs." + normalizedRealm);
+    lookupNames.add("_ldap._tcp." + normalizedRealm);
     return lookupNames;
   }
 
