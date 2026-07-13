@@ -194,7 +194,7 @@ public class KerberosAccount {
     accountVisibilitySetter = DEFAULT_ACCOUNT_VISIBILITY_SETTER;
   }
 
-  String getDomainController() {
+  public String getDomainController() {
     return userData.getString(KEY_AD_DC);
   }
 
