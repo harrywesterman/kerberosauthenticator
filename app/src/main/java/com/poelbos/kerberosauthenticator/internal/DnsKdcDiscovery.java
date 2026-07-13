@@ -228,10 +228,33 @@ public final class DnsKdcDiscovery {
       socket.receive(packet);
       byte[] message = new byte[packet.getLength()];
       System.arraycopy(packet.getData(), 0, message, 0, packet.getLength());
-      return srv
-          ? parseSrvResponse(message, queryId, expectedSrvPort)
-          : parseTxtResponse(message, queryId);
+      if (srv) {
+        List<String> hosts = parseSrvResponse(message, queryId, expectedSrvPort);
+        Log.i(TAG, "DNS SRV response " + describeResponse(message, queryId)
+            + " accepted=" + hosts.size());
+        return hosts;
+      }
+      return parseTxtResponse(message, queryId);
     }
+  }
+
+  static String describeResponse(byte[] message, int expectedQueryId) throws IOException {
+    if (message.length < 12) {
+      throw new IOException("DNS response is too short.");
+    }
+    int responseId = readUnsignedShort(message, 0);
+    if (responseId != expectedQueryId) {
+      throw new IOException("DNS response ID does not match the query.");
+    }
+    int rcode = readUnsignedShort(message, 2) & 0x000f;
+    return String.format(
+        Locale.US,
+        "rcode=%d questions=%d answers=%d authority=%d additional=%d",
+        rcode,
+        readUnsignedShort(message, 4),
+        readUnsignedShort(message, 6),
+        readUnsignedShort(message, 8),
+        readUnsignedShort(message, 10));
   }
 
   static byte[] buildSrvQuery(int queryId, String queryName) throws IOException {
