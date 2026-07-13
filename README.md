@@ -26,6 +26,7 @@ wachtwoorden, tickets, sessiesleutels en SPNEGO-tokenbytes worden nooit gelogd.
 
 - MDM bepaalt welke shares zichtbaar zijn; gebruikers kunnen geen eigen SMB-server toevoegen.
 - SMB gebruikt Kerberos GSS/SPNEGO, signing en minimaal SMB 2.1. Er is geen NTLM-, guest- of anonymous-fallback.
+- Beheerde DFS-namespaces en -referrals worden rechtstreeks gevolgd met Kerberos-only SMB.
 - Browsen, downloaden/openen, uploaden, mappen maken, hernoemen en verwijderen zijn beschikbaar binnen de AD-rechten van de gebruiker.
 - De gebruiker voert zelf zijn AD-gebruikersnaam en wachtwoord in. MDM levert nooit credentials.
 - Op een toestel met veilige schermvergrendeling wordt het wachtwoord apparaatgebonden versleuteld met een hardware-backed Android Keystore-sleutel. Daarmee vraagt de app dagelijks een volledig nieuw TGT aan. De opslag vereist niet langer dat de realm via één specifieke Android RestrictionsManager-bron is aangeleverd.
