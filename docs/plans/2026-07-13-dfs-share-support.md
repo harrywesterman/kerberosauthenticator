@@ -98,10 +98,11 @@ Run:
 
 ```bash
 git diff --check
-JAVA_HOME=$(/usr/libexec/java_home -v 17) ./gradlew assembleRelease -PreleaseVersion=1.40
+JAVA_HOME=$(/usr/libexec/java_home -v 17) ./gradlew assembleRelease -PreleaseVersion=1.39
 ```
 
-Expected: geen witruimtefouten en `BUILD SUCCESSFUL`.
+Expected: geen witruimtefouten en `BUILD SUCCESSFUL`. De releaseworkflow bepaalt de versie uit de
+nieuwste GitHub-releasetag; bij de huidige tag `v1.38` is de verwachte volgende versie `1.39`.
 
 **Step 4: Commit and push main**
 
