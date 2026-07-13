@@ -94,7 +94,13 @@ public final class KerberosSmbClient implements Closeable {
       normalizedRealm = normalizedRealm.substring(0, normalizedRealm.length() - 1);
     }
     return normalizedHost.equalsIgnoreCase(normalizedRealm)
-        ? domainController : shareHost;
+        ? firstHost(domainController) : shareHost;
+  }
+
+  private static String firstHost(String hosts) {
+    String normalized = hosts == null ? "" : hosts.trim();
+    int separator = normalized.indexOf(' ');
+    return separator < 0 ? normalized : normalized.substring(0, separator);
   }
 
   static IOException connectionFailure(Exception exception) {
