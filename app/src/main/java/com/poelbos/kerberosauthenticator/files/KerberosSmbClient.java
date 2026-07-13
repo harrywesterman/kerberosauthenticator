@@ -55,11 +55,7 @@ public final class KerberosSmbClient implements Closeable {
     Subject subject = tgt.asSubject();
     GSSUtil.setGlobalSubject(subject);
 
-    SmbConfig config = SmbConfig.builder()
-        .withDialects(SMB_3_1_1, SMB_3_0_2, SMB_3_0, SMB_2_1)
-        .withSigningRequired(true)
-        .withEncryptData(requireEncryption)
-        .build();
+    SmbConfig config = createConfig(requireEncryption);
     SMBClient client = new SMBClient(config);
     Connection connection = null;
     try {
@@ -75,6 +71,15 @@ public final class KerberosSmbClient implements Closeable {
       throw exception instanceof IOException
           ? (IOException) exception : new IOException("Kerberos-aanmelding bij de share is mislukt", exception);
     }
+  }
+
+  static SmbConfig createConfig(boolean requireEncryption) {
+    return SmbConfig.builder()
+        .withDialects(SMB_3_1_1, SMB_3_0_2, SMB_3_0, SMB_2_1)
+        .withSigningRequired(true)
+        .withEncryptData(requireEncryption)
+        .withDfsEnabled(true)
+        .build();
   }
 
   private KerberosSmbClient(
