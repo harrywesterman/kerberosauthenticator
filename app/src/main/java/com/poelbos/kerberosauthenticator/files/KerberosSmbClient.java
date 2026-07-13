@@ -143,9 +143,24 @@ public final class KerberosSmbClient implements Closeable {
       }
     }
     if (exception instanceof IOException) return (IOException) exception;
+    String location = exceptionLocation(exception);
     return new IOException(
-        "Kerberos-aanmelding bij de share is mislukt (" + exceptionTypes(exception) + ")",
+        "Kerberos-aanmelding bij de share is mislukt (" + exceptionTypes(exception)
+            + (location.isEmpty() ? "" : "@" + location) + ")",
         exception);
+  }
+
+  private static String exceptionLocation(Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      for (StackTraceElement frame : cause.getStackTrace()) {
+        String className = frame.getClassName();
+        if (className.startsWith("com.hierynomus.")) {
+          int separator = className.lastIndexOf('.');
+          return className.substring(separator + 1) + "." + frame.getMethodName();
+        }
+      }
+    }
+    return "";
   }
 
   private static String exceptionTypes(Throwable exception) {
@@ -179,19 +194,23 @@ public final class KerberosSmbClient implements Closeable {
     this.share = share;
   }
 
-  public List<RemoteEntry> list(String relativePath) {
-    List<RemoteEntry> result = new ArrayList<>();
-    for (FileIdBothDirectoryInformation item : share.list(resolve(relativePath))) {
-      String name = item.getFileName();
-      if (name.equals(".") || name.equals("..")) continue;
-      boolean directory = (item.getFileAttributes()
-          & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
-      result.add(new RemoteEntry(
-          name, directory, item.getEndOfFile(), item.getLastWriteTime().toEpochMillis()));
+  public List<RemoteEntry> list(String relativePath) throws IOException {
+    try {
+      List<RemoteEntry> result = new ArrayList<>();
+      for (FileIdBothDirectoryInformation item : share.list(resolve(relativePath))) {
+        String name = item.getFileName();
+        if (name.equals(".") || name.equals("..")) continue;
+        boolean directory = (item.getFileAttributes()
+            & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
+        result.add(new RemoteEntry(
+            name, directory, item.getEndOfFile(), item.getLastWriteTime().toEpochMillis()));
+      }
+      result.sort(Comparator.comparing(RemoteEntry::isDirectory).reversed()
+          .thenComparing(RemoteEntry::getName, String.CASE_INSENSITIVE_ORDER));
+      return result;
+    } catch (RuntimeException exception) {
+      throw connectionFailure(exception);
     }
-    result.sort(Comparator.comparing(RemoteEntry::isDirectory).reversed()
-        .thenComparing(RemoteEntry::getName, String.CASE_INSENSITIVE_ORDER));
-    return result;
   }
 
   public void createDirectory(String parent, String name) {
