@@ -129,7 +129,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       try {
         if (smbClient == null) {
           smbClient = KerberosSmbClient.connect(
-              KerberosAccount.getAccount(this), currentShare,
+              getApplicationContext(), KerberosAccount.getAccount(this), currentShare,
               configuration.isRequireEncryption());
         }
         List<RemoteEntry> entries = smbClient.list(currentPath);

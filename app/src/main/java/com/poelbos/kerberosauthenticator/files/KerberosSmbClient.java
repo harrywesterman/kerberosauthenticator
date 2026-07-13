@@ -5,6 +5,7 @@ import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_0;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_0_2;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_1_1;
 
+import android.content.Context;
 import com.hierynomus.msfscc.FileAttributes;
 import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation;
 import com.hierynomus.mssmb2.SMBApiException;
@@ -20,6 +21,7 @@ import com.hierynomus.mssmb2.SMB2CreateDisposition;
 import com.hierynomus.mssmb2.SMB2CreateOptions;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
 import com.poelbos.kerberosauthenticator.KerberosAccount;
+import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import java.io.Closeable;
 import java.io.FileOutputStream;
@@ -45,7 +47,7 @@ public final class KerberosSmbClient implements Closeable {
   private final DiskShare share;
 
   public static KerberosSmbClient connect(
-      KerberosAccount account, ManagedShare managedShare, boolean requireEncryption)
+      Context context, KerberosAccount account, ManagedShare managedShare, boolean requireEncryption)
       throws IOException {
     if (account == null || account.getTicketGrantingTicket().length == 0) {
       throw new IOException("Meld u opnieuw aan om deze share te openen");
@@ -57,6 +59,8 @@ public final class KerberosSmbClient implements Closeable {
       throw new IOException("Uw Kerberos-ticket is verlopen");
     }
     Subject subject = tgt.asSubject();
+    KerberosEnvironment.configure(
+        context, account.getDomain(), account.getDomainController(), managedShare.getHost());
     GSSUtil.setGlobalSubject(subject);
 
     SmbConfig config = createConfig(requireEncryption);
