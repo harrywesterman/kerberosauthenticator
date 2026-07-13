@@ -30,6 +30,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import javax.security.auth.Subject;
+import org.ietf.jgss.GSSException;
 import sun.security.jgss.GSSUtil;
 
 /** Kerberos-only SMB 2.1+ session. No password/NTLM authenticator is ever constructed. */
@@ -68,9 +69,24 @@ public final class KerberosSmbClient implements Closeable {
     } catch (RuntimeException | IOException exception) {
       if (connection != null) try { connection.close(); } catch (Exception ignored) {}
       try { client.close(); } catch (Exception ignored) {}
-      throw exception instanceof IOException
-          ? (IOException) exception : new IOException("Kerberos-aanmelding bij de share is mislukt", exception);
+      throw connectionFailure(exception);
     }
+  }
+
+  static IOException connectionFailure(Exception exception) {
+    if (exception instanceof IOException) return (IOException) exception;
+
+    Throwable cause = exception;
+    for (int depth = 0; cause != null && depth < 32; depth++, cause = cause.getCause()) {
+      if (cause instanceof GSSException) {
+        GSSException gssException = (GSSException) cause;
+        return new IOException(
+            "Kerberos-aanmelding bij de share is mislukt (GSS "
+                + gssException.getMajor() + "/" + gssException.getMinor() + ")",
+            exception);
+      }
+    }
+    return new IOException("Kerberos-aanmelding bij de share is mislukt", exception);
   }
 
   static SmbConfig createConfig(boolean requireEncryption) {
