@@ -599,15 +599,22 @@ public class DerInputStream {
                 throw new IOException(mdName + "lengthTag=" + tmp + ", "
                     + ((tmp < 0) ? "incorrect DER encoding." : "too big."));
 
-            value = 0x0ff & in.read();
-            tmp--;
-            if (value == 0) {
-                // DER requires length value be encoded in minimum number of bytes
-                throw new IOException(mdName + "Redundant length bytes found");
-            }
+            value = 0;
+            boolean leading = true;
             while (tmp-- > 0) {
+                int next = in.read();
+                if (next < 0) {
+                    throw new IOException("Short read of DER length");
+                }
+                // Some Windows SPNEGO targets use BER-compatible long lengths with a
+                // redundant leading zero. Accept only that padding; all size, overflow,
+                // indefinite-length, and short-form checks below remain enforced.
+                if (leading && next == 0) {
+                    continue;
+                }
+                leading = false;
                 value <<= 8;
-                value += 0x0ff & in.read();
+                value += next & 0x0ff;
             }
             if (value < 0) {
                 throw new IOException(mdName + "Invalid length bytes");
