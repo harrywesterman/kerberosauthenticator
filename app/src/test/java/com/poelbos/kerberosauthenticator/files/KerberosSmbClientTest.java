@@ -35,6 +35,16 @@ public final class KerberosSmbClientTest {
     assertSame(exception, failure.getCause());
   }
 
+  @Test public void reportsGssStatusWhenTransportIOExceptionWrapsIt() {
+    GSSException gssException = new GSSException(GSSException.BAD_NAME, 13, null);
+    IOException exception = new IOException(gssException);
+
+    IOException failure = KerberosSmbClient.connectionFailure(exception);
+
+    assertEquals("Kerberos-aanmelding bij de share is mislukt (GSS 3/13)", failure.getMessage());
+    assertSame(exception, failure.getCause());
+  }
+
   @Test public void returnsExistingIOExceptionUnchanged() {
     IOException exception = new IOException("netwerkfout");
 

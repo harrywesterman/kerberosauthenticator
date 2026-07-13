@@ -74,8 +74,6 @@ public final class KerberosSmbClient implements Closeable {
   }
 
   static IOException connectionFailure(Exception exception) {
-    if (exception instanceof IOException) return (IOException) exception;
-
     Throwable cause = exception;
     for (int depth = 0; cause != null && depth < 32; depth++, cause = cause.getCause()) {
       if (cause instanceof GSSException) {
@@ -86,6 +84,7 @@ public final class KerberosSmbClient implements Closeable {
             exception);
       }
     }
+    if (exception instanceof IOException) return (IOException) exception;
     return new IOException("Kerberos-aanmelding bij de share is mislukt", exception);
   }
 
