@@ -11,6 +11,7 @@ import com.hierynomus.smbj.auth.SpnegoAuthenticator;
 import java.io.IOException;
 import org.junit.Test;
 import org.ietf.jgss.GSSException;
+import sun.security.krb5.KrbException;
 
 public final class KerberosSmbClientTest {
   @Test public void createsDfsReadySignedConfiguration() {
@@ -45,6 +46,19 @@ public final class KerberosSmbClientTest {
     IOException failure = KerberosSmbClient.connectionFailure(exception);
 
     assertEquals("Kerberos-aanmelding bij de share is mislukt (GSS 3/13)", failure.getMessage());
+    assertSame(exception, failure.getCause());
+  }
+
+  @Test public void reportsNestedKerberosCodeWithGssStatus() {
+    GSSException gssException = new GSSException(GSSException.FAILURE, -1, null);
+    gssException.initCause(new KrbException(7));
+    RuntimeException exception = new RuntimeException(gssException);
+
+    IOException failure = KerberosSmbClient.connectionFailure(exception);
+
+    assertEquals(
+        "Kerberos-aanmelding bij de share is mislukt (GSS 11/-1, KRB 7)",
+        failure.getMessage());
     assertSame(exception, failure.getCause());
   }
 

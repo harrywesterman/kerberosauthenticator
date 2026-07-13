@@ -81,15 +81,25 @@ public final class KerberosSmbClient implements Closeable {
   }
 
   static IOException connectionFailure(Exception exception) {
+    GSSException gssFailure = null;
     Throwable cause = exception;
     for (int depth = 0; cause != null && depth < 32; depth++, cause = cause.getCause()) {
       if (cause instanceof GSSException) {
-        GSSException gssException = (GSSException) cause;
+        gssFailure = (GSSException) cause;
+      }
+      if (cause instanceof KrbException && gssFailure != null) {
         return new IOException(
             "Kerberos-aanmelding bij de share is mislukt (GSS "
-                + gssException.getMajor() + "/" + gssException.getMinor() + ")",
+                + gssFailure.getMajor() + "/" + gssFailure.getMinor() + ", KRB "
+                + ((KrbException) cause).returnCode() + ")",
             exception);
       }
+    }
+    if (gssFailure != null) {
+      return new IOException(
+          "Kerberos-aanmelding bij de share is mislukt (GSS "
+              + gssFailure.getMajor() + "/" + gssFailure.getMinor() + ")",
+          exception);
     }
     cause = exception;
     for (int depth = 0; cause != null && depth < 32; depth++, cause = cause.getCause()) {
