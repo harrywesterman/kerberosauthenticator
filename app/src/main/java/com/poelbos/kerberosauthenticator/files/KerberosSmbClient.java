@@ -7,6 +7,7 @@ import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_1_1;
 
 import com.hierynomus.msfscc.FileAttributes;
 import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation;
+import com.hierynomus.mssmb2.SMBApiException;
 import com.hierynomus.smbj.SMBClient;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.GSSAuthenticationContext;
@@ -32,6 +33,7 @@ import java.util.List;
 import javax.security.auth.Subject;
 import org.ietf.jgss.GSSException;
 import sun.security.jgss.GSSUtil;
+import sun.security.krb5.KrbException;
 
 /** Kerberos-only SMB 2.1+ session. No password/NTLM authenticator is ever constructed. */
 public final class KerberosSmbClient implements Closeable {
@@ -84,8 +86,39 @@ public final class KerberosSmbClient implements Closeable {
             exception);
       }
     }
+    cause = exception;
+    for (int depth = 0; cause != null && depth < 32; depth++, cause = cause.getCause()) {
+      if (cause instanceof SMBApiException) {
+        long status = ((SMBApiException) cause).getStatusCode() & 0xffffffffL;
+        return new IOException(
+            String.format(
+                java.util.Locale.ROOT,
+                "Kerberos-aanmelding bij de share is mislukt (SMB 0x%08X)",
+                status),
+            exception);
+      }
+      if (cause instanceof KrbException) {
+        return new IOException(
+            "Kerberos-aanmelding bij de share is mislukt (KRB "
+                + ((KrbException) cause).returnCode() + ")",
+            exception);
+      }
+    }
     if (exception instanceof IOException) return (IOException) exception;
-    return new IOException("Kerberos-aanmelding bij de share is mislukt", exception);
+    return new IOException(
+        "Kerberos-aanmelding bij de share is mislukt (" + exceptionTypes(exception) + ")",
+        exception);
+  }
+
+  private static String exceptionTypes(Throwable exception) {
+    StringBuilder result = new StringBuilder();
+    Throwable cause = exception;
+    for (int depth = 0; cause != null && depth < 6; depth++, cause = cause.getCause()) {
+      if (result.length() > 0) result.append('>');
+      String name = cause.getClass().getSimpleName();
+      result.append(name.isEmpty() ? "Throwable" : name.replaceAll("[^A-Za-z0-9_$]", "_"));
+    }
+    return result.toString();
   }
 
   static SmbConfig createConfig(boolean requireEncryption) {

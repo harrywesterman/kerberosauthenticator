@@ -50,4 +50,16 @@ public final class KerberosSmbClientTest {
 
     assertSame(exception, KerberosSmbClient.connectionFailure(exception));
   }
+
+  @Test public void reportsOnlyExceptionTypesForUnknownRuntimeFailure() {
+    RuntimeException exception =
+        new RuntimeException("gevoelige tekst", new IllegalStateException("ook gevoelig"));
+
+    IOException failure = KerberosSmbClient.connectionFailure(exception);
+
+    assertEquals(
+        "Kerberos-aanmelding bij de share is mislukt (RuntimeException>IllegalStateException)",
+        failure.getMessage());
+    assertSame(exception, failure.getCause());
+  }
 }
