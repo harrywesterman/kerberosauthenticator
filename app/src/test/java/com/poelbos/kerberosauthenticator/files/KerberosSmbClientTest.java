@@ -7,6 +7,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.hierynomus.smbj.SmbConfig;
+import com.hierynomus.smbj.auth.SpnegoAuthenticator;
 import java.io.IOException;
 import org.junit.Test;
 import org.ietf.jgss.GSSException;
@@ -19,6 +20,8 @@ public final class KerberosSmbClientTest {
     assertTrue(config.isSigningRequired());
     assertTrue(config.getSupportedDialects().contains(SMB_3_1_1));
     assertTrue(config.getSupportedDialects().contains(SMB_2_1));
+    assertEquals(1, config.getSupportedAuthenticators().size());
+    assertTrue(config.getSupportedAuthenticators().get(0) instanceof SpnegoAuthenticator.Factory);
   }
 
   @Test public void enablesEncryptionWhenRequired() {

@@ -11,6 +11,7 @@ import com.hierynomus.mssmb2.SMBApiException;
 import com.hierynomus.smbj.SMBClient;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.GSSAuthenticationContext;
+import com.hierynomus.smbj.auth.SpnegoAuthenticator;
 import com.hierynomus.smbj.connection.Connection;
 import com.hierynomus.smbj.session.Session;
 import com.hierynomus.smbj.share.DiskShare;
@@ -124,6 +125,7 @@ public final class KerberosSmbClient implements Closeable {
   static SmbConfig createConfig(boolean requireEncryption) {
     return SmbConfig.builder()
         .withDialects(SMB_3_1_1, SMB_3_0_2, SMB_3_0, SMB_2_1)
+        .withAuthenticators(new SpnegoAuthenticator.Factory())
         .withSigningRequired(true)
         .withEncryptData(requireEncryption)
         .withDfsEnabled(true)
