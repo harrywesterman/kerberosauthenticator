@@ -2,10 +2,14 @@ package com.poelbos.kerberosauthenticator.files;
 
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_2_1;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_1_1;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.hierynomus.smbj.SmbConfig;
+import java.io.IOException;
 import org.junit.Test;
+import org.ietf.jgss.GSSException;
 
 public final class KerberosSmbClientTest {
   @Test public void createsDfsReadySignedConfiguration() {
@@ -19,5 +23,21 @@ public final class KerberosSmbClientTest {
 
   @Test public void enablesEncryptionWhenRequired() {
     assertTrue(KerberosSmbClient.createConfig(true).isEncryptData());
+  }
+
+  @Test public void reportsOnlyNumericGssStatusForNestedGssException() {
+    GSSException gssException = new GSSException(GSSException.FAILURE, 7, null);
+    RuntimeException exception = new RuntimeException(gssException);
+
+    IOException failure = KerberosSmbClient.connectionFailure(exception);
+
+    assertEquals("Kerberos-aanmelding bij de share is mislukt (GSS 11/7)", failure.getMessage());
+    assertSame(exception, failure.getCause());
+  }
+
+  @Test public void returnsExistingIOExceptionUnchanged() {
+    IOException exception = new IOException("netwerkfout");
+
+    assertSame(exception, KerberosSmbClient.connectionFailure(exception));
   }
 }
