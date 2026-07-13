@@ -73,6 +73,16 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
+  public void testDcLocatorSrvLookupNamesIncludeActiveDirectoryLdapRecords() {
+    List<String> lookupNames = DnsKdcDiscovery.dcLocatorSrvLookupNames("EXAMPLE.LOCAL");
+
+    assertThat(lookupNames)
+        .containsExactly(
+            "_ldap._tcp.dc._msdcs.example.local", "_ldap._tcp.example.local")
+        .inOrder();
+  }
+
+  @Test
   public void testParseCnameResponseReturnsAliases() throws Exception {
     byte[] response = buildCnameResponse("web01.example.local");
 
