@@ -59,7 +59,7 @@ public final class KerberosSmbClient implements Closeable {
       throw new IOException("Uw Kerberos-ticket is verlopen");
     }
     Subject subject = tgt.asSubject();
-    KerberosEnvironment.configure(
+    String domainController = KerberosEnvironment.configure(
         context, account.getDomain(), account.getDomainController(), managedShare.getHost());
     GSSUtil.setGlobalSubject(subject);
 
@@ -67,7 +67,10 @@ public final class KerberosSmbClient implements Closeable {
     SMBClient client = new SMBClient(config);
     Connection connection = null;
     try {
-      connection = client.connect(managedShare.getHost(), managedShare.getPort());
+      connection = client.connect(
+          initialConnectionHost(
+              managedShare.getHost(), account.getDomain(), domainController),
+          managedShare.getPort());
       GSSAuthenticationContext authentication = new GSSAuthenticationContext(
           account.getName(), account.getDomain(), subject, null);
       Session session = connection.authenticate(authentication);
@@ -78,6 +81,20 @@ public final class KerberosSmbClient implements Closeable {
       try { client.close(); } catch (Exception ignored) {}
       throw connectionFailure(exception);
     }
+  }
+
+  static String initialConnectionHost(
+      String shareHost, String realm, String domainController) {
+    String normalizedHost = shareHost == null ? "" : shareHost.trim();
+    String normalizedRealm = realm == null ? "" : realm.trim();
+    if (normalizedHost.endsWith(".")) {
+      normalizedHost = normalizedHost.substring(0, normalizedHost.length() - 1);
+    }
+    if (normalizedRealm.endsWith(".")) {
+      normalizedRealm = normalizedRealm.substring(0, normalizedRealm.length() - 1);
+    }
+    return normalizedHost.equalsIgnoreCase(normalizedRealm)
+        ? domainController : shareHost;
   }
 
   static IOException connectionFailure(Exception exception) {

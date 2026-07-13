@@ -29,6 +29,20 @@ public final class KerberosSmbClientTest {
     assertTrue(KerberosSmbClient.createConfig(true).isEncryptData());
   }
 
+  @Test public void usesConcreteDomainControllerForDomainBasedDfsNamespace() {
+    assertEquals(
+        "dc01.politie.local",
+        KerberosSmbClient.initialConnectionHost(
+            "politie.local", "POLITIE.LOCAL", "dc01.politie.local"));
+  }
+
+  @Test public void keepsShareHostForNonDomainNamespace() {
+    assertEquals(
+        "files.politie.local",
+        KerberosSmbClient.initialConnectionHost(
+            "files.politie.local", "POLITIE.LOCAL", "dc01.politie.local"));
+  }
+
   @Test public void reportsOnlyNumericGssStatusForNestedGssException() {
     GSSException gssException = new GSSException(GSSException.FAILURE, 7, null);
     RuntimeException exception = new RuntimeException(gssException);
