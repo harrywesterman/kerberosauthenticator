@@ -601,6 +601,7 @@ public class DerInputStream {
 
             value = 0;
             boolean leading = true;
+            boolean redundantPadding = false;
             while (tmp-- > 0) {
                 int next = in.read();
                 if (next < 0) {
@@ -610,6 +611,7 @@ public class DerInputStream {
                 // redundant leading zero. Accept only that padding; all size, overflow,
                 // indefinite-length, and short-form checks below remain enforced.
                 if (leading && next == 0) {
+                    redundantPadding = true;
                     continue;
                 }
                 leading = false;
@@ -618,7 +620,7 @@ public class DerInputStream {
             }
             if (value < 0) {
                 throw new IOException(mdName + "Invalid length bytes");
-            } else if (value <= 127) {
+            } else if (value <= 127 && !redundantPadding) {
                 throw new IOException(mdName + "Should use short form for length");
             }
         }
