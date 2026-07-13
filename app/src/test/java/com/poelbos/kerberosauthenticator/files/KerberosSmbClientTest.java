@@ -94,4 +94,20 @@ public final class KerberosSmbClientTest {
         failure.getMessage());
     assertSame(exception, failure.getCause());
   }
+
+  @Test public void reportsOnlySafeSmbjFailureLocation() {
+    NullPointerException exception = new NullPointerException("gevoelige tekst");
+    exception.setStackTrace(new StackTraceElement[] {
+        new StackTraceElement(
+            "com.hierynomus.smbj.connection.SMBSessionBuilder",
+            "validateAndSetSigning", "SMBSessionBuilder.java", 251)
+    });
+
+    IOException failure = KerberosSmbClient.connectionFailure(exception);
+
+    assertEquals(
+        "Kerberos-aanmelding bij de share is mislukt "
+            + "(NullPointerException@SMBSessionBuilder.validateAndSetSigning)",
+        failure.getMessage());
+  }
 }
