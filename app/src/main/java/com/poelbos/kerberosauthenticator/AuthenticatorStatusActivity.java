@@ -24,6 +24,7 @@ import android.view.View;
 import android.widget.TextView;
 import java.text.DateFormat;
 import java.util.Date;
+import com.poelbos.kerberosauthenticator.internal.ntlm.NtlmCredentialProvider;
 
 /** Show the authentication status for the current account. */
 public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
@@ -61,9 +62,31 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
         ? "Automatic refresh: " + category
         : "Last automatic refresh: "
             + DateFormat.getDateTimeInstance().format(new Date(lastRefresh)));
+    KerberosAccount account = KerberosAccount.getAccount(this);
+    boolean ntlmCredentialsAvailable =
+        account != null
+            && accountConfiguration.isHttpNtlmConfigured()
+            && new NtlmCredentialProvider(this)
+                .isAvailable(account.getName(), account.getDomain());
+    TextView ntlmStatus = findViewById(R.id.http_ntlm_status);
+    ntlmStatus.setVisibility(View.VISIBLE);
+    ntlmStatus.setText(
+        httpNtlmStatus(
+            accountConfiguration.isHttpNtlmEnabled(),
+            accountConfiguration.isHttpNtlmConfigured(),
+            ntlmCredentialsAvailable));
 
     // If only the status is shown, the activity remains open until the user taps the dismiss
     // button to finish it.
     Log.d(TAG, "Finished creating status activity.");
+  }
+
+  static String httpNtlmStatus(boolean enabled, boolean configured, boolean credentialsAvailable) {
+    if (!enabled) return "HTTP NTLMv2: disabled by policy";
+    if (!configured) return "HTTP NTLMv2: unavailable (invalid NTLM domain)";
+    if (!credentialsAvailable) {
+      return "HTTP NTLMv2: unavailable (secure credentials missing)";
+    }
+    return "HTTP NTLMv2: ready";
   }
 }

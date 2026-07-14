@@ -25,6 +25,7 @@ import android.content.IntentFilter;
 import android.content.RestrictionsManager;
 import android.os.Bundle;
 import android.os.Looper;
+import android.content.Context;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.test.core.app.ApplicationProvider;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
@@ -129,5 +130,21 @@ public class BaseAuthenticatorActivityTest {
 
     // Unregister receiver.
     LocalBroadcastManager.getInstance(context).unregisterReceiver(receiver);
+  }
+
+  @Test
+  public void httpAuthStatusPersistsSafeMechanismAndResultCode() {
+    android.content.SharedPreferences preferences =
+        context.getSharedPreferences("http-auth-status-test", Context.MODE_PRIVATE);
+
+    BaseAuthenticatorActivity.ServiceTicketInfo.saveHttpAuthInfo(
+        preferences, "portal.example.com", 1234L, "NTLM", "INVALID_CREDENTIALS");
+    BaseAuthenticatorActivity.ServiceTicketInfo status =
+        BaseAuthenticatorActivity.ServiceTicketInfo.getServiceTicketInfo(preferences);
+
+    assertThat(status.getServiceName()).isEqualTo("portal.example.com");
+    assertThat(status.getMechanism()).isEqualTo("NTLM");
+    assertThat(status.getResultCode()).isEqualTo("INVALID_CREDENTIALS");
+    assertThat(status.getError()).isEmpty();
   }
 }
