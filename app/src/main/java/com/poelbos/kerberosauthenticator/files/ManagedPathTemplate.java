@@ -3,6 +3,7 @@ package com.poelbos.kerberosauthenticator.files;
 /** Resolves the deliberately small template language supported by managed share paths. */
 final class ManagedPathTemplate {
   private static final String USERNAME = "username";
+  private static final String USERNAME_FULL = "username:full";
   private static final String USERNAME_LAST_CHARACTER = "username:last:1";
 
   private ManagedPathTemplate() {}
@@ -31,14 +32,15 @@ final class ManagedPathTemplate {
   }
 
   private static String resolvePlaceholder(String placeholder, String username) {
-    if (!USERNAME.equals(placeholder) && !USERNAME_LAST_CHARACTER.equals(placeholder)) {
+    if (!USERNAME.equals(placeholder) && !USERNAME_FULL.equals(placeholder)
+        && !USERNAME_LAST_CHARACTER.equals(placeholder)) {
       throw new IllegalArgumentException(
           "The managed path contains an unsupported placeholder");
     }
     if (username == null || username.isEmpty()) {
       throw new IllegalArgumentException("The managed path requires a signed-in username");
     }
-    if (USERNAME.equals(placeholder)) {
+    if (USERNAME.equals(placeholder) || USERNAME_FULL.equals(placeholder)) {
       return username;
     }
     char lastCharacter = username.charAt(username.length() - 1);

@@ -13,6 +13,13 @@ public final class ManagedPathTemplateTest {
             "users\\${username:last:1}\\${username}", "isc36512"));
   }
 
+  @Test public void expandsUemSafeFullUsernameAlias() {
+    assertEquals(
+        "users/2/isc36512",
+        ManagedPathTemplate.resolve(
+            "users/${username:last:1}/${username:full}", "isc36512"));
+  }
+
   @Test public void leavesStaticPathUnchanged() {
     assertEquals(
         "Public\\Policies",
