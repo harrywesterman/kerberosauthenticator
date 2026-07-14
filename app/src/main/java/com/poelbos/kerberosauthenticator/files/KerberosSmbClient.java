@@ -350,6 +350,5 @@ public final class KerberosSmbClient implements Closeable {
     try { session.close(); } catch (Exception ignored) {}
     try { connection.close(); } catch (Exception ignored) {}
     try { client.close(); } catch (Exception ignored) {}
-    try { subject.getPrivateCredentials().clear(); } catch (Exception ignored) {}
   }
 }
