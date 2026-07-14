@@ -4,6 +4,7 @@ import static com.hierynomus.mssmb2.SMB2Dialect.SMB_2_1;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_1_1;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.hierynomus.smbj.SmbConfig;
@@ -14,6 +15,28 @@ import org.ietf.jgss.GSSException;
 import sun.security.krb5.KrbException;
 
 public final class KerberosSmbClientTest {
+  @Test public void resolvesManagedShareAtConnectionBoundary() throws Exception {
+    ManagedShare template = new ManagedShare(
+        "home", "Home", "files.example.test", 445, "Data",
+        "users/${username:last:1}/${username}");
+
+    ManagedShare resolved = KerberosSmbClient.resolveManagedShare(template, "isc36512");
+
+    assertEquals("users\\2\\isc36512", resolved.getStartPath());
+  }
+
+  @Test public void reportsSafeManagedPathConfigurationFailure() {
+    ManagedShare template = new ManagedShare(
+        "home", "Home", "files.example.test", 445, "Data", "users/${unknown}");
+
+    IOException failure = assertThrows(
+        IOException.class,
+        () -> KerberosSmbClient.resolveManagedShare(template, "isc36512"));
+
+    assertEquals("The managed share path is invalid", failure.getMessage());
+    assertTrue(failure.getCause() instanceof IllegalArgumentException);
+  }
+
   @Test public void createsDfsReadySignedConfiguration() {
     SmbConfig config = KerberosSmbClient.createConfig(false);
 

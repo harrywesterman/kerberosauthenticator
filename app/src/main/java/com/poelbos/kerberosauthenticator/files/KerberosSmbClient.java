@@ -52,6 +52,7 @@ public final class KerberosSmbClient implements Closeable {
     if (account == null || account.getTicketGrantingTicket().length == 0) {
       throw new IOException("Sign in again to open this share");
     }
+    ManagedShare resolvedShare = resolveManagedShare(managedShare, account.getName());
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
     if (tgt == null || tgt.getExpiryDate() == null
@@ -60,7 +61,7 @@ public final class KerberosSmbClient implements Closeable {
     }
     Subject subject = tgt.asSubject();
     String domainController = KerberosEnvironment.configure(
-        context, account.getDomain(), account.getDomainController(), managedShare.getHost());
+        context, account.getDomain(), account.getDomainController(), resolvedShare.getHost());
     GSSUtil.setGlobalSubject(subject);
 
     SmbConfig config = createConfig(requireEncryption);
@@ -69,17 +70,25 @@ public final class KerberosSmbClient implements Closeable {
     try {
       connection = client.connect(
           initialConnectionHost(
-              managedShare.getHost(), account.getDomain(), domainController),
-          managedShare.getPort());
+              resolvedShare.getHost(), account.getDomain(), domainController),
+          resolvedShare.getPort());
       GSSAuthenticationContext authentication = new GSSAuthenticationContext(
           account.getName(), account.getDomain(), subject, null);
       Session session = connection.authenticate(authentication);
-      DiskShare share = (DiskShare) session.connectShare(managedShare.getShareName());
-      return new KerberosSmbClient(managedShare, client, connection, session, share);
+      DiskShare share = (DiskShare) session.connectShare(resolvedShare.getShareName());
+      return new KerberosSmbClient(resolvedShare, client, connection, session, share);
     } catch (RuntimeException | IOException exception) {
       if (connection != null) try { connection.close(); } catch (Exception ignored) {}
       try { client.close(); } catch (Exception ignored) {}
       throw connectionFailure(exception);
+    }
+  }
+
+  static ManagedShare resolveManagedShare(ManagedShare share, String username) throws IOException {
+    try {
+      return share.resolveForUsername(username);
+    } catch (IllegalArgumentException exception) {
+      throw new IOException("The managed share path is invalid", exception);
     }
   }
 
