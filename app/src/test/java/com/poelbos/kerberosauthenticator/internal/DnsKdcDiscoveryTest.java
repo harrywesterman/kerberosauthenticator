@@ -62,23 +62,23 @@ public class DnsKdcDiscoveryTest {
 
   @Test
   public void testKdcSrvLookupNamesIncludeActiveDirectoryDcLocator() {
-    List<String> lookupNames = DnsKdcDiscovery.kdcSrvLookupNames("EXAMPLE.LOCAL");
+    List<String> lookupNames = DnsKdcDiscovery.kdcSrvLookupNames("EXAMPLE.TEST");
 
     assertThat(lookupNames)
         .containsExactly(
-            "_kerberos._udp.example.local",
-            "_kerberos._tcp.example.local",
-            "_kerberos._tcp.dc._msdcs.example.local")
+            "_kerberos._udp.example.test",
+            "_kerberos._tcp.example.test",
+            "_kerberos._tcp.dc._msdcs.example.test")
         .inOrder();
   }
 
   @Test
   public void testDcLocatorSrvLookupNamesIncludeActiveDirectoryLdapRecords() {
-    List<String> lookupNames = DnsKdcDiscovery.dcLocatorSrvLookupNames("EXAMPLE.LOCAL");
+    List<String> lookupNames = DnsKdcDiscovery.dcLocatorSrvLookupNames("EXAMPLE.TEST");
 
     assertThat(lookupNames)
         .containsExactly(
-            "_ldap._tcp.dc._msdcs.example.local", "_ldap._tcp.example.local")
+            "_ldap._tcp.dc._msdcs.example.test", "_ldap._tcp.example.test")
         .inOrder();
   }
 
