@@ -7,20 +7,23 @@ An Android Enterprise app for Active Directory/Kerberos with two components in o
 
 The app is based on the existing [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase and has been extended with an integrated enterprise file experience. Chrome can still use the same Kerberos account for HTTP Negotiate.
 
-## Current HTTP Kerberos status
+## HTTP Negotiate: Kerberos and managed NTLMv2
 
 The authenticator stores the user password after the first successful login only when the
 device has a secure screen lock and a hardware-backed Android Keystore. This allows the app
 to renew TGTs without additional input.
 
-For HTTP, the app uses Android AccountManager and GSS-SPNEGO. Chrome supplies the original
-URL host; the app then requests a ticket directly from the KDC for an exact MDM mapping, the
-original host, and then each name in the DNS CNAME chain. Only `KDC_ERR_S_PRINCIPAL_UNKNOWN`
-advances to the next candidate.
+For HTTP, the app uses Android AccountManager and SPNEGO. Chrome supplies the original URL host;
+the app then offers Kerberos first and can additionally advertise NTLMSSP when an administrator
+explicitly enables HTTP NTLMv2. The Kerberos path requests a ticket for an exact MDM mapping, the
+original host, and then each name in the DNS CNAME chain. Only
+`KDC_ERR_S_PRINCIPAL_UNKNOWN` advances to the next Kerberos candidate.
 
-The browser path uses no LDAP or NTLM fallback. This keeps a missing SPN visible and makes a
-failed request stop quickly. Internal Kerberos/JGSS debugging is permanently disabled;
-passwords, tickets, session keys, and SPNEGO token bytes are never logged.
+NTLMv2 is used only if the server explicitly selects NTLMSSP in a
+`WWW-Authenticate: Negotiate` exchange. A Kerberos error never causes an NTLM downgrade. A direct
+`WWW-Authenticate: NTLM` challenge is not passed to this Android authenticator by Chrome and is
+therefore unsupported. Internal Kerberos/JGSS debugging is permanently disabled; passwords,
+tickets, hashes, challenges, MICs, session keys, and SPNEGO token bytes are never logged.
 
 ## Enterprise files
 
@@ -124,6 +127,8 @@ For the integrated file app, for example:
 ```json
 {
   "ad_realm": "EXAMPLE.COM",
+  "enable_http_ntlm": true,
+  "ntlm_domain": "EXAMPLE",
   "require_smb_encryption": true,
   "allow_local_cache": true,
   "allow_screenshots": false,
@@ -184,6 +189,8 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
+| `enable_http_ntlm` | bool | no | Advertise NTLMSSP inside HTTP Negotiate when secure credentials are available; default `false` |
+| `ntlm_domain` | string | when HTTP NTLM is enabled | NetBIOS domain, 1–15 characters, for example `EXAMPLE` |
 | `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `false` |
 | `allow_local_cache` | bool | no | Permit app-private temporary files for external viewers; default `true` |
 | `allow_screenshots` | bool | no | Permit screenshots; default `false` |
@@ -209,6 +216,42 @@ and URLs are rejected. A Kerberos realm and DNS namespace do not have to be iden
 
 This requests `HTTP/web01.example.com` when Chrome asks for `portal.example.com`; the app never
 creates or changes SPNs in Active Directory.
+
+### HTTP NTLMv2 policy and limitations
+
+HTTP NTLMv2 becomes ready only when all of the following are true:
+
+- `enable_http_ntlm` is `true` and `ntlm_domain` is a valid NetBIOS domain;
+- the account was created successfully through Kerberos;
+- the password is available from the device-bound, hardware-backed credential vault;
+- Chrome allows the host through `AuthServerAllowlist` and has `negotiate` in `AuthSchemes`.
+
+The app accepts the stored identity as `user`, `DOMAIN\user` when the domain matches
+`ntlm_domain`, or `user@realm` when the realm matches `ad_realm`. It supports NTLMv2 only. NTLMv1,
+LM responses, guest, anonymous, proxy authentication, direct HTTP NTLM, and NTLM for SMB are not
+implemented. SMB remains Kerberos-only.
+
+Chrome's Android AccountManager adapter does not provide TLS channel-binding data. The app sends
+the protocol-defined zero channel-binding value; sites that require non-zero channel binding
+(strict Extended Protection) remain unsupported.
+
+### HTTP authentication troubleshooting
+
+The status screen shows whether HTTP NTLMv2 is disabled, ready, or unavailable and records only
+the last host, mechanism, time, and safe result category. Relevant Chrome result codes are:
+
+| Code | Meaning | Check |
+|---:|---|---|
+| `0` | Token round succeeded | Continue with the next server round if requested |
+| `4` | Invalid server response or negotiation context | Check the server's SPNEGO/NTLM Type-2 response and whether the host changed between rounds |
+| `5` | NTLM credentials rejected | Verify the user's current password; the app deliberately keeps the vault record |
+| `6` | Mechanism unavailable | Confirm the server selected a mechanism the managed policy permits |
+| `7` | Secure credentials missing | Confirm screen lock and hardware-backed Android Keystore availability, then sign in again |
+| `9` | Malformed or conflicting identity | Match `DOMAIN` to `ntlm_domain` or the UPN realm to `ad_realm` |
+
+If a site sends `WWW-Authenticate: NTLM` instead of `Negotiate`, change the server to offer NTLMSSP
+inside SPNEGO; the app cannot intercept Chrome's direct NTLM path. A strict Extended Protection
+failure is expected when the server requires a real TLS channel-binding hash.
 
 ### Credential and ticket policy
 
