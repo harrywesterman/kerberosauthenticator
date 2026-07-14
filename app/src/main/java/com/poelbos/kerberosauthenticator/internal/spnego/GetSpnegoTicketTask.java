@@ -171,17 +171,14 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       }
       List<String> dnsAliasCandidates = getDnsAliasCandidates(context, service);
       GSSException lastException = null;
-      String previousService =
-          context
-              .getSharedPreferences("service_ticket_info_storage", Context.MODE_PRIVATE)
-              .getString("service_ticket_name", null);
+      boolean continuation = incomingAuthToken != null || exportedContext != null;
       List<String> candidates =
           SpnResolver.resolve(context, domain, service, dnsAliasCandidates);
       candidates =
           candidatesForRound(
               candidates,
-              SpnResolver.normalizeHost(previousService, domain),
-              incomingAuthToken != null || exportedContext != null);
+              continuation ? SpnResolver.normalizeHost(service, domain) : null,
+              continuation);
       Log.i(TAG, "Direct SPNEGO candidates for " + service + ": " + candidates);
       for (String ticketService : candidates) {
         try {
