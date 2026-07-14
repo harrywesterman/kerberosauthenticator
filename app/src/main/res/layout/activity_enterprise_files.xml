@@ -27,7 +27,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:letterSpacing="0.14"
-                android:text="WERKOMGEVING"
+                android:text="WORK ENVIRONMENT"
                 android:textColor="#AFC4D3"
                 android:textSize="11sp"
                 android:textStyle="bold" />
@@ -37,7 +37,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="7dp"
-                android:text="Bedrijfsbestanden"
+                android:text="Enterprise Files"
                 android:textColor="@android:color/white"
                 android:textSize="30sp"
                 android:textStyle="bold" />
@@ -93,7 +93,7 @@
                 android:id="@+id/signInButton"
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
-                android:text="Aanmelden" />
+                android:text="Sign in" />
         </LinearLayout>
 
         <FrameLayout

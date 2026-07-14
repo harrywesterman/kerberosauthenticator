@@ -1,37 +1,37 @@
-# Bedrijfsbestanden voor Android
+# Enterprise Files for Android
 
-Een Android Enterprise-app voor Active Directory/Kerberos met twee delen in één APK:
+An Android Enterprise app for Active Directory/Kerberos with two components in one APK:
 
-- een Kerberos-authenticator voor SSO en ticketbeheer
-- een bedrijfsbestanden-browser voor SMB 2/3-shares met Kerberos-only toegang
+- a Kerberos authenticator for SSO and ticket management
+- an enterprise file browser for SMB 2/3 shares with Kerberos-only access
 
-De app is gebaseerd op de bestaande [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator)-codebasis en is uitgebreid met een geïntegreerde enterprise-bestandenervaring. Chrome kan nog steeds dezelfde Kerberos-account gebruiken voor HTTP Negotiate.
+The app is based on the existing [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase and has been extended with an integrated enterprise file experience. Chrome can still use the same Kerberos account for HTTP Negotiate.
 
-## Huidige status van HTTP Kerberos
+## Current HTTP Kerberos status
 
-De authenticator bewaart het gebruikerswachtwoord na de eerste geslaagde login alleen als het
-toestel een veilige schermvergrendeling en hardware-backed Android Keystore biedt. Daarmee kan
-de app zonder nieuwe invoer TGT's vernieuwen.
+The authenticator stores the user password after the first successful login only when the
+device has a secure screen lock and a hardware-backed Android Keystore. This allows the app
+to renew TGTs without additional input.
 
-Voor HTTP gebruikt de app Android AccountManager en GSS-SPNEGO. Chrome levert de oorspronkelijke
-URL-host aan; de app vraagt vervolgens rechtstreeks bij de KDC een ticket aan voor een exacte
-MDM-mapping, de oorspronkelijke host en daarna iedere naam uit de DNS CNAME-keten. Alleen
-`KDC_ERR_S_PRINCIPAL_UNKNOWN` gaat door naar de volgende kandidaat.
+For HTTP, the app uses Android AccountManager and GSS-SPNEGO. Chrome supplies the original
+URL host; the app then requests a ticket directly from the KDC for an exact MDM mapping, the
+original host, and then each name in the DNS CNAME chain. Only `KDC_ERR_S_PRINCIPAL_UNKNOWN`
+advances to the next candidate.
 
-De browserroute gebruikt geen LDAP- of NTLM-fallback. Daardoor blijft een ontbrekende SPN
-zichtbaar en stopt een mislukte aanvraag snel. Interne Kerberos/JGSS-debug staat permanent uit;
-wachtwoorden, tickets, sessiesleutels en SPNEGO-tokenbytes worden nooit gelogd.
+The browser path uses no LDAP or NTLM fallback. This keeps a missing SPN visible and makes a
+failed request stop quickly. Internal Kerberos/JGSS debugging is permanently disabled;
+passwords, tickets, session keys, and SPNEGO token bytes are never logged.
 
-## Bedrijfsbestanden
+## Enterprise files
 
-- MDM bepaalt welke shares zichtbaar zijn; gebruikers kunnen geen eigen SMB-server toevoegen.
-- SMB gebruikt Kerberos GSS/SPNEGO, signing en minimaal SMB 2.1. Er is geen NTLM-, guest- of anonymous-fallback.
-- Beheerde DFS-namespaces en -referrals worden rechtstreeks gevolgd met Kerberos-only SMB.
-- Browsen, downloaden/openen, uploaden, mappen maken, hernoemen en verwijderen zijn beschikbaar binnen de AD-rechten van de gebruiker.
-- De gebruiker voert zelf zijn AD-gebruikersnaam en wachtwoord in. MDM levert nooit credentials.
-- Op een toestel met veilige schermvergrendeling wordt het wachtwoord apparaatgebonden versleuteld met een hardware-backed Android Keystore-sleutel. Daarmee vraagt de app dagelijks een volledig nieuw TGT aan. De opslag vereist niet langer dat de realm via één specifieke Android RestrictionsManager-bron is aangeleverd.
-- Als veilige hardware-opslag niet beschikbaar is, blijft aanmelden mogelijk maar wordt het wachtwoord niet langdurig bewaard.
-- Screenshots zijn standaard geblokkeerd en SMB 3-encryptie kan door MDM verplicht worden.
+- MDM determines which shares are visible; users cannot add their own SMB server.
+- SMB uses Kerberos GSS/SPNEGO, signing, and at least SMB 2.1. There is no NTLM, guest, or anonymous fallback.
+- Managed DFS namespaces and referrals are followed directly with Kerberos-only SMB.
+- Browsing, downloading/opening, uploading, creating folders, renaming, and deleting are available within the user's AD permissions.
+- The user enters their own AD username and password. MDM never supplies credentials.
+- On a device with a secure screen lock, the password is device-bound encrypted with a hardware-backed Android Keystore key. The app uses this to request a completely new TGT every day. Storage no longer requires the realm to be supplied through one specific Android RestrictionsManager source.
+- If secure hardware storage is unavailable, sign-in remains possible but the password is not stored persistently.
+- Screenshots are blocked by default and SMB 3 encryption can be required by MDM.
 
 ## Differences from the original
 
@@ -100,9 +100,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-Langdurige credential-opslag werkt alleen wanneer het toestel beveiligd is met een schermvergrendeling en
-hardware-backed Android Keystore. Zonder veilige hardwareopslag blijft aanmelden mogelijk, maar wordt
-het wachtwoord niet langdurig bewaard.
+Persistent credential storage works only when the device is protected by a screen lock and
+hardware-backed Android Keystore. Without secure hardware storage, sign-in remains possible but
+the password is not stored persistently.
 
 ## MDM Deployment
 
@@ -119,7 +119,7 @@ Create one application configuration for this app and one for Chrome. MDM provid
 3. In the app assignment, enable **Application Configuration** / managed configuration.
 4. Enter the managed configuration keys below. If Workspace ONE UEM discovers the app restriction schema from the APK, use the generated fields. Otherwise, add the keys manually as custom key-value pairs.
 
-Voor de geïntegreerde bestandenapp gebruikt u bijvoorbeeld:
+For the integrated file app, for example:
 
 ```json
 {
@@ -130,7 +130,7 @@ Voor de geïntegreerde bestandenapp gebruikt u bijvoorbeeld:
   "shares": [
     {
       "id": "documents",
-      "display_name": "Documenten",
+      "display_name": "Documents",
       "host": "files.example.com",
       "port": 445,
       "share_name": "Documents",
@@ -140,9 +140,9 @@ Voor de geïntegreerde bestandenapp gebruikt u bijvoorbeeld:
 }
 ```
 
-Gebruik altijd een DNS-hostnaam met een geldige `cifs/<host>`-SPN; IP-adressen worden geweigerd. `kdc_hosts` is optioneel, anders gebruikt de app DNS SRV-discovery. Het schema staat in `app/src/main/res/xml/app_restrictions.xml` en kan door een MDM uit de APK worden ingelezen.
+Always use a DNS hostname with a valid `cifs/<host>` SPN; IP addresses are rejected. `kdc_hosts` is optional; otherwise the app uses DNS SRV discovery. The schema is in `app/src/main/res/xml/app_restrictions.xml` and can be read from the APK by an MDM.
 
-De gebruiker meldt zich in de app aan met zijn eigen AD-gebruikersnaam en wachtwoord. Na een succesvolle login vraagt de app dagelijks via WorkManager een nieuw TGT aan. Android kan door Doze het exacte uitvoeringstijdstip uitstellen. De app ontdekt KDC's via DNS SRV-records zoals `_kerberos._udp.example.com`.
+The user signs in to the app with their own AD username and password. After a successful login, the app requests a new TGT daily through WorkManager. Android may delay the exact execution time because of Doze. The app discovers KDCs through DNS SRV records such as `_kerberos._udp.example.com`.
 
 #### Chrome app
 
@@ -161,7 +161,7 @@ device to confirm the policies are present. This policy does not refresh dynamic
 
 ### Testing managed config
 
-**Option 1** — Use the built-in debug UI: install the APK and enter username and domain. Zonder managed configuration wordt het wachtwoord niet langdurig opgeslagen.
+**Option 1** — Use the built-in debug UI: install the APK and enter username and domain. Without managed configuration, the password is not stored persistently.
 
 **Option 2** — Use [Test DPC](https://play.google.com/store/apps/details?id=com.afwsamples.testdpc) from Google Play. After installing:
 1. Set Test DPC as device owner
@@ -210,13 +210,13 @@ and URLs are rejected. A Kerberos realm and DNS namespace do not have to be iden
 This requests `HTTP/web01.example.com` when Chrome asks for `portal.example.com`; the app never
 creates or changes SPNs in Active Directory.
 
-### Credential- en ticketbeleid
+### Credential and ticket policy
 
-- De app ondersteunt één AD-account per Android-profiel.
-- Ciphertext staat in app-private opslag; de AES-256-GCM-sleutel is niet exporteerbaar en hardware-backed. Android-backup en device-transfer zijn uitgeschakeld.
-- Iedere 24 uur wordt met een netwerkconstraint en een flexvenster van twee uur een nieuw TGT aangevraagd. Tijdelijke netwerk-, VPN-, DNS- en KDC-storingen krijgen oplopende retries.
-- Bij een gewijzigd/fout wachtwoord, verlopen of ingetrokken account worden wachtwoord en tickets gewist en vraagt de app om opnieuw aanmelden.
-- Logout, een gewijzigde/verwijderde MDM-realm en het wissen van app- of work-profiledata verwijderen credentials, tickets en geplande vernieuwing.
+- The app supports one AD account per Android profile.
+- Ciphertext is stored in app-private storage; the AES-256-GCM key is non-exportable and hardware-backed. Android backup and device transfer are disabled.
+- A new TGT is requested every 24 hours with a network constraint and a two-hour flex window. Temporary network, VPN, DNS, and KDC failures receive increasing retries.
+- If the password changes or is incorrect, or the account expires or is revoked, the password and tickets are cleared and the app requests sign-in again.
+- Logout, a changed or removed MDM realm, and clearing app or work-profile data remove credentials, tickets, and scheduled refreshes.
 
 ## License
 

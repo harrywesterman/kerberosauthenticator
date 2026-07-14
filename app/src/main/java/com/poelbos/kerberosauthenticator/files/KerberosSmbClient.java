@@ -50,13 +50,13 @@ public final class KerberosSmbClient implements Closeable {
       Context context, KerberosAccount account, ManagedShare managedShare, boolean requireEncryption)
       throws IOException {
     if (account == null || account.getTicketGrantingTicket().length == 0) {
-      throw new IOException("Meld u opnieuw aan om deze share te openen");
+      throw new IOException("Sign in again to open this share");
     }
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
     if (tgt == null || tgt.getExpiryDate() == null
         || tgt.getExpiryDate().getTime() <= System.currentTimeMillis()) {
-      throw new IOException("Uw Kerberos-ticket is verlopen");
+      throw new IOException("Your Kerberos ticket has expired");
     }
     Subject subject = tgt.asSubject();
     String domainController = KerberosEnvironment.configure(
@@ -112,7 +112,7 @@ public final class KerberosSmbClient implements Closeable {
       }
       if (cause instanceof KrbException && gssFailure != null) {
         return new IOException(
-            "Kerberos-aanmelding bij de share is mislukt (GSS "
+            "Kerberos sign-in to the share failed (GSS "
                 + gssFailure.getMajor() + "/" + gssFailure.getMinor() + ", KRB "
                 + ((KrbException) cause).returnCode() + ")",
             exception);
@@ -120,7 +120,7 @@ public final class KerberosSmbClient implements Closeable {
     }
     if (gssFailure != null) {
       return new IOException(
-          "Kerberos-aanmelding bij de share is mislukt (GSS "
+          "Kerberos sign-in to the share failed (GSS "
               + gssFailure.getMajor() + "/" + gssFailure.getMinor() + ")",
           exception);
     }
@@ -131,13 +131,13 @@ public final class KerberosSmbClient implements Closeable {
         return new IOException(
             String.format(
                 java.util.Locale.ROOT,
-                "Kerberos-aanmelding bij de share is mislukt (SMB 0x%08X)",
+                "Kerberos sign-in to the share failed (SMB 0x%08X)",
                 status),
             exception);
       }
       if (cause instanceof KrbException) {
         return new IOException(
-            "Kerberos-aanmelding bij de share is mislukt (KRB "
+            "Kerberos sign-in to the share failed (KRB "
                 + ((KrbException) cause).returnCode() + ")",
             exception);
       }
@@ -145,7 +145,7 @@ public final class KerberosSmbClient implements Closeable {
     if (exception instanceof IOException) return (IOException) exception;
     String location = exceptionLocation(exception);
     return new IOException(
-        "Kerberos-aanmelding bij de share is mislukt (" + exceptionTypes(exception)
+        "Kerberos sign-in to the share failed (" + exceptionTypes(exception)
             + (location.isEmpty() ? "" : "@" + location) + ")",
         exception);
   }
@@ -226,7 +226,7 @@ public final class KerberosSmbClient implements Closeable {
   public void download(String relativePath, java.io.File destination) throws IOException {
     java.io.File parent = destination.getParentFile();
     if (parent != null && !parent.exists() && !parent.mkdirs()) {
-      throw new IOException("Kan de tijdelijke map niet maken");
+      throw new IOException("Unable to create the temporary folder");
     }
     try (com.hierynomus.smbj.share.File remote = share.openFile(
             resolve(relativePath), EnumSet.of(AccessMask.GENERIC_READ),
@@ -280,7 +280,7 @@ public final class KerberosSmbClient implements Closeable {
 
   private static void validateFileName(String name) {
     if (name == null || name.trim().isEmpty() || name.matches(".*[\\\\/:*?\"<>|].*")) {
-      throw new IllegalArgumentException("Ongeldige mapnaam");
+      throw new IllegalArgumentException("Invalid folder name");
     }
   }
 
