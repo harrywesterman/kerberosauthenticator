@@ -30,6 +30,14 @@ import android.util.Base64;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import com.poelbos.kerberosauthenticator.internal.spnego.GetSpnegoTicketTask;
+import com.poelbos.kerberosauthenticator.internal.ntlm.HttpNtlmV2Engine;
+import com.poelbos.kerberosauthenticator.internal.ntlm.NtlmCredentialProvider;
+import com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoCoordinator;
+import com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoResult;
+import com.poelbos.kerberosauthenticator.internal.spnego.SpnegoNegotiationState;
+import com.poelbos.kerberosauthenticator.internal.spnego.SpnegoStateCodec;
+import com.hierynomus.smbj.SmbConfig;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.regex.Matcher;
@@ -220,52 +228,108 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       return result;
     }
 
-    Log.i(TAG, "SPNEGO_TICKET_REQUEST host=" + serviceName);
-    byte[] incomingAuthToken = incomingAuthToken(options);
-    byte[] spnegoContext = spnegoContext(options);
-    GetSpnegoTicketTask.SpnegoTicketResult serviceTicketResult =
-        serviceTicketProvider.getServiceTicket(
-            context,
+    Log.i(
+        TAG,
+        "HTTP_AUTH_REQUEST host="
+            + serviceName
+            + " phase="
+            + (options.getBundle(Constants.KEY_SPNEGO_CONTEXT) == null
+                ? "INITIAL"
+                : "CONTINUE"));
+    byte[] incomingAuthToken;
+    SpnegoNegotiationState negotiationState;
+    try {
+      incomingAuthToken = incomingAuthToken(options);
+      negotiationState = negotiationState(options, serviceName);
+    } catch (IllegalArgumentException error) {
+      Log.w(TAG, "HTTP_AUTH_RESULT code=4 reason=invalid_context");
+      result.putInt(Constants.KEY_SPNEGO_RESULT, HttpSpnegoResult.ERR_INVALID_RESPONSE);
+      return result;
+    }
+
+    NtlmPolicy ntlmPolicy = getNtlmPolicy();
+    NtlmCredentialProvider ntlmCredentials = new NtlmCredentialProvider(context);
+    if (negotiationState == null) {
+      boolean ntlmEligible =
+          ntlmPolicy.enabled
+              && ntlmPolicy.domain != null
+              && ntlmCredentials.isAvailable(krbAccount.getName(), krbAccount.getDomain());
+      Log.i(TAG, "SPNEGO_OFFER ntlmEligible=" + ntlmEligible);
+    }
+    HttpSpnegoCoordinator coordinator =
+        new HttpSpnegoCoordinator(
+            (host, incoming, exportedContext, selectedService) -> {
+              String ticketHost = selectedService == null ? host : selectedService;
+              GetSpnegoTicketTask.SpnegoTicketResult ticket =
+                  serviceTicketProvider.getServiceTicket(
+                      context, ticketHost, krbAccount, incoming, exportedContext);
+              if (!ticket.getRequestResult().successful() || ticket.getServiceTicket() == null) {
+                return HttpSpnegoCoordinator.KerberosRound.failure(
+                    ticket.getRequestResult().toString());
+              }
+              try {
+                return HttpSpnegoCoordinator.KerberosRound.success(
+                    Base64.decode(ticket.getServiceTicket(), Base64.DEFAULT),
+                    ticket.getSpnegoContext(),
+                    ticket.getSelectedService() == null ? ticketHost : ticket.getSelectedService());
+              } catch (IllegalArgumentException error) {
+                return HttpSpnegoCoordinator.KerberosRound.failure("Invalid Kerberos token");
+              }
+            },
+            new HttpNtlmV2Engine(
+                new SecureRandom(),
+                System::currentTimeMillis,
+                SmbConfig.createDefaultConfig().getSecurityProvider()),
+            ntlmCredentials);
+    HttpSpnegoResult authResult =
+        coordinator.nextToken(
             serviceName,
-            krbAccount,
+            krbAccount.getName(),
+            krbAccount.getDomain(),
+            ntlmPolicy.domain,
+            ntlmPolicy.enabled,
             incomingAuthToken,
-            spnegoContext);
-    if (!serviceTicketResult.getRequestResult().successful()
-        || serviceTicketResult.getServiceTicket() == null) {
+            negotiationState);
+    if (negotiationState != null) {
+      Log.i(TAG, "SPNEGO_SELECTED mechanism=" + mechanismName(negotiationState, authResult));
+    }
+    if (authResult.getStatus() != HttpSpnegoResult.OK || authResult.getToken() == null) {
       SharedPreferences sharedPref =
           context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
-      BaseAuthenticatorActivity.ServiceTicketInfo.saveServiceTicketInfo(
+      BaseAuthenticatorActivity.ServiceTicketInfo.saveHttpAuthInfo(
           sharedPref,
           serviceName,
           new Date().getTime(),
-          serviceTicketResult.getRequestResult().toString());
-      result.putInt(
-          AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_AUTHENTICATION);
-      result.putString(
-          AccountManager.KEY_ERROR_MESSAGE, serviceTicketResult.getRequestResult().toString());
+          mechanismName(negotiationState, authResult),
+          "ERROR_" + authResult.getStatus());
+      result.putInt(Constants.KEY_SPNEGO_RESULT, authResult.getStatus());
+      Log.i(TAG, "HTTP_AUTH_RESULT code=" + authResult.getStatus());
       return result;
     }
 
     result.putString(AccountManager.KEY_ACCOUNT_NAME, krbAccount.getName());
     result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
-    result.putString(AccountManager.KEY_AUTHTOKEN, serviceTicketResult.getServiceTicket());
+    result.putString(
+        AccountManager.KEY_AUTHTOKEN,
+        Base64.encodeToString(authResult.getToken(), Base64.NO_WRAP));
     result.putInt(Constants.KEY_SPNEGO_RESULT, 0);
-    if (serviceTicketResult.getSpnegoContext() != null) {
-      Bundle contextBundle = new Bundle();
-      contextBundle.putByteArray(
-          Constants.KEY_GSS_CONTEXT_BYTES, serviceTicketResult.getSpnegoContext());
-      result.putBundle(Constants.KEY_SPNEGO_CONTEXT, contextBundle);
+    if (authResult.getState() != null) {
+      result.putBundle(
+          Constants.KEY_SPNEGO_CONTEXT, SpnegoStateCodec.encode(authResult.getState()));
     }
     krbAccount.save(context);
     SharedPreferences sharedPref =
         context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
-    BaseAuthenticatorActivity.ServiceTicketInfo.saveServiceTicketInfo(
+    BaseAuthenticatorActivity.ServiceTicketInfo.saveHttpAuthInfo(
         sharedPref,
-        serviceTicketResult.getSelectedService() == null
+        authResult.getSelectedService() == null
             ? serviceName
-            : serviceTicketResult.getSelectedService(),
+            : authResult.getSelectedService(),
         new Date().getTime(),
-        null);
+        mechanismName(negotiationState, authResult),
+        "SUCCESS");
+    String mechanism = mechanismName(negotiationState, authResult);
+    Log.i(TAG, "HTTP_AUTH_RESULT mechanism=" + mechanism + " code=0");
     return result;
   }
 
@@ -312,12 +376,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
   private static byte[] incomingAuthToken(Bundle options) {
     String encoded = options.getString(Constants.KEY_INCOMING_AUTH_TOKEN);
     if (encoded != null) {
-      try {
-        return normalizeIncomingAuthToken(Base64.decode(encoded, Base64.DEFAULT));
-      } catch (IllegalArgumentException e) {
-        Log.w(TAG, "Chrome supplied an invalid incoming SPNEGO token.", e);
-        return null;
-      }
+      return normalizeIncomingAuthToken(java.util.Base64.getDecoder().decode(encoded));
     }
     return normalizeIncomingAuthToken(options.getByteArray(Constants.KEY_INCOMING_AUTH_TOKEN));
   }
@@ -326,12 +385,43 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     return token == null || token.length == 0 ? null : token;
   }
 
-  private static byte[] spnegoContext(Bundle options) {
+  private static SpnegoNegotiationState negotiationState(Bundle options, String host) {
     Bundle contextBundle = options.getBundle(Constants.KEY_SPNEGO_CONTEXT);
-    return contextBundle == null
-        ? null
-        : contextBundle.getByteArray(Constants.KEY_GSS_CONTEXT_BYTES);
+    if (contextBundle == null) return null;
+    if (contextBundle.containsKey("version")) {
+      return SpnegoStateCodec.decode(contextBundle, host);
+    }
+    byte[] legacy = contextBundle.getByteArray(Constants.KEY_GSS_CONTEXT_BYTES);
+    return legacy == null ? null : SpnegoNegotiationState.kerberos(host, host, legacy);
   }
+
+  private static String mechanismName(
+      SpnegoNegotiationState previousState, HttpSpnegoResult result) {
+    if (result.getSelectedMechanism() == SpnegoNegotiationState.Mechanism.NTLM) {
+      return "NTLM";
+    }
+    if (previousState != null
+        && previousState.getMechanism() == SpnegoNegotiationState.Mechanism.NTLM) {
+      return "NTLM";
+    }
+    return "KERBEROS";
+  }
+
+  private NtlmPolicy getNtlmPolicy() {
+    return getFromAccountConfiguration(
+        config -> new NtlmPolicy(config.isHttpNtlmConfigured(), config.getNtlmDomain()));
+  }
+
+  private static final class NtlmPolicy {
+    final boolean enabled;
+    final String domain;
+
+    NtlmPolicy(boolean enabled, String domain) {
+      this.enabled = enabled;
+      this.domain = domain;
+    }
+  }
+
 
   private static boolean hasValidTicketGrantingTicket(KerberosAccount account) {
     TicketGrantingTicket tgt =

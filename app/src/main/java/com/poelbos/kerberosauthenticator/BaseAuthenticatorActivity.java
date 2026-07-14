@@ -168,13 +168,16 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
     long serviceTicketInfoTimestamp = serviceTicketInfo.getObtainedAtMillis();
     String serviceTicketName = serviceTicketInfo.getServiceName();
     String serviceTicketError = serviceTicketInfo.getError();
+    String resultCode = serviceTicketInfo.getResultCode();
 
-    if (TextUtils.isEmpty(serviceTicketError)) {
+    if (TextUtils.isEmpty(serviceTicketError)
+        && (TextUtils.isEmpty(resultCode) || "SUCCESS".equals(resultCode))) {
       try {
         final boolean hasAttemptedServiceTicket =
             !TextUtils.isEmpty(serviceTicketName) && serviceTicketInfoTimestamp != -1;
         if (hasAttemptedServiceTicket) {
-          setServiceTicketInfoText(serviceTicketName, serviceTicketInfoTimestamp);
+          setServiceTicketInfoText(
+              serviceTicketName, serviceTicketInfoTimestamp, serviceTicketInfo.getMechanism());
           setOkStatus(serviceTicketTimestampViewId);
         } else {
           setErrorStatus(serviceTicketTimestampViewId);
@@ -189,7 +192,9 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
       }
     } else {
       setErrorStatus(serviceTicketTimestampViewId);
-      setText(serviceTicketTimestampViewId, serviceTicketError);
+      setText(
+          serviceTicketTimestampViewId,
+          TextUtils.isEmpty(serviceTicketError) ? resultCode : serviceTicketError);
     }
   }
 
@@ -278,10 +283,12 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
     ((TextView) findViewById(textviewId)).setText(text);
   }
 
-  private void setServiceTicketInfoText(String name, Long timestamp) {
+  private void setServiceTicketInfoText(String name, Long timestamp, String mechanism) {
     String formattedIssuanceTime =
         timestamp == -1 ? null : DateFormat.getDateTimeInstance().format(timestamp);
-    setText(getServiceTimestampTextviewId(), String.format("%s@%s", name, formattedIssuanceTime));
+    setText(
+        getServiceTimestampTextviewId(),
+        String.format("%s • %s@%s", mechanism, name, formattedIssuanceTime));
   }
 
   int getTGTTimestampTextViewId() {
@@ -312,11 +319,15 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
     private final String serviceName;
     private final long obtainedAtMillis;
     private final String error;
+    private final String mechanism;
+    private final String resultCode;
 
     // Keys for storing service ticket information on disk.
     private static final String KEY_SERVICE_TICKET_TIMESTAMP = "service_ticket_issuance_time";
     private static final String KEY_SERVICE_TICKET_NAME = "service_ticket_name";
     private static final String KEY_SERVICE_TICKET_ERROR = "servicet_ticket_error";
+    private static final String KEY_HTTP_AUTH_MECHANISM = "http_auth_mechanism";
+    private static final String KEY_HTTP_AUTH_RESULT = "http_auth_result";
 
     static void saveServiceTicketInfo(
         SharedPreferences sharedPref, String serviceName, long timestamp, String error) {
@@ -325,7 +336,25 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
       editor.putString(KEY_SERVICE_TICKET_NAME, serviceName);
       editor.putLong(KEY_SERVICE_TICKET_TIMESTAMP, timestamp);
       editor.putString(KEY_SERVICE_TICKET_ERROR, error);
+      editor.putString(KEY_HTTP_AUTH_MECHANISM, "KERBEROS");
+      editor.putString(KEY_HTTP_AUTH_RESULT, error == null ? "SUCCESS" : "ERROR");
       editor.apply();
+    }
+
+    static void saveHttpAuthInfo(
+        SharedPreferences sharedPref,
+        String host,
+        long timestamp,
+        String mechanism,
+        String resultCode) {
+      sharedPref
+          .edit()
+          .putString(KEY_SERVICE_TICKET_NAME, host)
+          .putLong(KEY_SERVICE_TICKET_TIMESTAMP, timestamp)
+          .remove(KEY_SERVICE_TICKET_ERROR)
+          .putString(KEY_HTTP_AUTH_MECHANISM, mechanism)
+          .putString(KEY_HTTP_AUTH_RESULT, resultCode)
+          .apply();
     }
 
     static ServiceTicketInfo getServiceTicketInfo(SharedPreferences sharedPref) {
@@ -342,6 +371,8 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
       this.serviceName = sharedPref.getString(KEY_SERVICE_TICKET_NAME, "");
       this.obtainedAtMillis = sharedPref.getLong(KEY_SERVICE_TICKET_TIMESTAMP, -1);
       this.error = sharedPref.getString(KEY_SERVICE_TICKET_ERROR, "");
+      this.mechanism = sharedPref.getString(KEY_HTTP_AUTH_MECHANISM, "KERBEROS");
+      this.resultCode = sharedPref.getString(KEY_HTTP_AUTH_RESULT, null);
     }
 
     String getServiceName() {
@@ -354,6 +385,14 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
 
     String getError() {
       return error;
+    }
+
+    String getMechanism() {
+      return mechanism;
+    }
+
+    String getResultCode() {
+      return resultCode;
     }
   }
 }

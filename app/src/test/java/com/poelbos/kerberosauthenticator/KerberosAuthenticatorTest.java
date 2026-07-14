@@ -31,6 +31,7 @@ import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.RestrictionsManager;
 import android.os.Bundle;
+import android.util.Base64;
 import androidx.test.core.app.ApplicationProvider;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
@@ -48,6 +49,7 @@ import org.robolectric.shadows.ShadowAccountManager;
     sdk = 26,
     shadows = {ShadowAccountManager.class})
 public class KerberosAuthenticatorTest {
+  private static final String TEST_SPNEGO_TOKEN = "dGVzdC1zcG5lZ28tdG9rZW4=";
 
   private ContextWrapper context;
   private AccountManager accountManager;
@@ -196,7 +198,7 @@ public class KerberosAuthenticatorTest {
         (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
-                "test-spnego-token"));
+                TEST_SPNEGO_TOKEN));
     KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> true);
     KerberosAccount.setAccountVisibilitySetterForTesting(
         (accountManager, account, packageName, visibility) -> true);
@@ -227,8 +229,101 @@ public class KerberosAuthenticatorTest {
     assertThat(result.getString(AccountManager.KEY_ACCOUNT_NAME)).isEqualTo(USERNAME);
     assertThat(result.getString(AccountManager.KEY_ACCOUNT_TYPE))
         .isEqualTo(Constants.KERBEROS_ACCOUNT_TYPE);
-    assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo("test-spnego-token");
+    assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo(TEST_SPNEGO_TOKEN);
     assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
+  }
+
+  @Test
+  public void initialTokenReturnsVersionedHostBoundContext() {
+    String encodedToken =
+        Base64.encodeToString(new byte[] {1, 2, 3}, Base64.NO_WRAP);
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
+            new GetSpnegoTicketTask.SpnegoTicketResult(
+                new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
+                encodedToken,
+                new byte[] {9, 8, 7},
+                "backend.example.com"));
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> true);
+    KerberosAccount.setAccountVisibilitySetterForTesting(
+        (manager, visibleAccount, packageName, visibility) -> true);
+    Account testAccount = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
+    shadowOf(accountManager).addAccount(testAccount);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
+    setTestRestrictions();
+
+    Bundle result =
+        authenticator.getAuthToken(
+            null,
+            testAccount,
+            "SPNEGO:HOSTBASED:HTTP@portal.example.com",
+            getTestOptions());
+
+    Bundle chromeContext = result.getBundle(Constants.KEY_SPNEGO_CONTEXT);
+    assertThat(chromeContext).isNotNull();
+    com.poelbos.kerberosauthenticator.internal.spnego.SpnegoNegotiationState state =
+        com.poelbos.kerberosauthenticator.internal.spnego.SpnegoStateCodec.decode(
+            chromeContext, "portal.example.com");
+    assertThat(state.getPhase())
+        .isEqualTo(
+            com.poelbos.kerberosauthenticator.internal.spnego.SpnegoNegotiationState.Phase.OFFERED);
+    assertThat(state.getSelectedService()).isEqualTo("backend.example.com");
+    assertThat(state.getKerberosContext()).isEqualTo(new byte[] {9, 8, 7});
+  }
+
+  @Test
+  public void malformedContinuationContextReturnsChromeProtocolError() {
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> true);
+    Account testAccount = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
+    shadowOf(accountManager).addAccount(testAccount);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
+    setTestRestrictions();
+    Bundle options = getTestOptions();
+    Bundle invalid = new Bundle();
+    invalid.putInt("version", 99);
+    options.putBundle(Constants.KEY_SPNEGO_CONTEXT, invalid);
+    options.putString(Constants.KEY_INCOMING_AUTH_TOKEN, "AQ==");
+
+    Bundle result =
+        authenticator.getAuthToken(
+            null,
+            testAccount,
+            "SPNEGO:HOSTBASED:HTTP@portal.example.com",
+            options);
+
+    assertThat(result.getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(
+            com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertThat(result.containsKey(AccountManager.KEY_AUTHTOKEN)).isFalse();
+  }
+
+  @Test
+  public void malformedIncomingTokenReturnsChromeProtocolError() {
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> true);
+    Account testAccount = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
+    shadowOf(accountManager).addAccount(testAccount);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
+    accountManager.setUserData(testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
+    setTestRestrictions();
+    Bundle options = getTestOptions();
+    options.putString(Constants.KEY_INCOMING_AUTH_TOKEN, "not valid base64!");
+
+    Bundle result =
+        authenticator.getAuthToken(
+            null,
+            testAccount,
+            "SPNEGO:HOSTBASED:HTTP@portal.example.com",
+            options);
+
+    assertThat(result.getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(
+            com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertThat(result.containsKey(AccountManager.KEY_AUTHTOKEN)).isFalse();
   }
 
   @Test
@@ -237,7 +332,7 @@ public class KerberosAuthenticatorTest {
         (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
-                "test-spnego-token"));
+                TEST_SPNEGO_TOKEN));
     KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> false);
     KerberosAuthenticator.setTgtRenewerForTesting((renewalContext, krbAccount) -> true);
     KerberosAccount.setAccountVisibilitySetterForTesting(
@@ -261,7 +356,7 @@ public class KerberosAuthenticatorTest {
             "SPNEGO:HOSTBASED:HTTP@test-server.example.com",
             getTestOptions());
 
-    assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo("test-spnego-token");
+    assertThat(result.getString(AccountManager.KEY_AUTHTOKEN)).isEqualTo(TEST_SPNEGO_TOKEN);
     assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
   }
 
