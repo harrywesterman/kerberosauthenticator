@@ -25,6 +25,7 @@ import android.util.Base64;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.DnsKdcDiscovery;
 import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
+import com.poelbos.kerberosauthenticator.internal.KerberosRuntimeCoordinator;
 import com.poelbos.kerberosauthenticator.internal.SpnResolver;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
@@ -147,15 +148,28 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String service,
     byte[] incomingAuthToken,
     byte[] exportedContext) {
-    GSSUtil.setGlobalSubject(subject);
     try {
-      KerberosEnvironment.configure(context, domain, domainController, service);
+      return KerberosRuntimeCoordinator.run(
+          context,
+          domain,
+          domainController,
+          service,
+          subject,
+          configured -> getServiceTicketConfigured(
+              context, domain, service, incomingAuthToken, exportedContext));
     } catch (IOException e) {
       Log.e(TAG, "Failure configuring Kerberos environment", e);
       return new SpnegoTicketResult(
           new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, e.getMessage()), null);
     }
+  }
 
+  private static SpnegoTicketResult getServiceTicketConfigured(
+      Context context,
+      String domain,
+      String service,
+      byte[] incomingAuthToken,
+      byte[] exportedContext) {
     GSSManager manager = new GSSManagerImpl(GSSCaller.CALLER_INITIATE, false);
 
     try {

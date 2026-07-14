@@ -53,12 +53,12 @@
         android:key="require_smb_encryption"
         android:title="@string/mdm_require_encryption"
         android:description="@string/mdm_require_encryption_description"
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:restrictionType="bool" />
     <restriction
         android:key="allow_local_cache"
         android:title="@string/mdm_allow_cache"
-        android:defaultValue="true"
+        android:defaultValue="false"
         android:restrictionType="bool" />
     <restriction
         android:key="allow_screenshots"

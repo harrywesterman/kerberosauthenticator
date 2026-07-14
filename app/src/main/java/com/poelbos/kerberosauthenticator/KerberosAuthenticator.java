@@ -438,7 +438,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             outcome = com.poelbos.kerberosauthenticator.internal.kinit.UserAuthenticationTask.authenticate(
                 context,
                 new com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails(
-                    account.getName(), new String(stored), account.getDomain(),
+                    account.getName(), stored, account.getDomain(),
                     account.getDomainController()));
         if (outcome.getResult().successful() && outcome.getSubject() != null) {
           account.setTicketGrantingTicket(
@@ -446,13 +446,16 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
           account.save(context);
           return true;
         }
-        if (outcome.getResult().isPasswordBad()) {
-          new CredentialVault(context).delete();
+        if (outcome.getResult().isCredentialRejected()) {
+          KerberosAccount.removeAccount(context);
+          TgtRefreshWorker.markReauthenticationRequired(context);
           return false;
         }
       } finally {
         Arrays.fill(stored, '\0');
       }
+    } else {
+      TgtRefreshWorker.markReauthenticationRequired(context);
     }
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());

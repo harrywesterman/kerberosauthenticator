@@ -68,7 +68,7 @@ public class BaseAuthenticatorActivityTest {
     KerberosAccountDetails accountDetails = accConfigs.getAccountDetails();
     assertThat(accountDetails).isNotNull();
     assertThat(accountDetails.getUsername()).isEqualTo(TestHelper.TEST_USERNAME);
-    assertThat(accountDetails.getPassword()).isEqualTo(TestHelper.TEST_PASSWORD);
+    assertThat(new String(accountDetails.copyPassword())).isEqualTo(TestHelper.TEST_PASSWORD);
     assertThat(accountDetails.getActiveDirectoryDomain()).isEqualTo(TestHelper.TEST_AD_DOMAIN);
     assertThat(accountDetails.getAdDomainController()).isEmpty();
   }

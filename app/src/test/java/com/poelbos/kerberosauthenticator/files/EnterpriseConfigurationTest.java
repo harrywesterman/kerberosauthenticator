@@ -32,7 +32,24 @@ public final class EnterpriseConfigurationTest {
     assertEquals(1, configuration.getShares().size());
     assertEquals(445, configuration.getShares().get(0).getPort());
     assertTrue(configuration.isRequireEncryption());
+    assertFalse(configuration.isAllowCache());
     assertFalse(configuration.isAllowScreenshots());
+  }
+
+  @Test public void securityDefaultsFailClosedAndExplicitOverridesRemainSupported() {
+    Bundle restrictions = new Bundle();
+    restrictions.putString("ad_realm", "EXAMPLE.COM");
+    restrictions.putParcelableArray("shares", new Parcelable[] {share("docs", "Docs")});
+
+    EnterpriseConfiguration secure = EnterpriseConfiguration.from(restrictions);
+    assertTrue(secure.isRequireEncryption());
+    assertFalse(secure.isAllowCache());
+
+    restrictions.putBoolean("require_smb_encryption", false);
+    restrictions.putBoolean("allow_local_cache", true);
+    EnterpriseConfiguration legacy = EnterpriseConfiguration.from(restrictions);
+    assertFalse(legacy.isRequireEncryption());
+    assertTrue(legacy.isAllowCache());
   }
 
   @Test public void invalidConfigurationExplainsAllMissingInputs() {

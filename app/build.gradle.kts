@@ -3,13 +3,28 @@ plugins {
 }
 
 fun versionCodeFor(versionName: String): Int {
+    require(Regex("^[0-9]+\\.[0-9]+$").matches(versionName)) {
+        "releaseVersion must use major.minor, for example 1.61"
+    }
     val parts = versionName.split(".")
-    val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
-    val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
-    return major * 100 + minor
+    val major = parts[0].toLong()
+    val minor = parts[1].toLong()
+    require(minor < 100000) { "releaseVersion minor component must be below 100000" }
+    val code = Math.addExact(Math.multiplyExact(major, 100000L), minor)
+    require(code in 1..Int.MAX_VALUE) { "releaseVersion does not fit Android versionCode" }
+    return code.toInt()
 }
 
 val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.0")
+val releaseStorePassword = providers.gradleProperty("releaseStorePassword")
+    .orElse(providers.environmentVariable("RELEASE_STORE_PASSWORD"))
+    .orElse("")
+val releaseKeyPassword = providers.gradleProperty("releaseKeyPassword")
+    .orElse(providers.environmentVariable("RELEASE_KEY_PASSWORD"))
+    .orElse("")
+val releaseKeyAlias = providers.gradleProperty("releaseKeyAlias")
+    .orElse(providers.environmentVariable("RELEASE_KEY_ALIAS"))
+    .orElse("kerberos")
 
 android {
     namespace = "com.poelbos.kerberosauthenticator"
@@ -36,9 +51,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../release.keystore")
-            storePassword = "android"
-            keyAlias = "kerberos"
-            keyPassword = "android"
+            storePassword = releaseStorePassword.get()
+            keyAlias = releaseKeyAlias.get()
+            keyPassword = releaseKeyPassword.get()
         }
     }
 

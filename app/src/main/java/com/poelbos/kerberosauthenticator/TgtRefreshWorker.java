@@ -31,13 +31,13 @@ public final class TgtRefreshWorker extends Worker {
     CredentialVault vault = new CredentialVault(context);
     char[] password = vault.load(account.getName(), account.getDomain());
     if (password == null) {
-      record(context, "reauthentication_required", false);
+      markReauthenticationRequired(context);
       return Result.success();
     }
     try {
       UserAuthenticationTask.AuthenticationOutcome outcome = UserAuthenticationTask.authenticate(
           context,
-          new KerberosAccountDetails(account.getName(), new String(password), account.getDomain(),
+          new KerberosAccountDetails(account.getName(), password, account.getDomain(),
               account.getDomainController()));
       if (outcome.getResult().successful() && outcome.getSubject() != null) {
         TicketGrantingTicket tgt = new TicketGrantingTicket(outcome.getSubject());
@@ -49,8 +49,7 @@ public final class TgtRefreshWorker extends Worker {
       if (outcome.getResult().isCredentialRejected()) {
         vault.delete();
         KerberosAccount.removeAccount(context);
-        record(context, "credentials_rejected", false);
-        notifyReauthentication(context);
+        markReauthenticationRequired(context);
         return Result.success();
       }
       record(context, "temporary_kdc_failure", false);
@@ -68,6 +67,7 @@ public final class TgtRefreshWorker extends Worker {
   }
 
   private static void notifyReauthentication(Context context) {
+    if (!NotificationPermissionController.isAllowed(context)) return;
     NotificationManager manager =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null) return;
@@ -81,5 +81,10 @@ public final class TgtRefreshWorker extends Worker {
         .setContentTitle("Sign-in required")
         .setContentText("Your work account must be signed in again.")
         .setContentIntent(intent).setAutoCancel(true).build());
+  }
+
+  static void markReauthenticationRequired(Context context) {
+    record(context, "reauthentication_required", false);
+    notifyReauthentication(context);
   }
 }

@@ -242,6 +242,7 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
 
   protected void onLogoutRequested() {
     KerberosAccount.removeAccount(this);
+    new com.poelbos.kerberosauthenticator.files.EnterpriseFileCache(this).cleanup();
     getSharedPreferences(EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, MODE_PRIVATE)
         .edit()
         .clear()

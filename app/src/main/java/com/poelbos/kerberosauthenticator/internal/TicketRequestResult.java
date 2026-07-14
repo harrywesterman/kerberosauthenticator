@@ -20,6 +20,12 @@ package com.poelbos.kerberosauthenticator.internal;
  * ticket).
  */
 public class TicketRequestResult {
+  public enum AuthenticationDisposition {
+    SUCCESS,
+    PERMANENT_CREDENTIAL_REJECTION,
+    TRANSIENT_FAILURE
+  }
+
   /**
    * The result code of getting a ticket.
    */
@@ -36,10 +42,17 @@ public class TicketRequestResult {
 
   private final ResultCode resultCode;
   private final String message;
+  private final AuthenticationDisposition disposition;
 
   public TicketRequestResult(ResultCode resultCode, String message) {
+    this(resultCode, message, defaultDisposition(resultCode, message));
+  }
+
+  public TicketRequestResult(
+      ResultCode resultCode, String message, AuthenticationDisposition disposition) {
     this.resultCode = resultCode;
     this.message = message;
+    this.disposition = disposition;
   }
 
   public boolean successful() {
@@ -56,15 +69,30 @@ public class TicketRequestResult {
 
   /** AD/KDC errors for which retrying the same stored password is unsafe or pointless. */
   public boolean isCredentialRejected() {
-    if (isPasswordBad()) return true;
+    return disposition == AuthenticationDisposition.PERMANENT_CREDENTIAL_REJECTION;
+  }
+
+  public AuthenticationDisposition getDisposition() {
+    return disposition;
+  }
+
+  private static AuthenticationDisposition defaultDisposition(
+      ResultCode resultCode, String message) {
+    if (resultCode == ResultCode.SUCCESS) return AuthenticationDisposition.SUCCESS;
+    if (resultCode == ResultCode.ERROR_BAD_PASSWORD) {
+      return AuthenticationDisposition.PERMANENT_CREDENTIAL_REJECTION;
+    }
     String normalized = message == null ? "" : message.toLowerCase(java.util.Locale.ROOT);
-    return normalized.contains("client's credentials have been revoked")
+    boolean permanent = normalized.contains("client's credentials have been revoked")
         || normalized.contains("client credentials have been revoked")
         || normalized.contains("client not found")
         || normalized.contains("account expired")
         || normalized.contains("password has expired")
         || normalized.contains("account locked")
         || normalized.contains("clients credentials have been revoked");
+    return permanent
+        ? AuthenticationDisposition.PERMANENT_CREDENTIAL_REJECTION
+        : AuthenticationDisposition.TRANSIENT_FAILURE;
   }
 
   @Override

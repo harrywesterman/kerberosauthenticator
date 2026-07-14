@@ -67,6 +67,16 @@ public class AccountConfigurationTest {
   }
 
   @Test
+  public void managedDeploymentRequiresRealmFromRestrictionsManager() {
+    restrictionsBundle.putString(AccountConfiguration.AD_REALM_KEY, TestHelper.TEST_AD_DOMAIN);
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.isManagedDeployment()).isTrue();
+  }
+
+  @Test
   public void testHasNoConfigs() {
     restrictionsBundle.clear();
     shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
@@ -108,6 +118,9 @@ public class AccountConfigurationTest {
         .apply();
     accConfig = new AccountConfiguration(context);
     assertTrue(accConfig.hasManagedConfigs());
+    assertThat(accConfig.isManagedDeployment()).isFalse();
+    assertThat(accConfig.hasManagedConfigPassword()).isFalse();
+    assertThat(prefs.contains(AccountConfiguration.PASSWORD_KEY)).isFalse();
   }
 
   @Test

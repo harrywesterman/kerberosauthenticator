@@ -102,7 +102,7 @@ public final class HttpNtlmV2Engine {
       }
 
       TargetInfo targetInfo = challenge.getTargetInfo().copy();
-      targetInfo.putAvPair(new AvPairChannelBindings(new byte[16]));
+      targetInfo.putAvPair(new AvPairChannelBindings(unavailableChannelBindingHash()));
       targetInfo.putAvPair(new AvPairString(AvId.MsvAvTargetName, "HTTP/" + host));
       AvPairFlags existing = targetInfo.getAvPair(AvId.MsvAvFlags);
       boolean includeMic =
@@ -264,5 +264,10 @@ public final class HttpNtlmV2Engine {
 
   private static void clear(byte[] value) {
     if (value != null) Arrays.fill(value, (byte) 0);
+  }
+
+  /** Chrome's Android AccountManager adapter does not expose the TLS channel-binding hash. */
+  static byte[] unavailableChannelBindingHash() {
+    return new byte[16];
   }
 }

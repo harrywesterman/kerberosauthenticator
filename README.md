@@ -80,12 +80,13 @@ Unit tests use Robolectric 4.16.1. JDK 17 is required because the openjdk-kerber
 
 ## Releasing
 
-Pushing to the `main` branch triggers the [Build and Publish Release](.github/workflows/release.yml) workflow:
+Pushing to the `main` branch triggers the serialized [Build and Publish Release](.github/workflows/release.yml) workflow:
 
-1. Restores the signing keystore from the GitHub secret `RELEASE_KEYSTORE_B64`.
-2. Determines the next version by incrementing the latest GitHub release tag (e.g. `v1.0` → `v1.1`).
-3. Builds the release APK signed with the keystore.
-4. Creates a git tag and publishes a GitHub release with the APK attached.
+1. Runs lint and all debug unit tests under JDK 17.
+2. Restores the signing keystore and passwords from GitHub secrets.
+3. Determines the next version by incrementing the latest GitHub release tag (e.g. `v1.0` → `v1.1`).
+4. Builds the signed release APK.
+5. Creates or resumes a draft release and publishes it after the APK upload succeeds.
 
 To set up the release keystore secret:
 
@@ -93,7 +94,9 @@ To set up the release keystore secret:
 base64 -i release.keystore | pbcopy
 ```
 
-Add the clipboard contents as the repository secret `RELEASE_KEYSTORE_B64` in GitHub.
+Add the clipboard contents as `RELEASE_KEYSTORE_B64`. Also configure
+`RELEASE_STORE_PASSWORD` and `RELEASE_KEY_PASSWORD`; `RELEASE_KEY_ALIAS` is optional and defaults
+to `kerberos`.
 
 ## Installing on device
 
@@ -103,9 +106,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Testing without MDM
 
-Persistent credential storage works only when the device is protected by a screen lock and
-hardware-backed Android Keystore. Without secure hardware storage, sign-in remains possible but
-the password is not stored persistently.
+Local configuration supports interactive sign-in only. Persistent credential storage and daily
+TGT refresh require an Android Enterprise managed profile or fully managed device, an `ad_realm`
+delivered through managed configuration, a screen lock, and hardware-backed Android Keystore.
 
 ## MDM Deployment
 
@@ -204,8 +207,8 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
 | `enable_http_ntlm` | bool | no | Advertise NTLMSSP inside HTTP Negotiate when secure credentials are available; default `false` |
 | `ntlm_domain` | string | when HTTP NTLM is enabled | NetBIOS domain, 1–15 characters, for example `EXAMPLE` |
-| `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `false` |
-| `allow_local_cache` | bool | no | Permit app-private temporary files for external viewers; default `true` |
+| `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `true` |
+| `allow_local_cache` | bool | no | Permit short-lived app-private files for external viewers; default `false` |
 | `allow_screenshots` | bool | no | Permit screenshots; default `false` |
 | `support_contact` | string | no | IT support text or URL |
 
@@ -246,7 +249,8 @@ implemented. SMB remains Kerberos-only.
 
 Chrome's Android AccountManager adapter does not provide TLS channel-binding data. The app sends
 the protocol-defined zero channel-binding value; sites that require non-zero channel binding
-(strict Extended Protection) remain unsupported.
+(strict Extended Protection) remain unsupported. The status screen shows this limitation whenever
+NTLM is explicitly enabled.
 
 ### HTTP authentication troubleshooting
 
@@ -270,6 +274,7 @@ failure is expected when the server requires a real TLS channel-binding hash.
 
 - The app supports one AD account per Android profile.
 - Ciphertext is stored in app-private storage; the AES-256-GCM key is non-exportable and hardware-backed. Android backup and device transfer are disabled.
+- Long-lived credentials are refused outside a managed profile or fully managed device with an MDM-provided `ad_realm`.
 - A new TGT is requested every 24 hours with a network constraint and a two-hour flex window. Temporary network, VPN, DNS, and KDC failures receive increasing retries.
 - If the password changes or is incorrect, or the account expires or is revoked, the password and tickets are cleared and the app requests sign-in again.
 - Logout, a changed or removed MDM realm, and clearing app or work-profile data remove credentials, tickets, and scheduled refreshes.

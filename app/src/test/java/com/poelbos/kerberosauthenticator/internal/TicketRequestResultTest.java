@@ -17,4 +17,13 @@ public final class TicketRequestResultTest {
     assertThat(new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED,
         "Cannot contact any KDC").isCredentialRejected()).isFalse();
   }
+
+  @Test public void explicitPermanentDispositionRejectsCredentials() {
+    TicketRequestResult result = new TicketRequestResult(
+        ResultCode.ERROR_LOGIN_FAILED,
+        "localized error",
+        TicketRequestResult.AuthenticationDisposition.PERMANENT_CREDENTIAL_REJECTION);
+
+    assertThat(result.isCredentialRejected()).isTrue();
+  }
 }

@@ -22,16 +22,20 @@ import android.os.AsyncTask;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
 import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
+import com.poelbos.kerberosauthenticator.internal.KerberosRuntimeCoordinator;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
+import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.AuthenticationDisposition;
 import com.sun.security.auth.module.Krb5LoginModule;
 import java.io.IOException;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Arrays;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.login.LoginException;
+import sun.security.krb5.KrbException;
 
 /**
  * Performs the equivalent of kinit - logging in the user to the Kerberos KDC, producing a
@@ -56,7 +60,7 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
   private static final String DEBUG = "debug";
 
   private final String username;
-  private final String password;
+  private final char[] password;
   private final String adDomain;
   private final String domainController;
   private final UserAuthenticationResultListener listener;
@@ -70,39 +74,49 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
     this.context = context.getApplicationContext();
     this.listener = listener;
     this.username = accountDetails.getUsername();
-    this.password = accountDetails.getPassword();
+    this.password = accountDetails.copyPassword();
     this.adDomain = accountDetails.getActiveDirectoryDomain();
     this.domainController = accountDetails.getAdDomainController();
   }
 
   @Override
   protected TicketRequestResult doInBackground(Void... voids) {
-    AuthenticationOutcome outcome = authenticate(
-        context, new KerberosAccountDetails(username, password, adDomain, domainController));
-    subject = outcome.getSubject();
-    return outcome.getResult();
+    try {
+      AuthenticationOutcome outcome = authenticate(
+          context, new KerberosAccountDetails(username, password, adDomain, domainController));
+      subject = outcome.getSubject();
+      return outcome.getResult();
+    } finally {
+      if (password != null) Arrays.fill(password, '\0');
+    }
   }
 
   /** Performs a synchronous kinit. Intended for WorkManager and tests. */
   public static AuthenticationOutcome authenticate(
       Context context, KerberosAccountDetails details) {
     String username = details.getUsername();
-    String password = details.getPassword();
+    char[] password = details.copyPassword();
     String adDomain = details.getActiveDirectoryDomain();
     String domainController = details.getAdDomainController();
     Log.i(TAG, String.format("TGT_REQUEST realm=%s configuredKdc=%s",
         adDomain, domainController != null && !domainController.isEmpty()));
     try {
-      KerberosEnvironment.configure(context.getApplicationContext(), adDomain, domainController);
+      return KerberosRuntimeCoordinator.run(
+          context, adDomain, domainController, null, null,
+          configured -> authenticateConfigured(username, password));
     } catch (IOException e) {
       Log.w(TAG, "Failure configuring Kerberos environment", e);
       return new AuthenticationOutcome(
           new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage()), null);
+    } finally {
+      if (password != null) Arrays.fill(password, '\0');
     }
+  }
 
+  private static AuthenticationOutcome authenticateConfigured(String username, char[] password) {
     Krb5LoginModule lm = new Krb5LoginModule();
     Subject subject = new Subject();
-    CallbackHandler handler = new UsernamePasswordCallbackHandler(username, password);
+    UsernamePasswordCallbackHandler handler = new UsernamePasswordCallbackHandler(username, password);
     Map<String, String> sharedState = new HashMap<>();
     sharedState.put(REFRESH_KRB5_CONFIG, "true");
     sharedState.put(STORE_KEY, "true");
@@ -127,13 +141,33 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
       // Never stringify a Subject: it contains the TGT and session key material.
     } catch (LoginException e) {
       Log.w(TAG, "Failure logging in", e);
-      if (e.getMessage().contains("Pre-authentication information was invalid")) {
+      int kerberosCode = kerberosErrorCode(e);
+      String message = e.getMessage() == null ? "Kerberos login failed" : e.getMessage();
+      if (kerberosCode == 24 || message.contains("Pre-authentication information was invalid")) {
         return new AuthenticationOutcome(
-            new TicketRequestResult(ResultCode.ERROR_BAD_PASSWORD, e.getMessage()), null);
+            new TicketRequestResult(
+                ResultCode.ERROR_BAD_PASSWORD,
+                message,
+                AuthenticationDisposition.PERMANENT_CREDENTIAL_REJECTION),
+            null);
+      } else if (kerberosCode == 6 || kerberosCode == 12 || kerberosCode == 18
+          || kerberosCode == 23) {
+        return new AuthenticationOutcome(
+            new TicketRequestResult(
+                ResultCode.ERROR_LOGIN_FAILED,
+                message,
+                AuthenticationDisposition.PERMANENT_CREDENTIAL_REJECTION),
+            null);
       } else {
         return new AuthenticationOutcome(
-            new TicketRequestResult(ResultCode.ERROR_LOGIN_FAILED, e.getMessage()), null);
+            new TicketRequestResult(
+                ResultCode.ERROR_LOGIN_FAILED,
+                message,
+                AuthenticationDisposition.TRANSIENT_FAILURE),
+            null);
       }
+    } finally {
+      handler.clear();
     }
 
     StringBuilder infoBuilder = new StringBuilder();
@@ -150,9 +184,28 @@ public class UserAuthenticationTask extends AsyncTask<Void, Void, TicketRequestR
         new TicketRequestResult(ResultCode.SUCCESS, infoBuilder.toString()), subject);
   }
 
+  private static int kerberosErrorCode(Throwable error) {
+    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+      if (cause instanceof KrbException) return ((KrbException) cause).returnCode();
+    }
+    return -1;
+  }
+
   @Override
   protected void onPostExecute(TicketRequestResult result) {
     super.onPostExecute(result);
     listener.onTicketGrantingTicketResult(result, subject);
+  }
+
+  @Override
+  protected void onCancelled(TicketRequestResult result) {
+    if (password != null) Arrays.fill(password, '\0');
+    super.onCancelled(result);
+  }
+
+  @Override
+  protected void onCancelled() {
+    if (password != null) Arrays.fill(password, '\0');
+    super.onCancelled();
   }
 }

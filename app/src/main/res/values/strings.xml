@@ -19,7 +19,7 @@
     <string name="mdm_realm_title">Active Directory realm</string>
     <string name="mdm_realm_description">Kerberos realm, for example EXAMPLE.COM.</string>
     <string name="mdm_enable_http_ntlm_title">Enable HTTP NTLMv2</string>
-    <string name="mdm_enable_http_ntlm_description">Allow managed Chrome Negotiate requests to use NTLMv2 when the server explicitly selects it.</string>
+    <string name="mdm_enable_http_ntlm_description">Allow managed Chrome Negotiate requests to use NTLMv2 when selected. Chrome does not provide TLS channel binding, so Extended Protection requiring CBT is unsupported.</string>
     <string name="mdm_ntlm_domain_title">NTLM domain</string>
     <string name="mdm_ntlm_domain_description">NetBIOS domain required for HTTP NTLMv2, for example EXAMPLE.</string>
     <string name="mdm_username_description">Username supplied by MDM; the password is never sent through MDM.</string>
@@ -103,4 +103,5 @@
     <string name="until">until</string>
     <!-- [CHAR_LIMIT=100] -->
     <string name="enter_pw">Enter Password</string>
+    <string name="notification_permission_missing">Sign-in alerts are disabled. Tap to open notification settings.</string>
 </resources>

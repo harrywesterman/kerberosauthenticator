@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Locale;
 
 /** Strict parser for Android Enterprise managed configuration. */
 public final class EnterpriseConfiguration {
@@ -80,9 +81,9 @@ public final class EnterpriseConfiguration {
       }
     }
     return new EnterpriseConfiguration(
-        realm.toUpperCase(), shares, kdcs,
-        bundle.getBoolean(REQUIRE_ENCRYPTION, false),
-        bundle.getBoolean(ALLOW_CACHE, true),
+        realm.toUpperCase(Locale.ROOT), shares, kdcs,
+        bundle.getBoolean(REQUIRE_ENCRYPTION, true),
+        bundle.getBoolean(ALLOW_CACHE, false),
         bundle.getBoolean(ALLOW_SCREENSHOTS, false), clean(bundle.getString(SUPPORT_CONTACT)), errors);
   }
 

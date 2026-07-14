@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -25,14 +29,18 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Verify source
+        run: ./gradlew lintDebug testDebugUnitTest
+
       - name: Restore signing keystore
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          if [ -z "$RELEASE_KEYSTORE_B64" ]; then
-            echo "Missing GitHub secret RELEASE_KEYSTORE_B64" >&2
-            exit 1
-          fi
+          test -n "$RELEASE_KEYSTORE_B64" || { echo "Missing GitHub secret RELEASE_KEYSTORE_B64" >&2; exit 1; }
+          test -n "$RELEASE_STORE_PASSWORD" || { echo "Missing GitHub secret RELEASE_STORE_PASSWORD" >&2; exit 1; }
+          test -n "$RELEASE_KEY_PASSWORD" || { echo "Missing GitHub secret RELEASE_KEY_PASSWORD" >&2; exit 1; }
           printf '%s' "$RELEASE_KEYSTORE_B64" | base64 -d > release.keystore
 
       - name: Determine release version
@@ -51,22 +59,42 @@ jobs:
           echo "TAG=v$VERSION" >> "$GITHUB_ENV"
 
       - name: Build release APK
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         run: |
           ./gradlew assembleRelease -PreleaseVersion="$VERSION"
           mkdir -p release-artifacts
           cp app/build/outputs/apk/release/app-release.apk "release-artifacts/kerberosauthenticator-$VERSION.apk"
 
-      - name: Create git tag
-        run: |
-          git tag "$TAG" "$GITHUB_SHA"
-          git push origin "$TAG"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
-
-      - name: Publish GitHub release
+      - name: Publish restartable release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" \
-            --title "Kerberos Authenticator $VERSION" \
-            --notes "Automated release for commit ${GITHUB_SHA}" \
-            "release-artifacts/kerberosauthenticator-$VERSION.apk"
+          ASSET="release-artifacts/kerberosauthenticator-$VERSION.apk"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+            TARGET_SHA="$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish)"
+            test "$IS_DRAFT" = "true" || {
+              echo "Release $TAG already exists and is not a draft" >&2
+              exit 1
+            }
+            test "$TARGET_SHA" = "$GITHUB_SHA" || {
+              echo "Draft release $TAG belongs to $TARGET_SHA, not $GITHUB_SHA" >&2
+              exit 1
+            }
+            gh release upload "$TAG" "$ASSET" --clobber
+          else
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists without a reusable draft release" >&2
+              exit 1
+            fi
+            gh release create "$TAG" \
+              --draft \
+              --target "$GITHUB_SHA" \
+              --title "Kerberos Authenticator $VERSION" \
+              --notes "Automated release for commit ${GITHUB_SHA}" \
+              "$ASSET"
+          fi
+          gh release edit "$TAG" --draft=false --latest

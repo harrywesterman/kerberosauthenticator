@@ -60,6 +60,7 @@ public class AccountConfiguration {
   private String adDomainController;
   private boolean httpNtlmEnabled;
   private String ntlmDomain;
+  private boolean managedDeployment;
 
   AccountConfiguration(@NonNull Context context) {
     // Managed configs initialisation and listener definition
@@ -74,25 +75,34 @@ public class AccountConfiguration {
   }
 
   private void setManagedConfigs() {
+    String previousRealm = adDomain;
     username = null;
     password = null;
     adDomain = null;
     adDomainController = "";
     httpNtlmEnabled = false;
     ntlmDomain = null;
+    managedDeployment = false;
 
     Bundle restrictionsBundle = restrictionsManager.getApplicationRestrictions();
     if (restrictionsBundle == null) {
       restrictionsBundle = new Bundle();
+    }
+    String directlyManagedRealm = restrictionsBundle.getString(AD_REALM_KEY);
+    managedDeployment = !Strings.isNullOrEmpty(directlyManagedRealm);
+    if (!managedDeployment
+        || (previousRealm != null && !previousRealm.equalsIgnoreCase(directlyManagedRealm))) {
+      new com.poelbos.kerberosauthenticator.files.EnterpriseFileCache(context).cleanup();
     }
     if (restrictionsBundle.isEmpty()) {
       SharedPreferences localPrefs = context
           .getSharedPreferences(EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE);
       String localUser = localPrefs.getString(USERNAME_KEY, null);
       String localDomain = localPrefs.getString(AD_DOMAIN_KEY, null);
+      // Remove credentials written by versions that predate session-only local authentication.
+      localPrefs.edit().remove(PASSWORD_KEY).apply();
       if (localUser != null && localDomain != null) {
         restrictionsBundle.putString(USERNAME_KEY, localUser);
-        restrictionsBundle.putString(PASSWORD_KEY, localPrefs.getString(PASSWORD_KEY, ""));
         restrictionsBundle.putString(AD_DOMAIN_KEY, localDomain);
       }
     }
@@ -191,6 +201,10 @@ public class AccountConfiguration {
 
   boolean isHttpNtlmConfigured() {
     return httpNtlmEnabled && ntlmDomain != null;
+  }
+
+  boolean isManagedDeployment() {
+    return managedDeployment;
   }
 
   class ManagedConfigsBroadcastReceiver extends BroadcastReceiver {

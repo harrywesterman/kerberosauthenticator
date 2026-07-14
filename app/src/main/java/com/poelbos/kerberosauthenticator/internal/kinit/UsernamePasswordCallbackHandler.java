@@ -21,6 +21,7 @@ import android.util.Log;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.PasswordCallback;
+import java.util.Arrays;
 import krb.javax.security.auth.callback.NameCallback;
 
 /**
@@ -28,11 +29,11 @@ import krb.javax.security.auth.callback.NameCallback;
  */
 public class UsernamePasswordCallbackHandler implements CallbackHandler {
   private final String username;
-  private final String password;
+  private final char[] password;
 
-  UsernamePasswordCallbackHandler(String username, String password) {
+  UsernamePasswordCallbackHandler(String username, char[] password) {
     this.username = username;
-    this.password = password;
+    this.password = password == null ? new char[0] : Arrays.copyOf(password, password.length);
   }
 
   @Override
@@ -41,10 +42,14 @@ public class UsernamePasswordCallbackHandler implements CallbackHandler {
       if (callback instanceof NameCallback) {
         ((NameCallback) callback).setName(username);
       } else if (callback instanceof PasswordCallback) {
-        ((PasswordCallback) callback).setPassword(password.toCharArray());
+        ((PasswordCallback) callback).setPassword(password);
       } else {
         Log.w(TAG, String.format("Unknown callback: %s", callback.getClass()));
       }
     }
+  }
+
+  void clear() {
+    Arrays.fill(password, '\0');
   }
 }

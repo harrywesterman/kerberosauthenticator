@@ -22,6 +22,7 @@ import com.hierynomus.mssmb2.SMB2CreateOptions;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
 import com.poelbos.kerberosauthenticator.KerberosAccount;
 import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
+import com.poelbos.kerberosauthenticator.internal.KerberosRuntimeCoordinator;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import java.io.Closeable;
 import java.io.FileOutputStream;
@@ -60,10 +61,22 @@ public final class KerberosSmbClient implements Closeable {
       throw new IOException("Your Kerberos ticket has expired");
     }
     Subject subject = tgt.asSubject();
-    String domainController = KerberosEnvironment.configure(
-        context, account.getDomain(), account.getDomainController(), resolvedShare.getHost());
-    GSSUtil.setGlobalSubject(subject);
+    return KerberosRuntimeCoordinator.run(
+        context,
+        account.getDomain(),
+        account.getDomainController(),
+        resolvedShare.getHost(),
+        subject,
+        configuredDomainController -> connectConfigured(
+            account, resolvedShare, requireEncryption, subject, configuredDomainController));
+  }
 
+  private static KerberosSmbClient connectConfigured(
+      KerberosAccount account,
+      ManagedShare resolvedShare,
+      boolean requireEncryption,
+      Subject subject,
+      String domainController) throws IOException {
     SmbConfig config = createConfig(requireEncryption);
     SMBClient client = new SMBClient(config);
     Connection connection = null;
@@ -298,6 +311,5 @@ public final class KerberosSmbClient implements Closeable {
     try { session.close(); } catch (Exception ignored) {}
     try { connection.close(); } catch (Exception ignored) {}
     try { client.close(); } catch (Exception ignored) {}
-    GSSUtil.setGlobalSubject(null);
   }
 }

@@ -1,6 +1,7 @@
 package com.poelbos.kerberosauthenticator.files;
 
 import java.util.Objects;
+import java.util.Locale;
 
 /** Immutable, administrator-provisioned SMB location. */
 public final class ManagedShare {
@@ -36,7 +37,7 @@ public final class ManagedShare {
     if (value.matches("^\\d{1,3}(\\.\\d{1,3}){3}$") || value.contains(":")) {
       throw new IllegalArgumentException("host must be a DNS name for Kerberos SPN validation");
     }
-    return value.toLowerCase();
+    return value.toLowerCase(Locale.ROOT);
   }
 
   public static String normalizePath(String value) {
