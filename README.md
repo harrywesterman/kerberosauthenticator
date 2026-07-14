@@ -139,7 +139,7 @@ For the integrated file app, for example:
       "host": "files.example.com",
       "port": 445,
       "share_name": "Documents",
-      "start_path": "users\\${username:last:1}\\${username}"
+      "start_path": "users/${username:last:1}/${username:full}"
     }
   ]
 }
@@ -151,10 +151,12 @@ Always use a DNS hostname with a valid `cifs/<host>` SPN; IP addresses are rejec
 authenticated Kerberos account, not from a UEM enrollment lookup value. The supported tokens are:
 
 - `${username}` — the complete Kerberos username.
+- `${username:full}` — UEM-safe alias for the complete Kerberos username.
 - `${username:last:1}` — the final digit of the Kerberos username.
 
-For example, `users\\${username:last:1}\\${username}` resolves to
-`users\\2\\user12342` for account `user12342`. Templates are accepted only in `start_path`;
+For UEM systems that consume `{username}` as their own lookup value, use
+`users/${username:last:1}/${username:full}`. It resolves to `users/2/user12342` for account
+`user12342`; forward slashes are normalized to SMB separators. Templates are accepted only in `start_path`;
 `host` and `share_name` remain fixed administrator-controlled values. Static paths continue to
 work unchanged.
 

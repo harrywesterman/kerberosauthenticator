@@ -32,7 +32,7 @@
     <string name="mdm_share_port">Port</string>
     <string name="mdm_share_name">Share name</string>
     <string name="mdm_share_start_path">Starting folder</string>
-    <string name="mdm_share_start_path_description">Relative path; supports ${username} and ${username:last:1}.</string>
+    <string name="mdm_share_start_path_description">Relative path; use ${username:full} and ${username:last:1} in UEM. ${username} remains supported.</string>
     <string name="mdm_kdc_hosts">KDC-hosts</string>
     <string name="mdm_kdc_hosts_description">Optional explicit KDC list; an empty value uses DNS SRV.</string>
     <string name="mdm_http_spn_mappings">HTTP SPN mappings</string>
