@@ -24,7 +24,8 @@ val releaseKeyPassword = providers.gradleProperty("releaseKeyPassword")
     .orElse("")
 val releaseKeyAlias = providers.gradleProperty("releaseKeyAlias")
     .orElse(providers.environmentVariable("RELEASE_KEY_ALIAS"))
-    .orElse("kerberos")
+    .orElse("")
+    .map { it.ifBlank { "kerberos" } }
 
 android {
     namespace = "com.poelbos.kerberosauthenticator"
