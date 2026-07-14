@@ -6,6 +6,17 @@
         android:description="@string/mdm_realm_description"
         android:restrictionType="string" />
     <restriction
+        android:key="enable_http_ntlm"
+        android:title="@string/mdm_enable_http_ntlm_title"
+        android:description="@string/mdm_enable_http_ntlm_description"
+        android:defaultValue="false"
+        android:restrictionType="bool" />
+    <restriction
+        android:key="ntlm_domain"
+        android:title="@string/mdm_ntlm_domain_title"
+        android:description="@string/mdm_ntlm_domain_description"
+        android:restrictionType="string" />
+    <restriction
         android:key="shares"
         android:title="@string/mdm_shares_title"
         android:description="@string/mdm_shares_description"

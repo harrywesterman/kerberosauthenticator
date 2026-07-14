@@ -16,6 +16,7 @@
 package com.poelbos.kerberosauthenticator;
 
 import static junit.framework.TestCase.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.robolectric.Shadows.shadowOf;
 
@@ -116,6 +117,44 @@ public class AccountConfigurationTest {
     accConfig = new AccountConfiguration(context);
     assertTrue(accConfig.hasManagedConfigs());
     assertFalse(accConfig.hasManagedConfigPassword());
+  }
+
+  @Test
+  public void httpNtlmIsDisabledByDefault() {
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.isHttpNtlmEnabled()).isFalse();
+    assertThat(accConfig.getNtlmDomain()).isNull();
+    assertThat(accConfig.isHttpNtlmConfigured()).isFalse();
+  }
+
+  @Test
+  public void httpNtlmRequiresValidNetbiosDomain() {
+    restrictionsBundle.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, true);
+    restrictionsBundle.putString(AccountConfiguration.NTLM_DOMAIN_KEY, "corp.example.com");
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.isHttpNtlmEnabled()).isTrue();
+    assertThat(accConfig.getNtlmDomain()).isNull();
+    assertThat(accConfig.isHttpNtlmConfigured()).isFalse();
+    assertThat(accConfig.hasManagedConfigs()).isTrue();
+  }
+
+  @Test
+  public void httpNtlmNormalizesManagedNetbiosDomain() {
+    restrictionsBundle.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, true);
+    restrictionsBundle.putString(AccountConfiguration.NTLM_DOMAIN_KEY, " corp ");
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.isHttpNtlmEnabled()).isTrue();
+    assertThat(accConfig.getNtlmDomain()).isEqualTo("CORP");
+    assertThat(accConfig.isHttpNtlmConfigured()).isTrue();
   }
 
 }

@@ -27,6 +27,8 @@ import androidx.annotation.VisibleForTesting;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
 import com.google.common.base.Strings;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * This class obtains and updates Kerberos account details from managed restrictions.
@@ -43,6 +45,10 @@ public class AccountConfiguration {
   static final String AD_REALM_KEY = "ad_realm";
   static final String USERNAME_KEY = "username";
   static final String PASSWORD_KEY = "password";
+  static final String ENABLE_HTTP_NTLM_KEY = "enable_http_ntlm";
+  static final String NTLM_DOMAIN_KEY = "ntlm_domain";
+  private static final Pattern NETBIOS_DOMAIN =
+      Pattern.compile("^[A-Z0-9][A-Z0-9_-]{0,14}$");
   // Managed configuration
   private final Context context;
   private final RestrictionsManager restrictionsManager;
@@ -52,6 +58,8 @@ public class AccountConfiguration {
   private String password;
   private String adDomain;
   private String adDomainController;
+  private boolean httpNtlmEnabled;
+  private String ntlmDomain;
 
   AccountConfiguration(@NonNull Context context) {
     // Managed configs initialisation and listener definition
@@ -70,6 +78,8 @@ public class AccountConfiguration {
     password = null;
     adDomain = null;
     adDomainController = "";
+    httpNtlmEnabled = false;
+    ntlmDomain = null;
 
     Bundle restrictionsBundle = restrictionsManager.getApplicationRestrictions();
     if (restrictionsBundle == null) {
@@ -94,6 +104,16 @@ public class AccountConfiguration {
     if (!Strings.isNullOrEmpty(configuredDomain)) {
       adDomain = configuredDomain;
       username = restrictionsBundle.getString(USERNAME_KEY);
+    }
+    httpNtlmEnabled = restrictionsBundle.getBoolean(ENABLE_HTTP_NTLM_KEY, false);
+    String configuredNtlmDomain = restrictionsBundle.getString(NTLM_DOMAIN_KEY);
+    if (!Strings.isNullOrEmpty(configuredNtlmDomain)) {
+      String normalized = configuredNtlmDomain.trim().toUpperCase(Locale.ROOT);
+      if (NETBIOS_DOMAIN.matcher(normalized).matches()) {
+        ntlmDomain = normalized;
+      } else {
+        Log.w(Constants.TAG, "Ignoring invalid managed NTLM domain.");
+      }
     }
     // Enterprise file deployments deliberately never accept a password through MDM. Retain the
     // legacy key only for existing authenticator-only deployments without managed shares.
@@ -159,6 +179,18 @@ public class AccountConfiguration {
 
   String getDomainController() {
     return adDomainController;
+  }
+
+  boolean isHttpNtlmEnabled() {
+    return httpNtlmEnabled;
+  }
+
+  String getNtlmDomain() {
+    return ntlmDomain;
+  }
+
+  boolean isHttpNtlmConfigured() {
+    return httpNtlmEnabled && ntlmDomain != null;
   }
 
   class ManagedConfigsBroadcastReceiver extends BroadcastReceiver {
