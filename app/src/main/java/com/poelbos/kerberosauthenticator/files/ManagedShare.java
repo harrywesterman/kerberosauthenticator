@@ -44,8 +44,10 @@ public final class ManagedShare {
     String path = value.trim().replace('/', '\\');
     while (path.startsWith("\\")) path = path.substring(1);
     while (path.endsWith("\\")) path = path.substring(0, path.length() - 1);
-    if (path.equals("..") || path.startsWith("..\\") || path.contains("\\..\\")) {
-      throw new IllegalArgumentException("start_path may not escape the managed share");
+    for (String segment : path.split("\\\\", -1)) {
+      if (segment.equals("..")) {
+        throw new IllegalArgumentException("start_path may not escape the managed share");
+      }
     }
     return path;
   }
