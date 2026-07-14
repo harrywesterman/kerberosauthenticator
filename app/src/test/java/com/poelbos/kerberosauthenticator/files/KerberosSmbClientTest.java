@@ -145,4 +145,15 @@ public final class KerberosSmbClientTest {
             + "(NullPointerException@SMBSessionBuilder.validateAndSetSigning)",
         failure.getMessage());
   }
+
+  @Test public void recognizesLazyDfsAuthenticationFailure() {
+    NullPointerException exception = new NullPointerException("sensitive");
+    exception.setStackTrace(new StackTraceElement[] {
+        new StackTraceElement(
+            "com.hierynomus.smbj.share.DiskShare",
+            "getDiskEntry", "DiskShare.java", 212)
+    });
+
+    assertTrue(KerberosSmbClient.isLazyDfsAuthenticationFailure(exception));
+  }
 }

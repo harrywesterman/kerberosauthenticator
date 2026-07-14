@@ -41,6 +41,10 @@ import sun.security.krb5.KrbException;
 
 /** Kerberos-only SMB 2.1+ session. No password/NTLM authenticator is ever constructed. */
 public final class KerberosSmbClient implements Closeable {
+  private final Context context;
+  private final String realm;
+  private final String domainController;
+  private final Subject subject;
   private final ManagedShare managedShare;
   private final SMBClient client;
   private final Connection connection;
@@ -68,10 +72,12 @@ public final class KerberosSmbClient implements Closeable {
         resolvedShare.getHost(),
         subject,
         configuredDomainController -> connectConfigured(
-            account, resolvedShare, requireEncryption, subject, configuredDomainController));
+            context.getApplicationContext(), account, resolvedShare, requireEncryption, subject,
+            configuredDomainController));
   }
 
   private static KerberosSmbClient connectConfigured(
+      Context context,
       KerberosAccount account,
       ManagedShare resolvedShare,
       boolean requireEncryption,
@@ -89,7 +95,9 @@ public final class KerberosSmbClient implements Closeable {
           account.getName(), account.getDomain(), subject, null);
       Session session = connection.authenticate(authentication);
       DiskShare share = (DiskShare) session.connectShare(resolvedShare.getShareName());
-      return new KerberosSmbClient(resolvedShare, client, connection, session, share);
+      return new KerberosSmbClient(
+          context, account.getDomain(), account.getDomainController(), subject,
+          resolvedShare, client, connection, session, share);
     } catch (RuntimeException | IOException exception) {
       if (connection != null) try { connection.close(); } catch (Exception ignored) {}
       try { client.close(); } catch (Exception ignored) {}
@@ -207,8 +215,13 @@ public final class KerberosSmbClient implements Closeable {
   }
 
   private KerberosSmbClient(
+      Context context, String realm, String domainController, Subject subject,
       ManagedShare managedShare, SMBClient client, Connection connection,
       Session session, DiskShare share) {
+    this.context = context;
+    this.realm = realm;
+    this.domainController = domainController;
+    this.subject = subject;
     this.managedShare = managedShare;
     this.client = client;
     this.connection = connection;
@@ -218,21 +231,47 @@ public final class KerberosSmbClient implements Closeable {
 
   public List<RemoteEntry> list(String relativePath) throws IOException {
     try {
-      List<RemoteEntry> result = new ArrayList<>();
-      for (FileIdBothDirectoryInformation item : share.list(resolve(relativePath))) {
-        String name = item.getFileName();
-        if (name.equals(".") || name.equals("..")) continue;
-        boolean directory = (item.getFileAttributes()
-            & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
-        result.add(new RemoteEntry(
-            name, directory, item.getEndOfFile(), item.getLastWriteTime().toEpochMillis()));
-      }
-      result.sort(Comparator.comparing(RemoteEntry::isDirectory).reversed()
-          .thenComparing(RemoteEntry::getName, String.CASE_INSENSITIVE_ORDER));
-      return result;
+      return listConfigured(relativePath);
     } catch (RuntimeException exception) {
+      if (isLazyDfsAuthenticationFailure(exception)) {
+        try {
+          // SMBJ authenticates a DFS referral lazily on first traversal. Serialize only that
+          // one-time nested-session authentication; later I/O uses the cached SMB session keys.
+          return KerberosRuntimeCoordinator.run(
+              context, realm, domainController, managedShare.getHost(), subject,
+              ignored -> listConfigured(relativePath));
+        } catch (RuntimeException retryFailure) {
+          throw connectionFailure(retryFailure);
+        }
+      }
       throw connectionFailure(exception);
     }
+  }
+
+  private List<RemoteEntry> listConfigured(String relativePath) {
+    List<RemoteEntry> result = new ArrayList<>();
+    for (FileIdBothDirectoryInformation item : share.list(resolve(relativePath))) {
+      String name = item.getFileName();
+      if (name.equals(".") || name.equals("..")) continue;
+      boolean directory = (item.getFileAttributes()
+          & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
+      result.add(new RemoteEntry(
+          name, directory, item.getEndOfFile(), item.getLastWriteTime().toEpochMillis()));
+    }
+    result.sort(Comparator.comparing(RemoteEntry::isDirectory).reversed()
+        .thenComparing(RemoteEntry::getName, String.CASE_INSENSITIVE_ORDER));
+    return result;
+  }
+
+  static boolean isLazyDfsAuthenticationFailure(Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (!(cause instanceof NullPointerException)) continue;
+      for (StackTraceElement frame : cause.getStackTrace()) {
+        if (frame.getClassName().equals("com.hierynomus.smbj.share.DiskShare")
+            && frame.getMethodName().equals("getDiskEntry")) return true;
+      }
+    }
+    return false;
   }
 
   public void createDirectory(String parent, String name) {
@@ -311,5 +350,6 @@ public final class KerberosSmbClient implements Closeable {
     try { session.close(); } catch (Exception ignored) {}
     try { connection.close(); } catch (Exception ignored) {}
     try { client.close(); } catch (Exception ignored) {}
+    try { subject.getPrivateCredentials().clear(); } catch (Exception ignored) {}
   }
 }
