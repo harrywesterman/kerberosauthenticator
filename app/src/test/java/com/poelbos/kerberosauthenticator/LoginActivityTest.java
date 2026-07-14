@@ -24,7 +24,7 @@ public final class LoginActivityTest {
 
     KerberosAccount updated = LoginActivity.accountForAuthentication(existing, details);
 
-    assertThat(updated.getPassword()).isEqualTo("new-password");
+    assertThat(new String(updated.copyPassword())).isEqualTo("new-password");
     assertThat(updated.getTicketGrantingTicket()).isEqualTo(TGT);
   }
 
@@ -36,6 +36,6 @@ public final class LoginActivityTest {
     KerberosAccount account = LoginActivity.accountForAuthentication(null, details);
 
     assertThat(account.getName()).isEqualTo(USERNAME);
-    assertThat(account.getPassword()).isEqualTo(PASSWORD);
+    assertThat(new String(account.copyPassword())).isEqualTo(PASSWORD);
   }
 }

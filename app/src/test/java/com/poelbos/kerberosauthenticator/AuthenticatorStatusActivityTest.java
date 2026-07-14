@@ -14,6 +14,7 @@ public final class AuthenticatorStatusActivityTest {
     assertThat(AuthenticatorStatusActivity.httpNtlmStatus(true, true, false))
         .isEqualTo("HTTP NTLMv2: unavailable (secure credentials missing)");
     assertThat(AuthenticatorStatusActivity.httpNtlmStatus(true, true, true))
-        .isEqualTo("HTTP NTLMv2: ready");
+        .isEqualTo(
+            "HTTP NTLMv2: ready; TLS channel binding unavailable (Extended Protection unsupported)");
   }
 }

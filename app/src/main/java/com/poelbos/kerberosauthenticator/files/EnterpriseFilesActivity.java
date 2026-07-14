@@ -27,8 +27,10 @@ import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.io.File;
 import java.io.InputStream;
 import java.net.URLConnection;
@@ -42,9 +44,17 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   private String currentPath = "";
   private final ExecutorService io = Executors.newSingleThreadExecutor();
   private ActivityResultLauncher<String[]> uploadLauncher;
+  private ActivityResultLauncher<Intent> viewerLauncher;
+  private EnterpriseFileCache fileCache;
+  private volatile long generation;
+  private volatile boolean destroyed;
+  private File pendingViewedFile;
+  private Uri pendingViewedUri;
 
   @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
+    fileCache = new EnterpriseFileCache(this);
+    fileCache.cleanup();
     binding = ActivityEnterpriseFilesBinding.inflate(getLayoutInflater());
     setContentView(binding.getRoot());
     binding.list.setLayoutManager(new LinearLayoutManager(this));
@@ -54,6 +64,8 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     binding.createFolderButton.setOnClickListener(view -> promptCreateFolder());
     binding.uploadButton.setOnClickListener(view -> uploadLauncher.launch(new String[] {"*/*"}));
     uploadLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::uploadDocument);
+    viewerLauncher = registerForActivityResult(
+        new ActivityResultContracts.StartActivityForResult(), ignored -> clearPendingViewedFile());
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
       @Override public void handleOnBackPressed() {
         if (currentShare == null) finish(); else navigateBack();
@@ -64,13 +76,15 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   @Override protected void onResume() {
     super.onResume();
     EnterpriseConfiguration updated = EnterpriseConfiguration.from(this);
+    if (!updated.isAllowCache()) fileCache.cleanup();
     if (!updated.isAllowScreenshots()) {
       getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
     } else {
       getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
-    if (configuration == null || !configuration.getShares().equals(updated.getShares())) {
-      closeSession();
+    if (configuration == null || sessionPolicyChanged(configuration, updated)) {
+      invalidateSession();
+      fileCache.cleanup();
       currentShare = null;
       currentPath = "";
     }
@@ -79,9 +93,10 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     if (account != null && (updated.getRealm().isEmpty()
         || !account.getDomain().equalsIgnoreCase(updated.getRealm()))) {
       KerberosAccount.removeAccount(this);
-      closeSession();
+      invalidateSession();
+      fileCache.cleanup();
     }
-    showOverview();
+    if (currentShare == null) showOverview(); else loadDirectory();
   }
 
   private void showOverview() {
@@ -112,7 +127,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
               startActivity(new Intent(this, AuthenticatorStatusActivity.class))).show();
       return;
     }
-    closeSession();
+    invalidateSession();
     currentShare = managedShare;
     currentPath = "";
     binding.backButton.setVisibility(View.VISIBLE);
@@ -122,25 +137,31 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   }
 
   private void loadDirectory() {
-    binding.title.setText(currentShare.getDisplayName());
-    binding.subtitle.setText(currentPath.isEmpty() ? "Root folder" : currentPath.replace("\\", " › "));
+    final ManagedShare shareSnapshot = currentShare;
+    final String pathSnapshot = currentPath;
+    final EnterpriseConfiguration configurationSnapshot = configuration;
+    final KerberosAccount accountSnapshot = KerberosAccount.getAccount(this);
+    final long requestGeneration = ++generation;
+    if (shareSnapshot == null || configurationSnapshot == null) return;
+    binding.title.setText(shareSnapshot.getDisplayName());
+    binding.subtitle.setText(pathSnapshot.isEmpty() ? "Root folder" : pathSnapshot.replace("\\", " › "));
     showState("Please wait", "The secure folder is being opened…", true);
     io.execute(() -> {
       try {
         if (smbClient == null) {
           smbClient = KerberosSmbClient.connect(
-              getApplicationContext(), KerberosAccount.getAccount(this), currentShare,
-              configuration.isRequireEncryption());
+              getApplicationContext(), accountSnapshot, shareSnapshot,
+              configurationSnapshot.isRequireEncryption());
         }
-        List<RemoteEntry> entries = smbClient.list(currentPath);
+        List<RemoteEntry> entries = smbClient.list(pathSnapshot);
         List<Row> rows = new ArrayList<>();
         for (RemoteEntry entry : entries) rows.add(Row.forEntry(entry));
-        runOnUiThread(() -> {
+        postIfCurrent(requestGeneration, () -> {
           if (rows.isEmpty()) showState("This folder is empty", "There are no files here yet.", false);
           else showRows(rows);
         });
       } catch (Exception exception) {
-        runOnUiThread(() -> showState(
+        postIfCurrent(requestGeneration, () -> showState(
             "Unable to open the folder", friendlyMessage(exception), false));
       }
     });
@@ -172,31 +193,34 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     }
     showState("Preparing file", "The file is being securely downloaded…", true);
     final String path = KerberosSmbClient.join(currentPath, entry.getName());
+    final ManagedShare shareSnapshot = currentShare;
+    final long requestGeneration = ++generation;
     io.execute(() -> {
       try {
-        File directory = new File(getCacheDir(), "opened");
-        File local = new File(directory, currentShare.getId() + "-" + safeName(entry.getName()));
+        if (smbClient == null || shareSnapshot == null) {
+          throw new IllegalStateException("The secure share is no longer open");
+        }
+        File local = fileCache.create(shareSnapshot.getId(), entry.getName());
         smbClient.download(path, local);
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".files", local);
         String mime = URLConnection.guessContentTypeFromName(entry.getName());
         Intent intent = new Intent(Intent.ACTION_VIEW)
             .setDataAndType(uri, mime == null ? "application/octet-stream" : mime)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        runOnUiThread(() -> {
-          loadDirectory();
-          try { startActivity(Intent.createChooser(intent, "Open with")); }
+        postIfCurrent(requestGeneration, () -> {
+          pendingViewedFile = local;
+          pendingViewedUri = uri;
+          try { viewerLauncher.launch(Intent.createChooser(intent, "Open with")); }
           catch (Exception exception) {
+            clearPendingViewedFile();
             Snackbar.make(binding.root, "No suitable app found", Snackbar.LENGTH_LONG).show();
           }
         });
       } catch (Exception exception) {
-        runOnUiThread(() -> showState("Unable to open file", friendlyMessage(exception), false));
+        postIfCurrent(requestGeneration,
+            () -> showState("Unable to open file", friendlyMessage(exception), false));
       }
     });
-  }
-
-  private static String safeName(String name) {
-    return name.replaceAll("[^A-Za-z0-9._ -]", "_");
   }
 
   private void navigateBack() {
@@ -207,7 +231,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       loadDirectory();
       return;
     }
-    closeSession();
+    invalidateSession();
     currentShare = null;
     showOverview();
   }
@@ -226,11 +250,6 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     binding.emptyMessage.setText(message);
   }
 
-  private void closeSession() {
-    if (smbClient != null) smbClient.close();
-    smbClient = null;
-  }
-
   private void promptCreateFolder() {
     TextInputEditText input = new TextInputEditText(this);
     input.setHint("Folder name");
@@ -240,18 +259,22 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
         .setTitle("New folder")
         .setView(input)
         .setNegativeButton("Cancel", null)
-        .setPositiveButton("Create", (dialog, which) -> runOperation("Create folder", () ->
-            smbClient.createDirectory(currentPath, String.valueOf(input.getText()))))
+        .setPositiveButton("Create", (dialog, which) -> {
+          String parent = currentPath;
+          String name = String.valueOf(input.getText());
+          runOperation("Create folder", () -> smbClient.createDirectory(parent, name));
+        })
         .show();
   }
 
   private void uploadDocument(Uri uri) {
     if (uri == null || currentShare == null) return;
     String name = queryDisplayName(uri);
+    String target = KerberosSmbClient.join(currentPath, name);
     runOperation("Uploaden", () -> {
       try (InputStream input = getContentResolver().openInputStream(uri)) {
         if (input == null) throw new IllegalStateException("Unable to read the file");
-        smbClient.upload(KerberosSmbClient.join(currentPath, name), input);
+        smbClient.upload(target, input);
       }
     });
   }
@@ -262,7 +285,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       if (cursor != null && cursor.moveToFirst()) return cursor.getString(0);
     }
     String segment = uri.getLastPathSegment();
-    return segment == null ? "upload" : safeName(segment);
+    return segment == null ? "upload" : EnterpriseFileCache.safeName(segment);
   }
 
   private void showEntryActions(Row row) {
@@ -282,9 +305,11 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     input.setPadding(padding, padding / 2, padding, 0);
     new MaterialAlertDialogBuilder(this).setTitle("Rename").setView(input)
         .setNegativeButton("Cancel", null)
-        .setPositiveButton("Save", (dialog, which) -> runOperation("Rename", () ->
-            smbClient.rename(KerberosSmbClient.join(currentPath, entry.getName()),
-                String.valueOf(input.getText())))).show();
+        .setPositiveButton("Save", (dialog, which) -> {
+          String source = KerberosSmbClient.join(currentPath, entry.getName());
+          String newName = String.valueOf(input.getText());
+          runOperation("Rename", () -> smbClient.rename(source, newName));
+        }).show();
   }
 
   private void confirmDelete(RemoteEntry entry) {
@@ -294,19 +319,23 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
             ? "The folder and all its contents will be deleted from the enterprise share."
             : "The file will be deleted from the enterprise share.")
         .setNegativeButton("Cancel", null)
-        .setPositiveButton("Delete", (dialog, which) -> runOperation("Delete", () ->
-            smbClient.delete(KerberosSmbClient.join(currentPath, entry.getName()), entry.isDirectory())))
+        .setPositiveButton("Delete", (dialog, which) -> {
+          String target = KerberosSmbClient.join(currentPath, entry.getName());
+          runOperation("Delete", () -> smbClient.delete(target, entry.isDirectory()));
+        })
         .show();
   }
 
   private void runOperation(String label, ThrowingOperation operation) {
+    final long requestGeneration = ++generation;
     showState(label, "Please wait…", true);
     io.execute(() -> {
       try {
         operation.run();
-        runOnUiThread(this::loadDirectory);
+        postIfCurrent(requestGeneration, this::loadDirectory);
       } catch (Exception exception) {
-        runOnUiThread(() -> showState(label + " failed", friendlyMessage(exception), false));
+        postIfCurrent(requestGeneration,
+            () -> showState(label + " failed", friendlyMessage(exception), false));
       }
     });
   }
@@ -314,9 +343,48 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   private interface ThrowingOperation { void run() throws Exception; }
 
   @Override protected void onDestroy() {
-    closeSession();
-    io.shutdownNow();
+    destroyed = true;
+    generation++;
+    try {
+      io.execute(this::closeSessionOnIoThread);
+    } catch (RejectedExecutionException ignored) {}
+    io.shutdown();
     super.onDestroy();
+  }
+
+  private void invalidateSession() {
+    generation++;
+    try {
+      io.execute(this::closeSessionOnIoThread);
+    } catch (RejectedExecutionException ignored) {}
+  }
+
+  private void closeSessionOnIoThread() {
+    if (smbClient != null) smbClient.close();
+    smbClient = null;
+  }
+
+  private void postIfCurrent(long requestGeneration, Runnable action) {
+    runOnUiThread(() -> {
+      if (!destroyed && generation == requestGeneration) action.run();
+    });
+  }
+
+  private void clearPendingViewedFile() {
+    if (pendingViewedUri != null) revokeUriPermission(
+        pendingViewedUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    fileCache.delete(pendingViewedFile);
+    pendingViewedUri = null;
+    pendingViewedFile = null;
+    if (!destroyed && currentShare != null) loadDirectory();
+  }
+
+  private static boolean sessionPolicyChanged(
+      EnterpriseConfiguration previous, EnterpriseConfiguration updated) {
+    return !previous.getRealm().equals(updated.getRealm())
+        || !previous.getShares().equals(updated.getShares())
+        || previous.isRequireEncryption() != updated.isRequireEncryption()
+        || previous.isAllowCache() != updated.isAllowCache();
   }
 
   private interface ClickListener { void onClick(Row row); }
@@ -362,9 +430,13 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     @Override public int getItemCount() { return rows.size(); }
     private static String formatSize(long bytes) {
       if (bytes < 1024) return bytes + " B";
-      if (bytes < 1024L * 1024L) return String.format("%.1f KB", bytes / 1024.0);
-      if (bytes < 1024L * 1024L * 1024L) return String.format("%.1f MB", bytes / 1048576.0);
-      return String.format("%.1f GB", bytes / 1073741824.0);
+      if (bytes < 1024L * 1024L) {
+        return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
+      }
+      if (bytes < 1024L * 1024L * 1024L) {
+        return String.format(Locale.ROOT, "%.1f MB", bytes / 1048576.0);
+      }
+      return String.format(Locale.ROOT, "%.1f GB", bytes / 1073741824.0);
     }
     static final class Holder extends RecyclerView.ViewHolder {
       final TextView icon;

@@ -22,6 +22,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.provider.Settings;
 import java.text.DateFormat;
 import java.util.Date;
 import com.poelbos.kerberosauthenticator.internal.ntlm.NtlmCredentialProvider;
@@ -76,6 +80,18 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
             accountConfiguration.isHttpNtlmConfigured(),
             ntlmCredentialsAvailable));
 
+    TextView notificationStatus = findViewById(R.id.notification_status);
+    if (accountConfiguration.isManagedDeployment()
+        && new CredentialVault(this).hasCredentials()
+        && !NotificationPermissionController.isAllowed(this)) {
+      notificationStatus.setVisibility(View.VISIBLE);
+      notificationStatus.setText(R.string.notification_permission_missing);
+      notificationStatus.setOnClickListener(view -> startActivity(
+          new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+              .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName())
+              .setData(Uri.parse("package:" + getPackageName()))));
+    }
+
     // If only the status is shown, the activity remains open until the user taps the dismiss
     // button to finish it.
     Log.d(TAG, "Finished creating status activity.");
@@ -87,6 +103,6 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     if (!credentialsAvailable) {
       return "HTTP NTLMv2: unavailable (secure credentials missing)";
     }
-    return "HTTP NTLMv2: ready";
+    return "HTTP NTLMv2: ready; TLS channel binding unavailable (Extended Protection unsupported)";
   }
 }

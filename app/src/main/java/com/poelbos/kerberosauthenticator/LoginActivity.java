@@ -24,6 +24,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.text.Editable;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -135,6 +136,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       account.save(this);
       if (stored) {
         TgtRefreshScheduler.schedule(this);
+        NotificationPermissionController.requestIfNeeded(this);
       } else {
         TgtRefreshScheduler.cancel(this);
         Toast.makeText(this,
@@ -144,11 +146,11 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       isPasswordRetry = false;
     } else {
       clearPendingPassword();
-      if (ticketRequestResult.isPasswordBad() && !isPasswordRetry) {
+      if (ticketRequestResult.isCredentialRejected() && !isPasswordRetry) {
         Log.i(
             Constants.TAG,
             String.format(
-                "Bad password for user %s, removing and attempting re-authentication.",
+                "Credentials rejected for user %s, removing and attempting re-authentication.",
             account == null ? "unknown" : account.getName()));
         KerberosAccount.removeAccount(this);
         isPasswordRetry = true;
@@ -204,7 +206,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       char[] stored = new CredentialVault(this).load(account.getName(), account.getDomain());
       if (stored != null) {
         try {
-          initiateUserAuthenticationTask(account.withPassword(new String(stored)), accountDetails);
+          initiateUserAuthenticationTask(account.withPassword(stored), accountDetails);
           return;
         } finally {
           java.util.Arrays.fill(stored, '\0');
@@ -221,8 +223,11 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     String username = ((TextView) findViewById(R.id.editTextUser)).getText().toString().trim();
     if (username.isEmpty() && existing != null) username = existing.getName();
     if (username.isEmpty() && configured != null) username = configured.getUsername();
-    String password = ((TextView) findViewById(R.id.editTextPw)).getText().toString();
-    if (TextUtils.isEmpty(username) || TextUtils.isEmpty(password)) {
+    Editable passwordInput = ((android.widget.EditText) findViewById(R.id.editTextPw)).getText();
+    char[] password = copyCharacters(passwordInput);
+    passwordInput.clear();
+    if (TextUtils.isEmpty(username) || password.length == 0) {
+      java.util.Arrays.fill(password, '\0');
       Toast.makeText(this, "Enter your username and password", Toast.LENGTH_LONG).show();
       showUserLoginUI();
       return;
@@ -231,40 +236,54 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       KerberosAccount.removeAccount(this);
     }
     hideUserLoginUI();
-    KerberosAccountDetails detailsWithPassword =
-        new KerberosAccountDetails(
-            username,
-            password,
-            configured.getActiveDirectoryDomain(),
-            configured.getAdDomainController());
-    initiateUserAuthenticationTask(detailsWithPassword);
+    try {
+      KerberosAccountDetails detailsWithPassword =
+          new KerberosAccountDetails(
+              username,
+              password,
+              configured.getActiveDirectoryDomain(),
+              configured.getAdDomainController());
+      initiateUserAuthenticationTask(detailsWithPassword);
+    } finally {
+      java.util.Arrays.fill(password, '\0');
+    }
   }
 
   private void initiateUserAuthenticationTask(
       KerberosAccount account, KerberosAccountDetails configured) {
-    initiateUserAuthenticationTask(new KerberosAccountDetails(
-        account.getName(), account.getPassword(), configured.getActiveDirectoryDomain(),
-        configured.getAdDomainController()));
+    char[] password = account.copyPassword();
+    try {
+      initiateUserAuthenticationTask(new KerberosAccountDetails(
+          account.getName(), password, configured.getActiveDirectoryDomain(),
+          configured.getAdDomainController()));
+    } finally {
+      if (password != null) java.util.Arrays.fill(password, '\0');
+    }
   }
 
   private void initiateUserAuthenticationTask(KerberosAccountDetails accountDetails) {
     setRefreshingStatus(getTGTTimestampTextViewId());
     clearPendingPassword();
-    pendingPassword = accountDetails.getPassword().toCharArray();
+    pendingPassword = accountDetails.copyPassword();
     KerberosAccount account = KerberosAccount.getAccount(this);
     account = accountForAuthentication(account, accountDetails);
 
     account.save(this);
-    UserAuthenticationTask kinit =
-        new UserAuthenticationTask(
-            this,
-            this,
-            new KerberosAccountDetails(
-                account.getName(),
-                account.getPassword(),
-                account.getDomain(),
-                account.getDomainController()));
-    kinit.execute();
+    char[] password = account.copyPassword();
+    try {
+      UserAuthenticationTask kinit =
+          new UserAuthenticationTask(
+              this,
+              this,
+              new KerberosAccountDetails(
+                  account.getName(),
+                  password,
+                  account.getDomain(),
+                  account.getDomainController()));
+      kinit.execute();
+    } finally {
+      if (password != null) java.util.Arrays.fill(password, '\0');
+    }
   }
 
   private void clearPendingPassword() {
@@ -283,10 +302,26 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   static KerberosAccount accountForAuthentication(
       KerberosAccount account, KerberosAccountDetails accountDetails) {
     if (account == null) {
-      return new KerberosAccount(accountDetails);
+      char[] initialPassword = accountDetails.copyPassword();
+      try {
+        return new KerberosAccount(
+            accountDetails.getUsername(),
+            initialPassword,
+            accountDetails.getActiveDirectoryDomain(),
+            accountDetails.getAdDomainController());
+      } finally {
+        if (initialPassword != null) java.util.Arrays.fill(initialPassword, '\0');
+      }
     }
-    if (!java.util.Objects.equals(account.getPassword(), accountDetails.getPassword())) {
-      return account.withPassword(accountDetails.getPassword());
+    char[] accountPassword = account.copyPassword();
+    char[] requestedPassword = accountDetails.copyPassword();
+    try {
+      if (!java.util.Arrays.equals(accountPassword, requestedPassword)) {
+        return account.withPassword(requestedPassword);
+      }
+    } finally {
+      if (accountPassword != null) java.util.Arrays.fill(accountPassword, '\0');
+      if (requestedPassword != null) java.util.Arrays.fill(requestedPassword, '\0');
     }
     return account;
   }
@@ -327,27 +362,9 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     }
   }
 
-  private static KerberosAccountDetails buildKerberosAccountDetails(
-      KerberosAccountDetails accountDetails, KerberosAccount account) {
-    String username;
-    String password;
-    String domain;
-    String controller;
-    if (account == null) {
-      username = accountDetails.getUsername();
-      password = accountDetails.getPassword();
-      domain = accountDetails.getActiveDirectoryDomain();
-      controller = accountDetails.getAdDomainController();
-    } else {
-      username = account.getName();
-      password = account.getPassword();
-      domain = account.getDomain();
-      controller = account.getDomainController();
-    }
-
-    if (TextUtils.isEmpty(password)) {
-      throw new IllegalStateException("No valid password.");
-    }
-    return new KerberosAccountDetails(username, password, domain, controller);
+  private static char[] copyCharacters(CharSequence value) {
+    char[] result = new char[value == null ? 0 : value.length()];
+    for (int index = 0; index < result.length; index++) result[index] = value.charAt(index);
+    return result;
   }
 }

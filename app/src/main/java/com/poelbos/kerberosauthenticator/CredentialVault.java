@@ -1,6 +1,5 @@
 package com.poelbos.kerberosauthenticator;
 
-import android.app.KeyguardManager;
 import android.content.Context;
 import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
@@ -10,6 +9,8 @@ import android.security.keystore.StrongBoxUnavailableException;
 import android.util.Base64;
 import android.util.Log;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.security.KeyStore;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -32,10 +33,13 @@ public final class CredentialVault {
   }
 
   public boolean store(String username, String realm, char[] password) {
-    if (password == null || password.length == 0 || !isDeviceSecure()) return false;
+    if (password == null || password.length == 0) {
+      delete();
+      return false;
+    }
     try {
       SecretKey key = getOrCreateKey(true);
-      if (!isHardwareBacked(key)) {
+      if (!ManagedEnvironmentPolicy.allowsPersistentCredentials(context, isHardwareBacked(key))) {
         delete();
         Log.w(Constants.TAG, "Persistent credentials refused: Keystore key is not hardware-backed");
         return false;
@@ -44,7 +48,7 @@ public final class CredentialVault {
       cipher.init(Cipher.ENCRYPT_MODE, key);
       String identity = identity(username, realm);
       cipher.updateAAD(identity.getBytes(StandardCharsets.UTF_8));
-      byte[] plaintext = new String(password).getBytes(StandardCharsets.UTF_8);
+      byte[] plaintext = encodeUtf8(password);
       byte[] encrypted;
       try {
         encrypted = cipher.doFinal(plaintext);
@@ -66,6 +70,11 @@ public final class CredentialVault {
 
   public char[] load(String username, String realm) {
     try {
+      SecretKey key = getOrCreateKey(false);
+      if (!ManagedEnvironmentPolicy.allowsPersistentCredentials(context, isHardwareBacked(key))) {
+        delete();
+        return null;
+      }
       String identity = identity(username, realm);
       android.content.SharedPreferences prefs =
           context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -73,15 +82,13 @@ public final class CredentialVault {
       String iv = prefs.getString(IV, null);
       String ciphertext = prefs.getString(CIPHERTEXT, null);
       if (iv == null || ciphertext == null) return null;
-      SecretKey key = getOrCreateKey(false);
-      if (key == null || !isHardwareBacked(key)) return null;
       Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(Cipher.DECRYPT_MODE, key,
           new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)));
       cipher.updateAAD(identity.getBytes(StandardCharsets.UTF_8));
       byte[] clear = cipher.doFinal(Base64.decode(ciphertext, Base64.NO_WRAP));
       try {
-        return new String(clear, StandardCharsets.UTF_8).toCharArray();
+        return decodeUtf8(clear);
       } finally {
         java.util.Arrays.fill(clear, (byte) 0);
       }
@@ -105,11 +112,6 @@ public final class CredentialVault {
     } catch (Exception exception) {
       Log.w(Constants.TAG, "Unable to delete credential key", exception);
     }
-  }
-
-  private boolean isDeviceSecure() {
-    KeyguardManager keyguard = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
-    return keyguard != null && keyguard.isDeviceSecure();
   }
 
   private SecretKey getOrCreateKey(boolean create) throws Exception {
@@ -154,5 +156,21 @@ public final class CredentialVault {
 
   private static String identity(String username, String realm) {
     return username.trim() + "@" + realm.trim().toUpperCase(java.util.Locale.ROOT);
+  }
+
+  private static byte[] encodeUtf8(char[] value) {
+    ByteBuffer encoded = StandardCharsets.UTF_8.encode(CharBuffer.wrap(value));
+    byte[] result = new byte[encoded.remaining()];
+    encoded.get(result);
+    if (encoded.hasArray()) java.util.Arrays.fill(encoded.array(), (byte) 0);
+    return result;
+  }
+
+  private static char[] decodeUtf8(byte[] value) {
+    CharBuffer decoded = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(value));
+    char[] result = new char[decoded.remaining()];
+    decoded.get(result);
+    if (decoded.hasArray()) java.util.Arrays.fill(decoded.array(), '\0');
+    return result;
   }
 }

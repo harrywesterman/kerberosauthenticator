@@ -27,8 +27,8 @@ import androidx.annotation.VisibleForTesting;
 import android.util.Base64;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.BaseAuthenticatorActivity.ServiceTicketInfo;
-import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
 import java.util.Objects;
+import java.util.Arrays;
 
 /** Kerberos account functionality. */
 public class KerberosAccount {
@@ -41,7 +41,7 @@ public class KerberosAccount {
       DEFAULT_ACCOUNT_VISIBILITY_SETTER;
 
   private final String name;
-  private final String password;
+  private final char[] password;
   private final Bundle userData = new Bundle();
 
   @VisibleForTesting
@@ -51,24 +51,20 @@ public class KerberosAccount {
   }
 
   KerberosAccount(String name, String password, String adDomain, String domainController) {
+    this(name, password == null ? null : password.toCharArray(), adDomain, domainController, "");
+  }
+
+  KerberosAccount(String name, char[] password, String adDomain, String domainController) {
     this(name, password, adDomain, domainController, "");
   }
 
   private KerberosAccount(
-      String name, String password, String adDomain, String domainController, String base64Tgt) {
+      String name, char[] password, String adDomain, String domainController, String base64Tgt) {
     this.name = name;
-    this.password = password;
+    this.password = password == null ? null : Arrays.copyOf(password, password.length);
     userData.putString(KEY_AD_DOMAIN, adDomain);
     userData.putString(KEY_AD_DC, domainController);
     userData.putString(KEY_TGT, base64Tgt);
-  }
-
-  KerberosAccount(KerberosAccountDetails accountDetails) {
-    this(
-        accountDetails.getUsername(),
-        accountDetails.getPassword(),
-        accountDetails.getActiveDirectoryDomain(),
-        accountDetails.getAdDomainController());
   }
 
   public static void removeAccount(Context context) {
@@ -103,14 +99,16 @@ public class KerberosAccount {
     String adDomain = am.getUserData(account, KEY_AD_DOMAIN);
     String domainController = am.getUserData(account, KEY_AD_DC);
     String base64Tgt = am.getUserData(account, KEY_TGT);
-    return new KerberosAccount(account.name, password, adDomain, domainController, base64Tgt);
+    return new KerberosAccount(
+        account.name, password == null ? null : password.toCharArray(),
+        adDomain, domainController, base64Tgt);
   }
 
   public String getName() {
     return name;
   }
 
-  KerberosAccount withPassword(String newPassword) {
+  KerberosAccount withPassword(char[] newPassword) {
     return new KerberosAccount(
         name,
         newPassword,
@@ -202,7 +200,7 @@ public class KerberosAccount {
     return userData.getString(KEY_AD_DOMAIN);
   }
 
-  String getPassword() {
-    return password;
+  char[] copyPassword() {
+    return password == null ? null : Arrays.copyOf(password, password.length);
   }
 }

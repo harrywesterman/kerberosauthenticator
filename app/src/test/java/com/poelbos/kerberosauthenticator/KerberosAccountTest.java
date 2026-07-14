@@ -65,7 +65,7 @@ public final class KerberosAccountTest {
 
   private void assertKerberosAccount(KerberosAccount account) {
     assertThat(account.getName()).isEqualTo(USERNAME);
-    assertThat(account.getPassword()).isEqualTo(PASSWORD);
+    assertThat(new String(account.copyPassword())).isEqualTo(PASSWORD);
     assertThat(account.getDomain()).isEqualTo(AD_DOMAIN);
     assertThat(account.getDomainController()).isEqualTo(AD_DC);
     assertThat(account.getTicketGrantingTicket()).isEqualTo(TGT);
@@ -134,7 +134,7 @@ public final class KerberosAccountTest {
     TestHelper.createKerberosAccount().save(context);
     KerberosAccount loadedAccount = KerberosAccount.getAccount(context);
     assertThat(loadedAccount.getName()).isEqualTo(USERNAME);
-    assertThat(loadedAccount.getPassword()).isNull();
+    assertThat(loadedAccount.copyPassword()).isNull();
     assertThat(loadedAccount.getDomain()).isEqualTo(AD_DOMAIN);
     assertThat(loadedAccount.getDomainController()).isEqualTo(AD_DC);
     assertThat(loadedAccount.getTicketGrantingTicket()).isEqualTo(TGT);
@@ -190,10 +190,10 @@ public final class KerberosAccountTest {
     KerberosAccount account = TestHelper.createKerberosAccount();
     account.save(context);
 
-    account.withPassword("refreshed-password").save(context);
+    account.withPassword("refreshed-password".toCharArray()).save(context);
 
     KerberosAccount refreshedAccount = KerberosAccount.getAccount(context);
-    assertThat(refreshedAccount.getPassword()).isNull();
+    assertThat(refreshedAccount.copyPassword()).isNull();
     assertThat(refreshedAccount.getTicketGrantingTicket()).isEqualTo(TGT);
   }
 

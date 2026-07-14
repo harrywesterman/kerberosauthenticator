@@ -17,6 +17,9 @@ import java.util.Random;
 import org.junit.Test;
 
 public final class HttpNtlmV2EngineTest {
+  @Test public void unavailableChannelBindingIsProtocolZeroValue() {
+    assertThat(HttpNtlmV2Engine.unavailableChannelBindingHash()).isEqualTo(new byte[16]);
+  }
   private static final ASN1ObjectIdentifier NTLMSSP =
       new ASN1ObjectIdentifier("1.3.6.1.4.1.311.2.2.10");
 

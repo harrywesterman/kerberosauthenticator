@@ -15,20 +15,28 @@
  */
 package com.poelbos.kerberosauthenticator.internal;
 
+import java.util.Arrays;
+
 /**
  * Holds the Kerberos accounts details - should be passed around when a dependency on a more
  * complex object is undesirable.
  */
 public class KerberosAccountDetails {
   private final String username;
-  private final String password;
+  private final char[] password;
   private final String activeDirectoryDomain;
   private final String adDomainController;
 
   public KerberosAccountDetails(String username, String password,
       String activeDirectoryDomain, String adDomainController) {
+    this(username, password == null ? null : password.toCharArray(),
+        activeDirectoryDomain, adDomainController);
+  }
+
+  public KerberosAccountDetails(String username, char[] password,
+      String activeDirectoryDomain, String adDomainController) {
     this.username = username;
-    this.password = password;
+    this.password = password == null ? null : Arrays.copyOf(password, password.length);
     this.activeDirectoryDomain = activeDirectoryDomain;
     this.adDomainController = adDomainController;
   }
@@ -37,8 +45,8 @@ public class KerberosAccountDetails {
     return username;
   }
 
-  public String getPassword() {
-    return password;
+  public char[] copyPassword() {
+    return password == null ? null : Arrays.copyOf(password, password.length);
   }
 
   public String getActiveDirectoryDomain() {
