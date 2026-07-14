@@ -31,17 +31,17 @@ public final class KerberosSmbClientTest {
 
   @Test public void usesConcreteDomainControllerForDomainBasedDfsNamespace() {
     assertEquals(
-        "dc01.politie.local",
+        "dc01.example.test",
         KerberosSmbClient.initialConnectionHost(
-            "politie.local", "POLITIE.LOCAL",
-            "dc01.politie.local dc02.politie.local"));
+            "example.test", "EXAMPLE.TEST",
+            "dc01.example.test dc02.example.test"));
   }
 
   @Test public void keepsShareHostForNonDomainNamespace() {
     assertEquals(
-        "files.politie.local",
+        "files.example.test",
         KerberosSmbClient.initialConnectionHost(
-            "files.politie.local", "POLITIE.LOCAL", "dc01.politie.local"));
+            "files.example.test", "EXAMPLE.TEST", "dc01.example.test"));
   }
 
   @Test public void reportsOnlyNumericGssStatusForNestedGssException() {
@@ -50,7 +50,7 @@ public final class KerberosSmbClientTest {
 
     IOException failure = KerberosSmbClient.connectionFailure(exception);
 
-    assertEquals("Kerberos-aanmelding bij de share is mislukt (GSS 11/7)", failure.getMessage());
+    assertEquals("Kerberos sign-in to the share failed (GSS 11/7)", failure.getMessage());
     assertSame(exception, failure.getCause());
   }
 
@@ -60,7 +60,7 @@ public final class KerberosSmbClientTest {
 
     IOException failure = KerberosSmbClient.connectionFailure(exception);
 
-    assertEquals("Kerberos-aanmelding bij de share is mislukt (GSS 3/13)", failure.getMessage());
+    assertEquals("Kerberos sign-in to the share failed (GSS 3/13)", failure.getMessage());
     assertSame(exception, failure.getCause());
   }
 
@@ -72,13 +72,13 @@ public final class KerberosSmbClientTest {
     IOException failure = KerberosSmbClient.connectionFailure(exception);
 
     assertEquals(
-        "Kerberos-aanmelding bij de share is mislukt (GSS 11/-1, KRB 7)",
+        "Kerberos sign-in to the share failed (GSS 11/-1, KRB 7)",
         failure.getMessage());
     assertSame(exception, failure.getCause());
   }
 
   @Test public void returnsExistingIOExceptionUnchanged() {
-    IOException exception = new IOException("netwerkfout");
+    IOException exception = new IOException("network failure");
 
     assertSame(exception, KerberosSmbClient.connectionFailure(exception));
   }
@@ -90,7 +90,7 @@ public final class KerberosSmbClientTest {
     IOException failure = KerberosSmbClient.connectionFailure(exception);
 
     assertEquals(
-        "Kerberos-aanmelding bij de share is mislukt (RuntimeException>IllegalStateException)",
+        "Kerberos sign-in to the share failed (RuntimeException>IllegalStateException)",
         failure.getMessage());
     assertSame(exception, failure.getCause());
   }
@@ -106,7 +106,7 @@ public final class KerberosSmbClientTest {
     IOException failure = KerberosSmbClient.connectionFailure(exception);
 
     assertEquals(
-        "Kerberos-aanmelding bij de share is mislukt "
+        "Kerberos sign-in to the share failed "
             + "(NullPointerException@SMBSessionBuilder.validateAndSetSigning)",
         failure.getMessage());
   }

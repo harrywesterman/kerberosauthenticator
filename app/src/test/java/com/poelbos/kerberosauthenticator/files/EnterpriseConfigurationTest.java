@@ -17,7 +17,7 @@ public final class EnterpriseConfigurationTest {
   @Test public void parsesManagedShareAndSecurityPolicy() {
     Bundle share = new Bundle();
     share.putString("id", "documents");
-    share.putString("display_name", "Documenten");
+    share.putString("display_name", "Documents");
     share.putString("host", "files.example.com");
     share.putString("share_name", "Documents");
     Bundle restrictions = new Bundle();
@@ -42,8 +42,8 @@ public final class EnterpriseConfigurationTest {
   }
 
   @Test public void duplicateShareIdsFailClosed() {
-    Bundle first = share("same", "Eerste");
-    Bundle second = share("same", "Tweede");
+    Bundle first = share("same", "First");
+    Bundle second = share("same", "Second");
     Bundle restrictions = new Bundle();
     restrictions.putString("ad_realm", "EXAMPLE.COM");
     restrictions.putParcelableArray("shares", new Parcelable[] {first, second});
