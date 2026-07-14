@@ -58,6 +58,12 @@ public final class ManagedShare {
   public String getStartPath() { return startPath; }
   public String getSpn() { return "cifs/" + host; }
 
+  public ManagedShare resolveForUsername(String username) {
+    return new ManagedShare(
+        id, displayName, host, port, shareName,
+        ManagedPathTemplate.resolve(startPath, username));
+  }
+
   @Override public boolean equals(Object other) {
     if (!(other instanceof ManagedShare)) return false;
     ManagedShare share = (ManagedShare) other;
