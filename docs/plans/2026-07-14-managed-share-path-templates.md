@@ -200,7 +200,7 @@ Document that templates are accepted only in `start_path`, list the two tokens, 
 ```bash
 JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.19/libexec/openjdk.jdk/Contents/Home \
 ANDROID_HOME=/opt/homebrew/share/android-commandlinetools \
-./gradlew test assembleRelease -PreleaseVersion=1.55
+./gradlew test assembleRelease -PreleaseVersion=1.59
 ```
 
 Expected: `BUILD SUCCESSFUL`.
@@ -230,10 +230,10 @@ Use `gh run watch <run-id> --exit-status` and require success.
 
 **Step 3: Download and install the signed release**
 
-Download `kerberosauthenticator-1.55.apk` from GitHub release `v1.55`, verify its checksum, and install with:
+Download `kerberosauthenticator-1.59.apk` from GitHub release `v1.59`, verify its checksum, and install with:
 
 ```bash
-adb install -r kerberosauthenticator-1.55.apk
+adb install -r kerberosauthenticator-1.59.apk
 ```
 
 Do not install the local debug APK.
@@ -244,4 +244,4 @@ After UEM delivers a template such as `users\\${username:last:1}\\${username}`, 
 
 **Step 5: Verify repository and device state**
 
-Require a clean `main` synchronized with `origin/main`, version 1.55 on device, and preserved account credentials.
+Require a clean `main` synchronized with `origin/main`, version 1.59 on device, and preserved account credentials.

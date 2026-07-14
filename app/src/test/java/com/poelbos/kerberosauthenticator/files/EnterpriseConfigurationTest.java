@@ -52,6 +52,22 @@ public final class EnterpriseConfigurationTest {
     assertEquals(1, configuration.getShares().size());
   }
 
+  @Test public void preservesManagedStartPathTemplateUntilAccountIsKnown() {
+    Bundle templatedShare = share("home", "Home");
+    templatedShare.putString(
+        "start_path", "users\\${username:last:1}\\${username}");
+    Bundle restrictions = new Bundle();
+    restrictions.putString("ad_realm", "EXAMPLE.COM");
+    restrictions.putParcelableArray("shares", new Parcelable[] {templatedShare});
+
+    EnterpriseConfiguration configuration = EnterpriseConfiguration.from(restrictions);
+
+    assertTrue(configuration.isValid());
+    assertEquals(
+        "users\\${username:last:1}\\${username}",
+        configuration.getShares().get(0).getStartPath());
+  }
+
   private static Bundle share(String id, String name) {
     Bundle share = new Bundle();
     share.putString("id", id);

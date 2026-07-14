@@ -27,7 +27,11 @@
             <restriction android:key="host" android:title="@string/mdm_share_host" android:restrictionType="string" />
             <restriction android:key="port" android:title="@string/mdm_share_port" android:defaultValue="445" android:restrictionType="integer" />
             <restriction android:key="share_name" android:title="@string/mdm_share_name" android:restrictionType="string" />
-            <restriction android:key="start_path" android:title="@string/mdm_share_start_path" android:restrictionType="string" />
+            <restriction
+                android:key="start_path"
+                android:title="@string/mdm_share_start_path"
+                android:description="@string/mdm_share_start_path_description"
+                android:restrictionType="string" />
         </restriction>
     </restriction>
     <restriction
