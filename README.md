@@ -139,13 +139,24 @@ For the integrated file app, for example:
       "host": "files.example.com",
       "port": 445,
       "share_name": "Documents",
-      "start_path": ""
+      "start_path": "users\\${username:last:1}\\${username}"
     }
   ]
 }
 ```
 
 Always use a DNS hostname with a valid `cifs/<host>` SPN; IP addresses are rejected. `kdc_hosts` is optional; otherwise the app uses DNS SRV discovery. The schema is in `app/src/main/res/xml/app_restrictions.xml` and can be read from the APK by an MDM.
+
+`start_path` may be a static relative path or a user template. Templates are resolved from the
+authenticated Kerberos account, not from a UEM enrollment lookup value. The supported tokens are:
+
+- `${username}` — the complete Kerberos username.
+- `${username:last:1}` — the final digit of the Kerberos username.
+
+For example, `users\\${username:last:1}\\${username}` resolves to
+`users\\2\\user12342` for account `user12342`. Templates are accepted only in `start_path`;
+`host` and `share_name` remain fixed administrator-controlled values. Static paths continue to
+work unchanged.
 
 The user signs in to the app with their own AD username and password. After a successful login, the app requests a new TGT daily through WorkManager. Android may delay the exact execution time because of Doze. The app discovers KDCs through DNS SRV records such as `_kerberos._udp.example.com`.
 
@@ -186,7 +197,7 @@ Then use the Test DPC UI to set managed configuration for the app.
 | Key | Type | Required | Description |
 |---|---|---|---|
 | `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
-| `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and start path |
+| `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and static or username-templated start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
 | `enable_http_ntlm` | bool | no | Advertise NTLMSSP inside HTTP Negotiate when secure credentials are available; default `false` |
