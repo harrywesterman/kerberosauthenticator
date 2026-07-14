@@ -37,6 +37,18 @@ public final class KerberosSmbClientTest {
     assertTrue(failure.getCause() instanceof IllegalArgumentException);
   }
 
+  @Test public void rejectsTrailingTraversalAtConnectionBoundary() {
+    ManagedShare template = new ManagedShare(
+        "home", "Home", "files.example.test", 445, "Data", "users/${username}");
+
+    IOException failure = assertThrows(
+        IOException.class,
+        () -> KerberosSmbClient.resolveManagedShare(template, "member/.."));
+
+    assertEquals("The managed share path is invalid", failure.getMessage());
+    assertTrue(failure.getCause() instanceof IllegalArgumentException);
+  }
+
   @Test public void createsDfsReadySignedConfiguration() {
     SmbConfig config = KerberosSmbClient.createConfig(false);
 

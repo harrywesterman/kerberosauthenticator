@@ -25,6 +25,12 @@ public final class ManagedShareTest {
         new ManagedShare("finance", "Finance", "files.example.com", 445, "Finance$", "../HR"));
   }
 
+  @Test public void rejectsTrailingPathTraversalSegment() {
+    assertThrows(IllegalArgumentException.class, () ->
+        new ManagedShare(
+            "finance", "Finance", "files.example.com", 445, "Finance$", "users/member/.."));
+  }
+
   @Test public void resolvesStartPathForUsernameWithoutMutatingTemplate() {
     ManagedShare template = new ManagedShare(
         "home", "Home", "files.example.com", 445, "Data",
@@ -45,5 +51,14 @@ public final class ManagedShareTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> template.resolveForUsername("..\\Secret"));
+  }
+
+  @Test public void validatesTrailingTraversalAfterUsernameExpansion() {
+    ManagedShare template = new ManagedShare(
+        "home", "Home", "files.example.com", 445, "Data", "users/${username}");
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> template.resolveForUsername("member/.."));
   }
 }
