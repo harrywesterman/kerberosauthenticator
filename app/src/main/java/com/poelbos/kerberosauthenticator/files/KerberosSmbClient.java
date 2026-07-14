@@ -14,6 +14,10 @@ import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.GSSAuthenticationContext;
 import com.hierynomus.smbj.auth.SpnegoAuthenticator;
 import com.hierynomus.smbj.connection.Connection;
+import com.hierynomus.smbj.common.SmbPath;
+import com.hierynomus.smbj.paths.DFSPathResolver;
+import com.hierynomus.smbj.paths.PathResolveException;
+import com.hierynomus.smbj.paths.PathResolver;
 import com.hierynomus.smbj.session.Session;
 import com.hierynomus.smbj.share.DiskShare;
 import com.hierynomus.msdtyp.AccessMask;
@@ -50,6 +54,7 @@ public final class KerberosSmbClient implements Closeable {
   private final Connection connection;
   private final Session session;
   private final DiskShare share;
+  private final PathResolver proactiveDfsResolver;
 
   public static KerberosSmbClient connect(
       Context context, KerberosAccount account, ManagedShare managedShare, boolean requireEncryption)
@@ -97,7 +102,8 @@ public final class KerberosSmbClient implements Closeable {
       DiskShare share = (DiskShare) session.connectShare(resolvedShare.getShareName());
       return new KerberosSmbClient(
           context, account.getDomain(), account.getDomainController(), subject,
-          resolvedShare, client, connection, session, share);
+          resolvedShare, client, connection, session, share,
+          new DFSPathResolver(PathResolver.LOCAL, config.getTransactTimeout()));
     } catch (RuntimeException | IOException exception) {
       if (connection != null) try { connection.close(); } catch (Exception ignored) {}
       try { client.close(); } catch (Exception ignored) {}
@@ -217,7 +223,7 @@ public final class KerberosSmbClient implements Closeable {
   private KerberosSmbClient(
       Context context, String realm, String domainController, Subject subject,
       ManagedShare managedShare, SMBClient client, Connection connection,
-      Session session, DiskShare share) {
+      Session session, DiskShare share, PathResolver proactiveDfsResolver) {
     this.context = context;
     this.realm = realm;
     this.domainController = domainController;
@@ -227,30 +233,21 @@ public final class KerberosSmbClient implements Closeable {
     this.connection = connection;
     this.session = session;
     this.share = share;
+    this.proactiveDfsResolver = proactiveDfsResolver;
   }
 
   public List<RemoteEntry> list(String relativePath) throws IOException {
     try {
-      return listConfigured(relativePath);
+      ResolvedTarget target = resolveTarget(relativePath);
+      return listConfigured(target);
     } catch (RuntimeException exception) {
-      if (isLazyDfsAuthenticationFailure(exception)) {
-        try {
-          // SMBJ authenticates a DFS referral lazily on first traversal. Serialize only that
-          // one-time nested-session authentication; later I/O uses the cached SMB session keys.
-          return KerberosRuntimeCoordinator.run(
-              context, realm, domainController, managedShare.getHost(), subject,
-              ignored -> listConfigured(relativePath));
-        } catch (RuntimeException retryFailure) {
-          throw connectionFailure(retryFailure);
-        }
-      }
       throw connectionFailure(exception);
     }
   }
 
-  private List<RemoteEntry> listConfigured(String relativePath) {
+  private List<RemoteEntry> listConfigured(ResolvedTarget target) {
     List<RemoteEntry> result = new ArrayList<>();
-    for (FileIdBothDirectoryInformation item : share.list(resolve(relativePath))) {
+    for (FileIdBothDirectoryInformation item : target.share.list(target.path)) {
       String name = item.getFileName();
       if (name.equals(".") || name.equals("..")) continue;
       boolean directory = (item.getFileAttributes()
@@ -261,6 +258,48 @@ public final class KerberosSmbClient implements Closeable {
     result.sort(Comparator.comparing(RemoteEntry::isDirectory).reversed()
         .thenComparing(RemoteEntry::getName, String.CASE_INSENSITIVE_ORDER));
     return result;
+  }
+
+  /**
+   * Resolve a DFS namespace path before file I/O. SMBJ otherwise waits for
+   * STATUS_PATH_NOT_COVERED and can lose the create response while following a link.
+   */
+  private ResolvedTarget resolveTarget(String relativePath) throws IOException {
+    String path = resolve(relativePath);
+    return KerberosRuntimeCoordinator.run(
+        context, realm, domainController, managedShare.getHost(), subject,
+        ignored -> {
+          SmbPath requested = new SmbPath(
+              managedShare.getHost(), managedShare.getShareName(), path);
+          SmbPath resolved;
+          try {
+            resolved = proactiveDfsResolver.resolve(session, requested, candidate -> candidate);
+          } catch (PathResolveException exception) {
+            throw new IOException("The managed DFS path could not be resolved", exception);
+          }
+          if (resolved == null || requested.isOnSameShare(resolved)) {
+            return new ResolvedTarget(share, path, requested);
+          }
+          Session targetSession = session.getNestedSession(resolved);
+          DiskShare targetShare = (DiskShare) targetSession.connectShare(resolved.getShareName());
+          return new ResolvedTarget(targetShare, nullToEmpty(resolved.getPath()), resolved);
+        });
+  }
+
+  private static String nullToEmpty(String value) {
+    return value == null ? "" : value;
+  }
+
+  private static final class ResolvedTarget {
+    final DiskShare share;
+    final String path;
+    final SmbPath smbPath;
+
+    ResolvedTarget(DiskShare share, String path, SmbPath smbPath) {
+      this.share = share;
+      this.path = path;
+      this.smbPath = smbPath;
+    }
   }
 
   static boolean isLazyDfsAuthenticationFailure(Throwable exception) {
@@ -274,14 +313,15 @@ public final class KerberosSmbClient implements Closeable {
     return false;
   }
 
-  public void createDirectory(String parent, String name) {
+  public void createDirectory(String parent, String name) throws IOException {
     validateFileName(name);
-    share.mkdir(resolve(join(parent, name)));
+    ResolvedTarget target = resolveTarget(join(parent, name));
+    target.share.mkdir(target.path);
   }
 
-  public void delete(String relativePath, boolean directory) {
-    String path = resolve(relativePath);
-    if (directory) share.rmdir(path, true); else share.rm(path);
+  public void delete(String relativePath, boolean directory) throws IOException {
+    ResolvedTarget target = resolveTarget(relativePath);
+    if (directory) target.share.rmdir(target.path, true); else target.share.rm(target.path);
   }
 
   public void download(String relativePath, java.io.File destination) throws IOException {
@@ -289,8 +329,9 @@ public final class KerberosSmbClient implements Closeable {
     if (parent != null && !parent.exists() && !parent.mkdirs()) {
       throw new IOException("Unable to create the temporary folder");
     }
-    try (com.hierynomus.smbj.share.File remote = share.openFile(
-            resolve(relativePath), EnumSet.of(AccessMask.GENERIC_READ),
+    ResolvedTarget target = resolveTarget(relativePath);
+    try (com.hierynomus.smbj.share.File remote = target.share.openFile(
+            target.path, EnumSet.of(AccessMask.GENERIC_READ),
             EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL), SMB2ShareAccess.ALL,
             SMB2CreateDisposition.FILE_OPEN,
             EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE));
@@ -303,8 +344,9 @@ public final class KerberosSmbClient implements Closeable {
   }
 
   public void upload(String relativePath, InputStream input) throws IOException {
-    try (com.hierynomus.smbj.share.File remote = share.openFile(
-            resolve(relativePath), EnumSet.of(AccessMask.GENERIC_WRITE),
+    ResolvedTarget target = resolveTarget(relativePath);
+    try (com.hierynomus.smbj.share.File remote = target.share.openFile(
+            target.path, EnumSet.of(AccessMask.GENERIC_WRITE),
             EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL), SMB2ShareAccess.ALL,
             SMB2CreateDisposition.FILE_OVERWRITE_IF,
             EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE));
@@ -315,16 +357,20 @@ public final class KerberosSmbClient implements Closeable {
     }
   }
 
-  public void rename(String relativePath, String newName) {
+  public void rename(String relativePath, String newName) throws IOException {
     validateFileName(newName);
     String normalized = ManagedShare.normalizePath(relativePath);
     int separator = normalized.lastIndexOf('\\');
     String parent = separator < 0 ? "" : normalized.substring(0, separator);
-    String target = resolve(join(parent, newName));
-    try (com.hierynomus.smbj.share.DiskEntry entry = share.open(
-        resolve(normalized), EnumSet.of(AccessMask.DELETE), null, SMB2ShareAccess.ALL,
+    ResolvedTarget source = resolveTarget(normalized);
+    ResolvedTarget target = resolveTarget(join(parent, newName));
+    if (!source.smbPath.isOnSameShare(target.smbPath)) {
+      throw new IOException("The item cannot be moved across managed shares");
+    }
+    try (com.hierynomus.smbj.share.DiskEntry entry = source.share.open(
+        source.path, EnumSet.of(AccessMask.DELETE), null, SMB2ShareAccess.ALL,
         SMB2CreateDisposition.FILE_OPEN, null)) {
-      entry.rename(target, false);
+      entry.rename(target.path, false);
     }
   }
 
