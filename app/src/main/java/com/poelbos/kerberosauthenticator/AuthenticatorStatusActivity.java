@@ -56,10 +56,10 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     TextView refreshStatus = findViewById(R.id.automatic_refresh_status);
     refreshStatus.setVisibility(View.VISIBLE);
     String category = getSharedPreferences(TgtRefreshWorker.STATUS_PREFS, MODE_PRIVATE)
-        .getString(TgtRefreshWorker.LAST_CATEGORY, "nog niet uitgevoerd");
+        .getString(TgtRefreshWorker.LAST_CATEGORY, "not run yet");
     refreshStatus.setText(lastRefresh == 0L
-        ? "Automatische vernieuwing: " + category
-        : "Laatste automatische vernieuwing: "
+        ? "Automatic refresh: " + category
+        : "Last automatic refresh: "
             + DateFormat.getDateTimeInstance().format(new Date(lastRefresh)));
 
     // If only the status is shown, the activity remains open until the user taps the dismiss

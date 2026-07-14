@@ -85,17 +85,17 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   }
 
   private void showOverview() {
-    binding.title.setText("Bedrijfsbestanden");
+    binding.title.setText("Enterprise Files");
     binding.backButton.setVisibility(View.GONE);
     binding.createFolderButton.setVisibility(View.GONE);
     binding.uploadButton.setVisibility(View.GONE);
     KerberosAccount account = KerberosAccount.getAccount(this);
     binding.subtitle.setText(account == null
-        ? "Veilig verbonden met uw werkomgeving"
-        : account.getName() + "  •  Kerberos beveiligd");
-    binding.signInButton.setText(account == null ? "Aanmelden" : "Account");
+        ? "Securely connected to your work environment"
+        : account.getName() + "  •  Kerberos secured");
+    binding.signInButton.setText(account == null ? "Sign in" : "Account");
     if (!configuration.isValid()) {
-      showState("Configuratie nodig", String.join("\n", configuration.getErrors()), false);
+      showState("Configuration required", String.join("\n", configuration.getErrors()), false);
       return;
     }
     List<Row> rows = new ArrayList<>();
@@ -107,8 +107,8 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
 
   private void openShare(ManagedShare managedShare) {
     if (KerberosAccount.getAccount(this) == null) {
-      Snackbar.make(binding.root, "Meld u eerst aan met uw werkaccount", Snackbar.LENGTH_LONG)
-          .setAction("Aanmelden", view ->
+      Snackbar.make(binding.root, "Sign in with your work account first", Snackbar.LENGTH_LONG)
+          .setAction("Sign in", view ->
               startActivity(new Intent(this, AuthenticatorStatusActivity.class))).show();
       return;
     }
@@ -123,8 +123,8 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
 
   private void loadDirectory() {
     binding.title.setText(currentShare.getDisplayName());
-    binding.subtitle.setText(currentPath.isEmpty() ? "Hoofdmap" : currentPath.replace("\\", " › "));
-    showState("Even geduld", "De beveiligde map wordt geopend…", true);
+    binding.subtitle.setText(currentPath.isEmpty() ? "Root folder" : currentPath.replace("\\", " › "));
+    showState("Please wait", "The secure folder is being opened…", true);
     io.execute(() -> {
       try {
         if (smbClient == null) {
@@ -136,20 +136,20 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
         List<Row> rows = new ArrayList<>();
         for (RemoteEntry entry : entries) rows.add(Row.forEntry(entry));
         runOnUiThread(() -> {
-          if (rows.isEmpty()) showState("Deze map is leeg", "Hier staan nog geen bestanden.", false);
+          if (rows.isEmpty()) showState("This folder is empty", "There are no files here yet.", false);
           else showRows(rows);
         });
       } catch (Exception exception) {
         runOnUiThread(() -> showState(
-            "Kan de map niet openen", friendlyMessage(exception), false));
+            "Unable to open the folder", friendlyMessage(exception), false));
       }
     });
   }
 
   private static String friendlyMessage(Exception exception) {
     String message = exception.getMessage();
-    if (message == null || message.trim().isEmpty()) return "Controleer uw netwerk en probeer opnieuw.";
-    return message + "\n\nControleer uw VPN, tijdinstelling en werkaccount.";
+    if (message == null || message.trim().isEmpty()) return "Check your network and try again.";
+    return message + "\n\nCheck your VPN, time settings, and work account.";
   }
 
   private void onRowClicked(Row row) {
@@ -166,11 +166,11 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   private void openFile(RemoteEntry entry) {
     if (!configuration.isAllowCache()) {
       Snackbar.make(binding.root,
-          "Openen is door uw beheerder uitgeschakeld omdat lokale cache niet is toegestaan.",
+          "Opening is disabled by your administrator because local caching is not allowed.",
           Snackbar.LENGTH_LONG).show();
       return;
     }
-    showState("Bestand voorbereiden", "Het bestand wordt beveiligd opgehaald…", true);
+    showState("Preparing file", "The file is being securely downloaded…", true);
     final String path = KerberosSmbClient.join(currentPath, entry.getName());
     io.execute(() -> {
       try {
@@ -184,13 +184,13 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         runOnUiThread(() -> {
           loadDirectory();
-          try { startActivity(Intent.createChooser(intent, "Openen met")); }
+          try { startActivity(Intent.createChooser(intent, "Open with")); }
           catch (Exception exception) {
-            Snackbar.make(binding.root, "Geen geschikte app gevonden", Snackbar.LENGTH_LONG).show();
+            Snackbar.make(binding.root, "No suitable app found", Snackbar.LENGTH_LONG).show();
           }
         });
       } catch (Exception exception) {
-        runOnUiThread(() -> showState("Bestand kan niet worden geopend", friendlyMessage(exception), false));
+        runOnUiThread(() -> showState("Unable to open file", friendlyMessage(exception), false));
       }
     });
   }
@@ -233,14 +233,14 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
 
   private void promptCreateFolder() {
     TextInputEditText input = new TextInputEditText(this);
-    input.setHint("Mapnaam");
+    input.setHint("Folder name");
     int padding = (int) (24 * getResources().getDisplayMetrics().density);
     input.setPadding(padding, padding / 2, padding, 0);
     new MaterialAlertDialogBuilder(this)
-        .setTitle("Nieuwe map")
+        .setTitle("New folder")
         .setView(input)
-        .setNegativeButton("Annuleren", null)
-        .setPositiveButton("Maken", (dialog, which) -> runOperation("Map maken", () ->
+        .setNegativeButton("Cancel", null)
+        .setPositiveButton("Create", (dialog, which) -> runOperation("Create folder", () ->
             smbClient.createDirectory(currentPath, String.valueOf(input.getText()))))
         .show();
   }
@@ -250,7 +250,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     String name = queryDisplayName(uri);
     runOperation("Uploaden", () -> {
       try (InputStream input = getContentResolver().openInputStream(uri)) {
-        if (input == null) throw new IllegalStateException("Bestand kan niet worden gelezen");
+        if (input == null) throw new IllegalStateException("Unable to read the file");
         smbClient.upload(KerberosSmbClient.join(currentPath, name), input);
       }
     });
@@ -269,7 +269,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     if (row.entry == null) return;
     new MaterialAlertDialogBuilder(this)
         .setTitle(row.entry.getName())
-        .setItems(new String[] {"Hernoemen", "Verwijderen"}, (dialog, which) -> {
+        .setItems(new String[] {"Rename", "Delete"}, (dialog, which) -> {
           if (which == 0) promptRename(row.entry); else confirmDelete(row.entry);
         }).show();
   }
@@ -280,33 +280,33 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     input.selectAll();
     int padding = (int) (24 * getResources().getDisplayMetrics().density);
     input.setPadding(padding, padding / 2, padding, 0);
-    new MaterialAlertDialogBuilder(this).setTitle("Hernoemen").setView(input)
-        .setNegativeButton("Annuleren", null)
-        .setPositiveButton("Opslaan", (dialog, which) -> runOperation("Hernoemen", () ->
+    new MaterialAlertDialogBuilder(this).setTitle("Rename").setView(input)
+        .setNegativeButton("Cancel", null)
+        .setPositiveButton("Save", (dialog, which) -> runOperation("Rename", () ->
             smbClient.rename(KerberosSmbClient.join(currentPath, entry.getName()),
                 String.valueOf(input.getText())))).show();
   }
 
   private void confirmDelete(RemoteEntry entry) {
     new MaterialAlertDialogBuilder(this)
-        .setTitle("Definitief verwijderen?")
+        .setTitle("Delete permanently?")
         .setMessage(entry.isDirectory()
-            ? "De map en alle inhoud worden van de bedrijfsshare verwijderd."
-            : "Het bestand wordt van de bedrijfsshare verwijderd.")
-        .setNegativeButton("Annuleren", null)
-        .setPositiveButton("Verwijderen", (dialog, which) -> runOperation("Verwijderen", () ->
+            ? "The folder and all its contents will be deleted from the enterprise share."
+            : "The file will be deleted from the enterprise share.")
+        .setNegativeButton("Cancel", null)
+        .setPositiveButton("Delete", (dialog, which) -> runOperation("Delete", () ->
             smbClient.delete(KerberosSmbClient.join(currentPath, entry.getName()), entry.isDirectory())))
         .show();
   }
 
   private void runOperation(String label, ThrowingOperation operation) {
-    showState(label, "Even geduld…", true);
+    showState(label, "Please wait…", true);
     io.execute(() -> {
       try {
         operation.run();
         runOnUiThread(this::loadDirectory);
       } catch (Exception exception) {
-        runOnUiThread(() -> showState(label + " is mislukt", friendlyMessage(exception), false));
+        runOnUiThread(() -> showState(label + " failed", friendlyMessage(exception), false));
       }
     });
   }
@@ -349,7 +349,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       } else {
         holder.icon.setText(row.entry.isDirectory() ? "◆" : "▪");
         holder.name.setText(row.entry.getName());
-        holder.detail.setText(row.entry.isDirectory() ? "Map" : formatSize(row.entry.getSize()));
+        holder.detail.setText(row.entry.isDirectory() ? "Folder" : formatSize(row.entry.getSize()));
       }
       holder.itemView.setContentDescription(holder.name.getText() + ", " + holder.detail.getText());
       holder.itemView.setOnClickListener(view -> listener.onClick(row));

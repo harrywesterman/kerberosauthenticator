@@ -72,14 +72,14 @@ public final class TgtRefreshWorker extends Worker {
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null) return;
     manager.createNotificationChannel(new NotificationChannel(
-        CHANNEL, "Werkaccount", NotificationManager.IMPORTANCE_DEFAULT));
+        CHANNEL, "Work account", NotificationManager.IMPORTANCE_DEFAULT));
     android.app.PendingIntent intent = android.app.PendingIntent.getActivity(
         context, 0, new android.content.Intent(context, AuthenticatorStatusActivity.class),
         android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
     manager.notify(7001, new NotificationCompat.Builder(context, CHANNEL)
         .setSmallIcon(R.mipmap.ic_launcher)
-        .setContentTitle("Opnieuw aanmelden vereist")
-        .setContentText("Uw werkaccount moet opnieuw worden aangemeld.")
+        .setContentTitle("Sign-in required")
+        .setContentText("Your work account must be signed in again.")
         .setContentIntent(intent).setAutoCancel(true).build());
   }
 }

@@ -41,7 +41,7 @@ public final class EnterpriseConfiguration {
     String realm = clean(bundle.getString(REALM));
     // Backwards compatibility with the existing authenticator MDM key.
     if (realm.isEmpty()) realm = clean(bundle.getString("adDomain"));
-    if (realm.isEmpty()) errors.add("Active Directory-realm ontbreekt");
+    if (realm.isEmpty()) errors.add("Active Directory realm is missing");
 
     List<ManagedShare> shares = new ArrayList<>();
     Set<String> ids = new LinkedHashSet<>();
@@ -49,7 +49,7 @@ public final class EnterpriseConfiguration {
     if (configuredShares != null) {
       for (int index = 0; index < configuredShares.length; index++) {
         if (!(configuredShares[index] instanceof Bundle)) {
-          errors.add("Share " + (index + 1) + " heeft een ongeldig formaat");
+          errors.add("Share " + (index + 1) + " has an invalid format");
           continue;
         }
         Bundle item = (Bundle) configuredShares[index];
@@ -65,7 +65,7 @@ public final class EnterpriseConfiguration {
         }
       }
     }
-    if (shares.isEmpty()) errors.add("Er zijn geen geldige bedrijfsshares geconfigureerd");
+    if (shares.isEmpty()) errors.add("No valid enterprise shares are configured");
 
     List<String> kdcs = new ArrayList<>();
     String[] configuredKdcs = bundle.getStringArray(KDC_HOSTS);

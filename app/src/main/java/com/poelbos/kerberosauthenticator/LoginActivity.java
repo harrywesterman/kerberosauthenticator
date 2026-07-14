@@ -138,7 +138,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       } else {
         TgtRefreshScheduler.cancel(this);
         Toast.makeText(this,
-            "Automatisch vernieuwen is op dit toestel niet veilig beschikbaar",
+            "Automatic refresh is not securely available on this device",
             Toast.LENGTH_LONG).show();
       }
       isPasswordRetry = false;
@@ -149,7 +149,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
             Constants.TAG,
             String.format(
                 "Bad password for user %s, removing and attempting re-authentication.",
-                account == null ? "onbekend" : account.getName()));
+            account == null ? "unknown" : account.getName()));
         KerberosAccount.removeAccount(this);
         isPasswordRetry = true;
         showUserLoginUI();
@@ -223,7 +223,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (username.isEmpty() && configured != null) username = configured.getUsername();
     String password = ((TextView) findViewById(R.id.editTextPw)).getText().toString();
     if (TextUtils.isEmpty(username) || TextUtils.isEmpty(password)) {
-      Toast.makeText(this, "Vul uw gebruikersnaam en wachtwoord in", Toast.LENGTH_LONG).show();
+      Toast.makeText(this, "Enter your username and password", Toast.LENGTH_LONG).show();
       showUserLoginUI();
       return;
     }
@@ -297,7 +297,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (existing != null) username.setText(existing.getName());
     username.setVisibility(View.VISIBLE);
     TextView realm = findViewById(R.id.managedRealm);
-    realm.setText("Bedrijfsomgeving: " + accountConfiguration.getRealm());
+    realm.setText("Work environment: " + accountConfiguration.getRealm());
     realm.setVisibility(View.VISIBLE);
     View pwField = findViewById(R.id.editTextPw);
     pwField.setVisibility(View.VISIBLE);
