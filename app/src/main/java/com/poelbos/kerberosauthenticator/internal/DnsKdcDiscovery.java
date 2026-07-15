@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 /** Discovers Kerberos KDC hosts from DNS SRV records on the active Android network. */
@@ -64,6 +65,24 @@ public final class DnsKdcDiscovery {
     return null;
   }
 
+  /** Discovers concrete Active Directory domain controllers for SMB/DFS bootstrap. */
+  public static String discoverDomainControllers(Context context, String realm) {
+    List<InetAddress> dnsServers = getDnsServers(context);
+    if (dnsServers.isEmpty()) {
+      Log.w(TAG, "Cannot discover domain controllers because the active network has no DNS servers.");
+      return null;
+    }
+
+    for (SrvLookup lookup : domainControllerLookupPlan(realm)) {
+      List<String> domainControllers =
+          queryDnsServers(dnsServers, lookup.queryName, lookup.port);
+      if (!domainControllers.isEmpty()) {
+        return joinHosts(domainControllers);
+      }
+    }
+    return null;
+  }
+
   static List<String> kdcSrvLookupNames(String realm) {
     String normalizedRealm = normalizeRealm(realm);
     List<String> lookupNames = new ArrayList<>();
@@ -74,11 +93,19 @@ public final class DnsKdcDiscovery {
   }
 
   static List<String> dcLocatorSrvLookupNames(String realm) {
-    String normalizedRealm = normalizeRealm(realm);
     List<String> lookupNames = new ArrayList<>();
-    lookupNames.add("_ldap._tcp.dc._msdcs." + normalizedRealm);
-    lookupNames.add("_ldap._tcp." + normalizedRealm);
+    for (SrvLookup lookup : domainControllerLookupPlan(realm)) {
+      lookupNames.add(lookup.queryName);
+    }
     return lookupNames;
+  }
+
+  static List<SrvLookup> domainControllerLookupPlan(String realm) {
+    String normalizedRealm = normalizeRealm(realm);
+    List<SrvLookup> lookups = new ArrayList<>();
+    lookups.add(new SrvLookup("_ldap._tcp.dc._msdcs." + normalizedRealm, 389));
+    lookups.add(new SrvLookup("_ldap._tcp." + normalizedRealm, 389));
+    return lookups;
   }
 
   public static String discoverCname(Context context, String host) {
@@ -577,6 +604,33 @@ public final class DnsKdcDiscovery {
     NameReadResult(String name, int nextOffset) {
       this.name = name;
       this.nextOffset = nextOffset;
+    }
+  }
+
+  static final class SrvLookup {
+    final String queryName;
+    final int port;
+
+    SrvLookup(String queryName, int port) {
+      this.queryName = queryName;
+      this.port = port;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof SrvLookup)) return false;
+      SrvLookup lookup = (SrvLookup) other;
+      return port == lookup.port && queryName.equals(lookup.queryName);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(queryName, port);
+    }
+
+    @Override
+    public String toString() {
+      return queryName + ":" + port;
     }
   }
 
