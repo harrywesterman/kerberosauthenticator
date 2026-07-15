@@ -86,7 +86,7 @@ public class AccountConfigurationTest {
 
   @Test
   public void testPartialConfigSetupIsConsideredFalse() {
-    Set<String> testKeys = Sets.newHashSet("adDomain");
+    Set<String> testKeys = Sets.newHashSet(AccountConfiguration.AD_REALM_KEY);
     for (String key : testKeys) {
       restrictionsBundle = TestHelper.makeRestrictionsBundle();
       restrictionsBundle.remove(key);
@@ -105,7 +105,7 @@ public class AccountConfigurationTest {
   }
 
   @Test
-  public void testLocalConfigIsUsedWhenManagedConfigMissing() {
+  public void localUsernameAndDomainDoNotReplaceManagedRealm() {
     shadowOf(restrictionsManager).setApplicationRestrictions(new Bundle());
     SharedPreferences prefs =
         context.getSharedPreferences(
@@ -117,10 +117,19 @@ public class AccountConfigurationTest {
         .putString(AccountConfiguration.AD_DOMAIN_KEY, TestHelper.TEST_AD_DOMAIN)
         .apply();
     accConfig = new AccountConfiguration(context);
-    assertTrue(accConfig.hasManagedConfigs());
-    assertThat(accConfig.isManagedDeployment()).isFalse();
-    assertThat(accConfig.hasManagedConfigPassword()).isFalse();
+    assertFalse(accConfig.hasManagedConfigs());
+    assertThat(accConfig.getAccountDetails()).isNull();
     assertThat(prefs.contains(AccountConfiguration.PASSWORD_KEY)).isFalse();
+  }
+
+  @Test
+  public void managedRealmDoesNotPreconfigureUsername() {
+    restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, "managed-user");
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.getAccountDetails().getUsername()).isNull();
   }
 
   @Test
