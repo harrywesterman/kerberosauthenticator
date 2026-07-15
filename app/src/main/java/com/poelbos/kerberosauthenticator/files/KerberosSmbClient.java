@@ -379,8 +379,8 @@ public final class KerberosSmbClient implements Closeable {
     return KerberosRuntimeCoordinator.run(
         context, realm, domainController, managedShare.getHost(), subject,
         ignored -> {
-          SmbPath requested = new SmbPath(
-              managedShare.getHost(), managedShare.getShareName(), path);
+          SmbPath requested = proactiveDfsRequestPath(
+              managedShare, connection.getRemoteHostname(), path);
           SmbPath resolved;
           try {
             resolved = proactiveDfsResolver.resolve(session, requested, candidate -> candidate);
@@ -394,6 +394,11 @@ public final class KerberosSmbClient implements Closeable {
           DiskShare targetShare = (DiskShare) targetSession.connectShare(resolved.getShareName());
           return new ResolvedTarget(targetShare, nullToEmpty(resolved.getPath()), resolved);
         });
+  }
+
+  static SmbPath proactiveDfsRequestPath(
+      ManagedShare managedShare, String authenticatedHost, String path) {
+    return new SmbPath(authenticatedHost, managedShare.getShareName(), path);
   }
 
   private static String nullToEmpty(String value) {

@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.SpnegoAuthenticator;
+import com.hierynomus.smbj.common.SmbPath;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -100,6 +101,18 @@ public final class KerberosSmbClientTest {
         KerberosSmbClient.initialConnectionHosts(
             "Files.EXAMPLE.TEST.", "OTHER.EXAMPLE.TEST",
             "dc01.example.test", "kdc01.example.test"));
+  }
+
+  @Test public void sendsProactiveDfsReferralThroughAuthenticatedBootstrapHost() {
+    ManagedShare share = new ManagedShare(
+        "home", "Home", "example.test", 445, "Data", "users\\member");
+
+    SmbPath request = KerberosSmbClient.proactiveDfsRequestPath(
+        share, "dc02.example.test", "users\\member");
+
+    assertEquals("dc02.example.test", request.getHostname());
+    assertEquals("Data", request.getShareName());
+    assertEquals("users\\member", request.getPath());
   }
 
   @Test public void retriesOnlyIoFailuresFromInitialConnect() {
