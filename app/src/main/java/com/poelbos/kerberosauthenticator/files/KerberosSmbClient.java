@@ -390,15 +390,28 @@ public final class KerberosSmbClient implements Closeable {
           if (resolved == null || requested.isOnSameShare(resolved)) {
             return new ResolvedTarget(share, path, requested);
           }
-          Session targetSession = session.getNestedSession(resolved);
-          DiskShare targetShare = (DiskShare) targetSession.connectShare(resolved.getShareName());
-          return new ResolvedTarget(targetShare, nullToEmpty(resolved.getPath()), resolved);
+          String targetServiceHost = resolvedTargetServiceHost(requested, resolved);
+          return KerberosRuntimeCoordinator.run(
+              context, realm, domainController, targetServiceHost, subject,
+              targetConfiguration -> {
+                Session targetSession = session.getNestedSession(resolved);
+                DiskShare targetShare =
+                    (DiskShare) targetSession.connectShare(resolved.getShareName());
+                return new ResolvedTarget(
+                    targetShare, nullToEmpty(resolved.getPath()), resolved);
+              });
         });
   }
 
   static SmbPath proactiveDfsRequestPath(
       ManagedShare managedShare, String authenticatedHost, String path) {
     return new SmbPath(authenticatedHost, managedShare.getShareName(), path);
+  }
+
+  static String resolvedTargetServiceHost(SmbPath requested, SmbPath resolved) {
+    return resolved == null || requested.isOnSameShare(resolved)
+        ? requested.getHostname()
+        : resolved.getHostname();
   }
 
   private static String nullToEmpty(String value) {
