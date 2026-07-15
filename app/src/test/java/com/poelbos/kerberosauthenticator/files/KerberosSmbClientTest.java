@@ -11,8 +11,10 @@ import static org.junit.Assert.assertTrue;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.SpnegoAuthenticator;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import org.junit.Test;
 import org.ietf.jgss.GSSException;
 import sun.security.krb5.KrbException;
@@ -102,6 +104,8 @@ public final class KerberosSmbClientTest {
 
   @Test public void retriesNetworkFailureBeforeSessionEstablishment() {
     assertTrue(KerberosSmbClient.shouldRetryBootstrap(new IOException("unreachable"), false));
+    assertTrue(KerberosSmbClient.shouldRetryBootstrap(
+        new RuntimeException(new IOException("connection dropped")), false));
     assertFalse(KerberosSmbClient.shouldRetryBootstrap(new IOException("access denied"), true));
   }
 
@@ -117,6 +121,40 @@ public final class KerberosSmbClientTest {
     gssException.initCause(new KrbException(6));
 
     assertFalse(KerberosSmbClient.shouldRetryBootstrap(gssException, true));
+  }
+
+  @Test public void triesNextBootstrapCandidateAfterRetryableFailure() throws Exception {
+    List<String> attempts = new ArrayList<>();
+
+    String selected = KerberosSmbClient.tryBootstrapCandidates(
+        Arrays.asList("dc01.example.test", "dc02.example.test"),
+        host -> {
+          attempts.add(host);
+          if (host.equals("dc01.example.test")) {
+            throw new KerberosSmbClient.RetryableBootstrapException(
+                new IOException("unreachable"));
+          }
+          return host;
+        });
+
+    assertEquals("dc02.example.test", selected);
+    assertEquals(Arrays.asList("dc01.example.test", "dc02.example.test"), attempts);
+  }
+
+  @Test public void stopsBootstrapFailoverAfterNonRetryableFailure() {
+    List<String> attempts = new ArrayList<>();
+
+    IOException failure = assertThrows(
+        IOException.class,
+        () -> KerberosSmbClient.tryBootstrapCandidates(
+            Arrays.asList("dc01.example.test", "dc02.example.test"),
+            host -> {
+              attempts.add(host);
+              throw new IOException("access denied");
+            }));
+
+    assertEquals("access denied", failure.getMessage());
+    assertEquals(Collections.singletonList("dc01.example.test"), attempts);
   }
 
   @Test public void reportsOnlyNumericGssStatusForNestedGssException() {
