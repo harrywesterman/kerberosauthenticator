@@ -124,6 +124,18 @@ public final class KerberosSmbClientTest {
         KerberosSmbClient.resolvedTargetServiceHost(requested, resolved));
   }
 
+  @Test public void retriesDfsTargetWithDefaultRealmWhenNoCredentialIsAvailable() {
+    GSSException noCredential = new GSSException(GSSException.NO_CRED, -1, null);
+
+    assertTrue(KerberosSmbClient.shouldRetryDfsTargetConfiguration(noCredential));
+  }
+
+  @Test public void doesNotRetryDfsTargetForGenericGssFailure() {
+    GSSException failure = new GSSException(GSSException.FAILURE, -1, null);
+
+    assertFalse(KerberosSmbClient.shouldRetryDfsTargetConfiguration(failure));
+  }
+
   @Test public void retriesOnlyIoFailuresFromInitialConnect() {
     IOException networkFailure = new IOException("unreachable");
     IOException retryable = KerberosSmbClient.bootstrapConnectFailure(networkFailure);

@@ -391,15 +391,29 @@ public final class KerberosSmbClient implements Closeable {
             return new ResolvedTarget(share, path, requested);
           }
           String targetServiceHost = resolvedTargetServiceHost(requested, resolved);
-          return KerberosRuntimeCoordinator.run(
-              context, realm, domainController, targetServiceHost, subject,
-              targetConfiguration -> {
-                Session targetSession = session.getNestedSession(resolved);
-                DiskShare targetShare =
-                    (DiskShare) targetSession.connectShare(resolved.getShareName());
-                return new ResolvedTarget(
-                    targetShare, nullToEmpty(resolved.getPath()), resolved);
-              });
+          try {
+            return connectResolvedTarget(resolved, targetServiceHost);
+          } catch (RuntimeException | IOException exception) {
+            if (normalizeHost(targetServiceHost)
+                    .equals(normalizeHost(managedShare.getHost()))
+                || !shouldRetryDfsTargetConfiguration(exception)) {
+              throw exception;
+            }
+            Log.i(TAG, "SMB_DFS_TARGET_CONFIG_FALLBACK result=NO_CRED");
+            return connectResolvedTarget(resolved, managedShare.getHost());
+          }
+        });
+  }
+
+  private ResolvedTarget connectResolvedTarget(SmbPath resolved, String serviceHost)
+      throws IOException {
+    return KerberosRuntimeCoordinator.run(
+        context, realm, domainController, serviceHost, subject,
+        ignored -> {
+          Session targetSession = session.getNestedSession(resolved);
+          DiskShare targetShare =
+              (DiskShare) targetSession.connectShare(resolved.getShareName());
+          return new ResolvedTarget(targetShare, nullToEmpty(resolved.getPath()), resolved);
         });
   }
 
@@ -412,6 +426,18 @@ public final class KerberosSmbClient implements Closeable {
     return resolved == null || requested.isOnSameShare(resolved)
         ? requested.getHostname()
         : resolved.getHostname();
+  }
+
+  static boolean shouldRetryDfsTargetConfiguration(Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause instanceof GSSException) {
+        return ((GSSException) cause).getMajor() == GSSException.NO_CRED;
+      }
+      if (cause instanceof KrbException && ((KrbException) cause).returnCode() == 7) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static String nullToEmpty(String value) {
