@@ -38,6 +38,7 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
 
     if (!accountConfiguration.hasManagedConfigs()) {
       setContentView(R.layout.activity_account_login);
+      SystemBarInsets.applyToTopAppBar(findViewById(R.id.accountTopAppBar));
       findViewById(R.id.accountForm).setVisibility(View.GONE);
       findViewById(R.id.managedConfigurationError).setVisibility(View.VISIBLE);
       ((com.google.android.material.appbar.MaterialToolbar) findViewById(R.id.accountTopAppBar))
@@ -46,6 +47,7 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     }
 
     setContentView(R.layout.activity_account_status);
+    SystemBarInsets.applyToTopAppBar(findViewById(R.id.accountStatusTopAppBar));
 
     if (KerberosAccount.getAccount(this) == null) {
       startActivity(LoginActivity.getAccountSignInIntent(this));

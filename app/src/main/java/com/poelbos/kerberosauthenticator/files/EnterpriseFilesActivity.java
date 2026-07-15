@@ -22,6 +22,7 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.poelbos.kerberosauthenticator.AuthenticatorStatusActivity;
 import com.poelbos.kerberosauthenticator.KerberosAccount;
 import com.poelbos.kerberosauthenticator.R;
+import com.poelbos.kerberosauthenticator.SystemBarInsets;
 import com.poelbos.kerberosauthenticator.databinding.ActivityEnterpriseFilesBinding;
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -57,6 +58,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     fileCache.cleanup();
     binding = ActivityEnterpriseFilesBinding.inflate(getLayoutInflater());
     setContentView(binding.getRoot());
+    SystemBarInsets.applyToTopAppBar(binding.topAppBar);
     binding.list.setLayoutManager(new LinearLayoutManager(this));
     binding.topAppBar.setOnMenuItemClickListener(item -> {
       if (item.getItemId() == R.id.action_account) {
