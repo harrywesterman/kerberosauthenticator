@@ -22,6 +22,7 @@ import static org.robolectric.Shadows.shadowOf;
 
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.Intent;
 import android.content.RestrictionsManager;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -150,6 +151,40 @@ public class AccountConfigurationTest {
     assertThat(accConfig.isHttpNtlmEnabled()).isFalse();
     assertThat(accConfig.getNtlmDomain()).isNull();
     assertThat(accConfig.isHttpNtlmConfigured()).isFalse();
+  }
+
+  @Test
+  public void httpKerberosIsEnabledByDefaultForExistingDeployments() {
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.isHttpKerberosEnabled()).isTrue();
+  }
+
+  @Test
+  public void httpKerberosCanBeDisabledByManagedPolicy() {
+    restrictionsBundle.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.isHttpKerberosEnabled()).isFalse();
+  }
+
+  @Test
+  public void managedConfigurationBroadcastRefreshesHttpKerberosPolicy() {
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+    accConfig = new AccountConfiguration(context);
+    assertThat(accConfig.isHttpKerberosEnabled()).isTrue();
+
+    restrictionsBundle.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+    accConfig
+        .getReceiver()
+        .onReceive(context, new Intent(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED));
+
+    assertThat(accConfig.isHttpKerberosEnabled()).isFalse();
   }
 
   @Test

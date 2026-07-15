@@ -13,6 +13,7 @@ public final class SpnegoStateCodec {
   private static final String SERVICE_KEY = "selectedService";
   private static final String KERBEROS_CONTEXT_KEY = "kerberosContext";
   private static final String NTLM_TYPE1_KEY = "ntlmType1";
+  private static final String NTLM_OFFERED_KEY = "ntlmOffered";
 
   private SpnegoStateCodec() {}
 
@@ -30,6 +31,9 @@ public final class SpnegoStateCodec {
     }
     if (state.getNtlmType1() != null) {
       bundle.putByteArray(NTLM_TYPE1_KEY, state.getNtlmType1());
+    }
+    if (state.wasNtlmOffered()) {
+      bundle.putBoolean(NTLM_OFFERED_KEY, true);
     }
     return bundle;
   }
@@ -49,7 +53,8 @@ public final class SpnegoStateCodec {
           SpnegoNegotiationState.Phase.valueOf(bundle.getString(PHASE_KEY, "")),
           bundle.getString(SERVICE_KEY),
           bundle.getByteArray(KERBEROS_CONTEXT_KEY),
-          bundle.getByteArray(NTLM_TYPE1_KEY));
+          bundle.getByteArray(NTLM_TYPE1_KEY),
+          bundle.getBoolean(NTLM_OFFERED_KEY, false));
     } catch (RuntimeException error) {
       throw new IllegalArgumentException("Invalid SPNEGO state", error);
     }

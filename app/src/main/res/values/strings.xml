@@ -18,6 +18,8 @@
     <string name="app_name">Enterprise Files</string>
     <string name="mdm_realm_title">Active Directory realm</string>
     <string name="mdm_realm_description">Kerberos realm, for example EXAMPLE.COM.</string>
+    <string name="mdm_enable_http_kerberos_title">Enable HTTP Kerberos</string>
+    <string name="mdm_enable_http_kerberos_description">Allow managed Chrome Negotiate requests to use Kerberos. This does not disable the Kerberos account, ticket renewal, or Kerberos-only SMB.</string>
     <string name="mdm_enable_http_ntlm_title">Enable HTTP NTLMv2</string>
     <string name="mdm_enable_http_ntlm_description">Allow managed Chrome Negotiate requests to use NTLMv2 when selected. Chrome does not provide TLS channel binding, so Extended Protection requiring CBT is unsupported.</string>
     <string name="mdm_ntlm_domain_title">NTLM domain</string>

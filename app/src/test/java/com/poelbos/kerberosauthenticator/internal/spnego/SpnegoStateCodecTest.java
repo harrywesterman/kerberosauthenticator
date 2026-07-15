@@ -33,7 +33,7 @@ public final class SpnegoStateCodecTest {
   public void offeredStateCarriesOptimisticKerberosContext() {
     SpnegoNegotiationState state =
         SpnegoNegotiationState.offered(
-            "portal.example.com", "backend.example.com", new byte[] {4, 5, 6});
+            "portal.example.com", "backend.example.com", new byte[] {4, 5, 6}, true);
 
     SpnegoNegotiationState decoded =
         SpnegoStateCodec.decode(SpnegoStateCodec.encode(state), "portal.example.com");
@@ -42,6 +42,7 @@ public final class SpnegoStateCodecTest {
         .isEqualTo(SpnegoNegotiationState.Mechanism.UNSELECTED);
     assertThat(decoded.getSelectedService()).isEqualTo("backend.example.com");
     assertThat(decoded.getKerberosContext()).isEqualTo(new byte[] {4, 5, 6});
+    assertThat(decoded.wasNtlmOffered()).isTrue();
   }
 
   @Test

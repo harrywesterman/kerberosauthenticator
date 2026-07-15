@@ -7,7 +7,7 @@ An Android Enterprise app for Active Directory/Kerberos with two components in o
 
 The app is based on the existing [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase and has been extended with an integrated enterprise file experience. Chrome can still use the same Kerberos account for HTTP Negotiate.
 
-## HTTP Negotiate: Kerberos and managed NTLMv2
+## HTTP authentication: Kerberos, managed NTLMv2 and Chrome Basic
 
 The authenticator stores the user password after the first successful login only when the
 device has a secure screen lock and a hardware-backed Android Keystore. This allows the app
@@ -24,6 +24,17 @@ NTLMv2 is used only if the server explicitly selects NTLMSSP in a
 `WWW-Authenticate: NTLM` challenge is not passed to this Android authenticator by Chrome and is
 therefore unsupported. Internal Kerberos/JGSS debugging is permanently disabled; passwords,
 tickets, hashes, challenges, MICs, session keys, and SPNEGO token bytes are never logged.
+
+Administrators can independently enable HTTP Kerberos and NTLMv2 in this app's managed
+configuration. Disabling HTTP Kerberos does not disable the Kerberos account, TGT renewal, or
+Kerberos-only SMB. When only NTLMv2 is enabled, the app sends an NTLMSSP-only SPNEGO offer without
+requesting a Kerberos service ticket.
+
+HTTP Basic uses Chrome's native HTTP authentication and password manager; Chrome does not expose
+its Basic prompt to this Android AccountManager authenticator. The user enters a Basic credential
+once and may save it in Chrome for later automatic reuse. The app never exports its credential
+vault to Chrome. Basic must be enabled through Chrome's managed `AuthSchemes` policy and restricted
+to HTTPS by blocking cleartext HTTP URLs with Chrome's managed `URLBlocklist` policy.
 
 ## Enterprise files
 
@@ -130,6 +141,7 @@ For the integrated file app, for example:
 ```json
 {
   "ad_realm": "EXAMPLE.COM",
+  "enable_http_kerberos": true,
   "enable_http_ntlm": true,
   "ntlm_domain": "EXAMPLE",
   "require_smb_encryption": true,
@@ -173,12 +185,16 @@ Chrome must also be managed. Add or edit the managed Google Play assignment for 
 |---|---|---|---|
 | `AuthAndroidNegotiateAccountType` | string | `AndroidEnterpriseKerberos` | Account type exposed by this authenticator app. Without this, Chrome disables HTTP Negotiate on Android. |
 | `AuthServerAllowlist` | string | `*.example.com,example.com` | Internal sites where Chrome may answer Kerberos/Negotiate challenges. |
-| `AuthSchemes` | string | `negotiate` | Optional. Include `negotiate` if you restrict authentication schemes. |
+| `AuthSchemes` | string | `basic,negotiate` | Use `negotiate` when Basic is disabled, or `basic,negotiate` when Basic is enabled. Do not include direct `ntlm` or `digest`. |
+| `URLBlocklist` | string list | `["http://*"]` | Block cleartext HTTP so Basic credentials can be used only on HTTPS sites. Scope this more narrowly only when required HTTP exceptions are understood. |
+| `HttpsOnlyMode` | string | `force_enabled` | Upgrade navigations to HTTPS in strict mode before the HTTP block is reached. |
+| `PasswordManagerEnabled` | bool | `true` | Allow the user to save a Basic credential in Chrome for later reuse. |
 | `AuthNegotiateDelegateAllowlist` | string | `*.example.com` | Optional. Only needed if credential delegation is required. |
 | `DisableAuthNegotiateCnameLookup` | bool | `true` | Preserve the original URL host for the Kerberos request. The app can then try that host before its CNAME chain. |
 
 After the assignment syncs, fully stop and restart Chrome, then open `chrome://policy` on the
-device to confirm the policies are present. This policy does not refresh dynamically.
+device to confirm the policies are present. `AuthAndroidNegotiateAccountType` does not refresh
+dynamically, so restart Chrome after changing that policy.
 
 ### Testing managed config
 
@@ -205,6 +221,7 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and static or username-templated start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
+| `enable_http_kerberos` | bool | no | Permit Kerberos inside HTTP Negotiate; default `true`. Does not affect the Kerberos account or SMB |
 | `enable_http_ntlm` | bool | no | Advertise NTLMSSP inside HTTP Negotiate when secure credentials are available; default `false` |
 | `ntlm_domain` | string | when HTTP NTLM is enabled | NetBIOS domain, 1–15 characters, for example `EXAMPLE` |
 | `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `true` |
@@ -233,7 +250,23 @@ and URLs are rejected. A Kerberos realm and DNS namespace do not have to be iden
 This requests `HTTP/web01.example.com` when Chrome asks for `portal.example.com`; the app never
 creates or changes SPNs in Active Directory.
 
-### HTTP NTLMv2 policy and limitations
+### HTTP mechanism policy and Basic Auth limitations
+
+Configure the two managed applications together:
+
+| Basic | Chrome `AuthSchemes` | App policy |
+|---|---|---|
+| off | `negotiate` | `enable_http_kerberos` and `enable_http_ntlm` independently select the allowed Negotiate mechanisms |
+| on | `basic,negotiate` | The same two app switches independently select the allowed Negotiate mechanisms |
+
+Keep `negotiate` in Chrome even when both app mechanisms are disabled; the authenticator then
+returns an unsupported-scheme result while Basic remains independently controlled by the presence
+of `basic`. Chrome for Android does not support the desktop-only `BasicAuthOverHttpEnabled` policy.
+Use `HttpsOnlyMode=force_enabled` together with `URLBlocklist=["http://*"]` to upgrade navigations
+and block remaining cleartext HTTP. The blocklist applies to all HTTP sites; any exception must be
+reviewed because Basic is a browser-wide scheme. Chrome's Basic credential store is separate from
+the app vault, so an AD password change must be updated in both places. If Chrome password saving
+is disabled, the user must enter the Basic credential on each prompt.
 
 HTTP NTLMv2 becomes ready only when all of the following are true:
 

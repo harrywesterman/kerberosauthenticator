@@ -45,6 +45,7 @@ public class AccountConfiguration {
   static final String USERNAME_KEY = "username";
   static final String PASSWORD_KEY = "password";
   static final String LEGACY_LOCAL_CONFIG_PREFS_NAME = "kerberos_local_config";
+  static final String ENABLE_HTTP_KERBEROS_KEY = "enable_http_kerberos";
   static final String ENABLE_HTTP_NTLM_KEY = "enable_http_ntlm";
   static final String NTLM_DOMAIN_KEY = "ntlm_domain";
   private static final Pattern NETBIOS_DOMAIN =
@@ -58,6 +59,7 @@ public class AccountConfiguration {
   private String password;
   private String adDomain;
   private String adDomainController;
+  private boolean httpKerberosEnabled;
   private boolean httpNtlmEnabled;
   private String ntlmDomain;
   private boolean managedDeployment;
@@ -80,6 +82,7 @@ public class AccountConfiguration {
     password = null;
     adDomain = null;
     adDomainController = "";
+    httpKerberosEnabled = true;
     httpNtlmEnabled = false;
     ntlmDomain = null;
     managedDeployment = false;
@@ -107,6 +110,7 @@ public class AccountConfiguration {
     if (!Strings.isNullOrEmpty(configuredDomain)) {
       adDomain = configuredDomain;
     }
+    httpKerberosEnabled = restrictionsBundle.getBoolean(ENABLE_HTTP_KERBEROS_KEY, true);
     httpNtlmEnabled = restrictionsBundle.getBoolean(ENABLE_HTTP_NTLM_KEY, false);
     String configuredNtlmDomain = restrictionsBundle.getString(NTLM_DOMAIN_KEY);
     if (!Strings.isNullOrEmpty(configuredNtlmDomain)) {
@@ -185,6 +189,10 @@ public class AccountConfiguration {
 
   boolean isHttpNtlmEnabled() {
     return httpNtlmEnabled;
+  }
+
+  boolean isHttpKerberosEnabled() {
+    return httpKerberosEnabled;
   }
 
   String getNtlmDomain() {
