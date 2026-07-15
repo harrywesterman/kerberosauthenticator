@@ -136,7 +136,8 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       if (hasValidAccountConfiguration()) {
         intentToReturn = LoginActivity.getAuthenticateIntent(context, response);
       } else {
-        intentToReturn = EditConfigurationActivity.getEditIntent(context, response, null);
+        intentToReturn =
+            DeclineAddingAccountActivity.getDeclineIntentDueToConfigMissing(context, response);
       }
     } else {
       // User cannot add account themselves.

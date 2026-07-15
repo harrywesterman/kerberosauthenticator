@@ -106,4 +106,11 @@
     <string name="notification_permission_missing">Sign-in alerts are disabled. Tap to open notification settings.</string>
     <string name="account">Account</string>
     <string name="enterprise_files">Enterprise Files</string>
+    <string name="sign_in">Sign in</string>
+    <string name="sign_in_title">Sign in to your work account</string>
+    <string name="sign_in_supporting_text">Enter your username and password. Your work environment is configured by your administrator.</string>
+    <string name="username_required">Enter your username</string>
+    <string name="password_required">Enter your password</string>
+    <string name="sign_in_failed">Sign-in failed. Check your username and password.</string>
+    <string name="managed_configuration_missing">Managed account configuration is missing. Contact your administrator.</string>
 </resources>

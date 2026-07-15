@@ -243,15 +243,11 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
   protected void onLogoutRequested() {
     KerberosAccount.removeAccount(this);
     new com.poelbos.kerberosauthenticator.files.EnterpriseFileCache(this).cleanup();
-    getSharedPreferences(EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, MODE_PRIVATE)
+    getSharedPreferences(AccountConfiguration.LEGACY_LOCAL_CONFIG_PREFS_NAME, MODE_PRIVATE)
         .edit()
         .clear()
         .apply();
-    Intent intent =
-        EditConfigurationActivity.getEditIntent(
-            this,
-            getIntent().getParcelableExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE),
-            getIntent().getStringExtra(Constants.SERVICE_NAME));
+    Intent intent = LoginActivity.getAccountSignInIntent(this);
     intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
     startActivity(intent);
     finish();

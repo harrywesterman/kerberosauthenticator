@@ -44,6 +44,7 @@ public class AccountConfiguration {
   static final String AD_REALM_KEY = "ad_realm";
   static final String USERNAME_KEY = "username";
   static final String PASSWORD_KEY = "password";
+  static final String LEGACY_LOCAL_CONFIG_PREFS_NAME = "kerberos_local_config";
   static final String ENABLE_HTTP_NTLM_KEY = "enable_http_ntlm";
   static final String NTLM_DOMAIN_KEY = "ntlm_domain";
   private static final Pattern NETBIOS_DOMAIN =
@@ -97,7 +98,7 @@ public class AccountConfiguration {
     // realm. Enterprise authentication now accepts the AD realm only from managed restrictions.
     context
         .getSharedPreferences(
-            EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
+            LEGACY_LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
         .clear()
         .apply();

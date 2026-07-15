@@ -100,13 +100,13 @@ public class KerberosAuthenticatorTest {
   }
 
   @Test
-  public void testEditConfigAddAccountWhenMissingManagedConfigs() {
+  public void testDeclineAddAccountWhenMissingManagedConfigs() {
     // SPNEGO requests are approved.
     Bundle result =
         authenticator.addAccount(
             null, null, null, new String[] {Constants.SPNEGO}, getTestOptions());
     assertThat(((Intent) result.get("intent")).getComponent().getClassName())
-        .isEqualTo(EditConfigurationActivity.class.getName());
+        .isEqualTo(DeclineAddingAccountActivity.class.getName());
   }
 
   @Test
