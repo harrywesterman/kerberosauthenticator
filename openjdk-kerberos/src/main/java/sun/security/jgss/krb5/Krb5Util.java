@@ -162,6 +162,19 @@ public class Krb5Util {
         return ticket;
     }
 
+    static KerberosTicket getInitialTgt(GSSCaller caller,
+        String clientPrincipal, AccessControlContext acc) throws LoginException {
+
+        Subject accSubj = GSSUtil.getGloballySetSubject();
+        KerberosTicket ticket = SubjectComber.findInitialTgt(accSubj, clientPrincipal);
+
+        if (ticket == null && !GSSUtil.useSubjectCredsOnly(caller)) {
+            Subject subject = GSSUtil.login(caller, GSSUtil.GSS_KRB5_MECH_OID);
+            ticket = SubjectComber.findInitialTgt(subject, clientPrincipal);
+        }
+        return ticket;
+    }
+
     /**
      * Retrieves the caller's Subject, or Subject obtained by logging in
      * via the specified caller.
