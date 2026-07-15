@@ -35,9 +35,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import javax.security.auth.Subject;
 import org.ietf.jgss.GSSException;
 import sun.security.jgss.GSSUtil;
@@ -121,22 +125,47 @@ public final class KerberosSmbClient implements Closeable {
 
   static String initialConnectionHost(
       String shareHost, String realm, String domainController) {
-    String normalizedHost = shareHost == null ? "" : shareHost.trim();
-    String normalizedRealm = realm == null ? "" : realm.trim();
-    if (normalizedHost.endsWith(".")) {
-      normalizedHost = normalizedHost.substring(0, normalizedHost.length() - 1);
-    }
-    if (normalizedRealm.endsWith(".")) {
-      normalizedRealm = normalizedRealm.substring(0, normalizedRealm.length() - 1);
-    }
-    return normalizedHost.equalsIgnoreCase(normalizedRealm)
-        ? firstHost(domainController) : shareHost;
+    return initialConnectionHosts(shareHost, realm, domainController, domainController).get(0);
   }
 
-  private static String firstHost(String hosts) {
-    String normalized = hosts == null ? "" : hosts.trim();
-    int separator = normalized.indexOf(' ');
-    return separator < 0 ? normalized : normalized.substring(0, separator);
+  static List<String> initialConnectionHosts(
+      String shareHost, String realm, String domainControllers, String kerberosServers) {
+    String normalizedHost = normalizeHost(shareHost);
+    if (!normalizedHost.equals(normalizeHost(realm))) {
+      return Collections.singletonList(normalizedHost);
+    }
+
+    String candidates = isBlank(domainControllers) ? kerberosServers : domainControllers;
+    Set<String> unique = new LinkedHashSet<>();
+    if (!isBlank(candidates)) {
+      for (String candidate : candidates.trim().split("\\s+")) {
+        String normalized = normalizeHost(candidate);
+        if (!normalized.isEmpty()) unique.add(normalized);
+      }
+    }
+    if (unique.isEmpty()) unique.add(normalizedHost);
+    return new ArrayList<>(unique);
+  }
+
+  static boolean shouldRetryBootstrap(Throwable exception, boolean connectionEstablished) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause instanceof KrbException) {
+        return ((KrbException) cause).returnCode() == 7;
+      }
+    }
+    return !connectionEstablished && exception instanceof IOException;
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.trim().isEmpty();
+  }
+
+  private static String normalizeHost(String value) {
+    String normalized = value == null ? "" : value.trim().toLowerCase(Locale.US);
+    while (normalized.endsWith(".")) {
+      normalized = normalized.substring(0, normalized.length() - 1);
+    }
+    return normalized;
   }
 
   static IOException connectionFailure(Exception exception) {
