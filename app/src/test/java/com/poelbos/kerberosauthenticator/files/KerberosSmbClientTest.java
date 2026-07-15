@@ -115,6 +115,15 @@ public final class KerberosSmbClientTest {
     assertEquals("users\\member", request.getPath());
   }
 
+  @Test public void configuresKerberosForResolvedDfsTargetHost() {
+    SmbPath requested = new SmbPath("dc02.example.test", "Data", "users\\member");
+    SmbPath resolved = new SmbPath("files.other.test", "Profiles", "member");
+
+    assertEquals(
+        "files.other.test",
+        KerberosSmbClient.resolvedTargetServiceHost(requested, resolved));
+  }
+
   @Test public void retriesOnlyIoFailuresFromInitialConnect() {
     IOException networkFailure = new IOException("unreachable");
     IOException retryable = KerberosSmbClient.bootstrapConnectFailure(networkFailure);
