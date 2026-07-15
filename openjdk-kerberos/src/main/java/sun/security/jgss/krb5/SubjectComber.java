@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 import krb.javax.security.auth.kerberos.KerberosPrincipal;
 import krb.javax.security.auth.kerberos.KeyTab;
+import krb.sun.security.jgss.krb5.InitialTgtSelector;
 
 /**
  * This utility looks through the current Subject and retrieves private
@@ -60,6 +61,10 @@ class SubjectComber {
         // findAux returns T if oneOnly.
         return credClass.cast(findAux(subject, serverPrincipal,
                                       clientPrincipal, credClass, true));
+    }
+
+    static KerberosTicket findInitialTgt(Subject subject, String clientPrincipal) {
+        return InitialTgtSelector.select(subject, clientPrincipal);
     }
 
     @SuppressWarnings("unchecked") // findAux returns List<T> if !oneOnly.

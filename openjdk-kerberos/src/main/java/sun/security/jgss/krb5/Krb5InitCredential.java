@@ -330,11 +330,8 @@ public class Krb5InitCredential
             return AccessController.doPrivileged(
                 new PrivilegedExceptionAction<KerberosTicket>() {
                 public KerberosTicket run() throws Exception {
-                    // It's OK to use null as serverPrincipal. TGT is almost
-                    // the first ticket for a principal and we use list.
-                    return Krb5Util.getTicket(
-                        realCaller,
-                        clientPrincipal, null, acc);
+                    return Krb5Util.getInitialTgt(
+                        realCaller, clientPrincipal, acc);
                         }});
         } catch (PrivilegedActionException e) {
             GSSException ge =
