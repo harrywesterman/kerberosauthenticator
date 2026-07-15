@@ -83,6 +83,15 @@ public class DnsKdcDiscoveryTest {
   }
 
   @Test
+  public void domainControllerLookupPlanUsesActiveDirectoryLocatorPorts() {
+    assertThat(DnsKdcDiscovery.domainControllerLookupPlan("EXAMPLE.TEST"))
+        .containsExactly(
+            new DnsKdcDiscovery.SrvLookup("_ldap._tcp.dc._msdcs.example.test", 389),
+            new DnsKdcDiscovery.SrvLookup("_ldap._tcp.example.test", 389))
+        .inOrder();
+  }
+
+  @Test
   public void testParseCnameResponseReturnsAliases() throws Exception {
     byte[] response = buildCnameResponse("web01.example.local");
 
