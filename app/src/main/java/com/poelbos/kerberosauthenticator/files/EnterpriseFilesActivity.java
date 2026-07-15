@@ -58,8 +58,13 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     binding = ActivityEnterpriseFilesBinding.inflate(getLayoutInflater());
     setContentView(binding.getRoot());
     binding.list.setLayoutManager(new LinearLayoutManager(this));
-    binding.signInButton.setOnClickListener(view ->
-        startActivity(new Intent(this, AuthenticatorStatusActivity.class)));
+    binding.topAppBar.setOnMenuItemClickListener(item -> {
+      if (item.getItemId() == R.id.action_account) {
+        startActivity(new Intent(this, AuthenticatorStatusActivity.class));
+        return true;
+      }
+      return false;
+    });
     binding.backButton.setOnClickListener(view -> navigateBack());
     binding.createFolderButton.setOnClickListener(view -> promptCreateFolder());
     binding.uploadButton.setOnClickListener(view -> uploadLauncher.launch(new String[] {"*/*"}));
@@ -100,7 +105,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   }
 
   private void showOverview() {
-    binding.title.setText("Enterprise Files");
+    binding.topAppBar.setTitle(R.string.enterprise_files);
     binding.backButton.setVisibility(View.GONE);
     binding.createFolderButton.setVisibility(View.GONE);
     binding.uploadButton.setVisibility(View.GONE);
@@ -108,7 +113,6 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     binding.subtitle.setText(account == null
         ? "Securely connected to your work environment"
         : account.getName() + "  •  Kerberos secured");
-    binding.signInButton.setText(account == null ? "Sign in" : "Account");
     if (!configuration.isValid()) {
       showState("Configuration required", String.join("\n", configuration.getErrors()), false);
       return;
@@ -143,7 +147,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
     final KerberosAccount accountSnapshot = KerberosAccount.getAccount(this);
     final long requestGeneration = ++generation;
     if (shareSnapshot == null || configurationSnapshot == null) return;
-    binding.title.setText(shareSnapshot.getDisplayName());
+    binding.topAppBar.setTitle(shareSnapshot.getDisplayName());
     binding.subtitle.setText(pathSnapshot.isEmpty() ? "Root folder" : pathSnapshot.replace("\\", " › "));
     showState("Please wait", "The secure folder is being opened…", true);
     io.execute(() -> {

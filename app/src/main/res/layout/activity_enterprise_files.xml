@@ -12,44 +12,26 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <LinearLayout
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/topAppBar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/enterprise_navy"
+            android:elevation="0dp"
+            app:menu="@menu/menu_enterprise_files"
+            app:title="@string/enterprise_files"
+            app:titleTextColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/subtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/enterprise_header"
-            android:orientation="vertical"
-            android:paddingStart="24dp"
-            android:paddingTop="28dp"
-            android:paddingEnd="24dp"
-            android:paddingBottom="26dp">
-
-            <TextView
-                android:id="@+id/eyebrow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:letterSpacing="0.14"
-                android:text="WORK ENVIRONMENT"
-                android:textColor="#AFC4D3"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
-                android:text="Enterprise Files"
-                android:textColor="@android:color/white"
-                android:textSize="30sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/subtitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="#D5E1E8"
-                android:textSize="14sp" />
-        </LinearLayout>
+            android:background="@color/enterprise_navy"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="12dp"
+            android:textColor="#D5E1E8"
+            android:textSize="14sp" />
 
         <LinearLayout
             android:id="@+id/actionBar"
@@ -89,11 +71,6 @@
                 android:text="Nieuwe map"
                 android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/signInButton"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Sign in" />
         </LinearLayout>
 
         <FrameLayout
