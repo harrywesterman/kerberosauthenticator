@@ -424,6 +424,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
   private void showAccountSignIn() {
     setContentView(R.layout.activity_account_login);
+    SystemBarInsets.applyToTopAppBar(findViewById(R.id.accountTopAppBar));
     findViewById(R.id.managedConfigurationError).setVisibility(View.GONE);
     ((TextView) findViewById(R.id.accountUsername)).setText("");
     ((TextView) findViewById(R.id.accountPassword)).setText("");
@@ -434,6 +435,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
 
   private void showMissingManagedConfiguration() {
     setContentView(R.layout.activity_account_login);
+    SystemBarInsets.applyToTopAppBar(findViewById(R.id.accountTopAppBar));
     findViewById(R.id.accountForm).setVisibility(View.GONE);
     findViewById(R.id.managedConfigurationError).setVisibility(View.VISIBLE);
     ((com.google.android.material.appbar.MaterialToolbar) findViewById(R.id.accountTopAppBar))
