@@ -133,7 +133,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
     // Request comes from Chrome, add account.
     if (requiredFeatures != null && Arrays.asList(requiredFeatures).contains(Constants.SPNEGO)) {
-      if (hasValidAccountConfiguration()) {
+      if (hasValidAccountConfiguration() && getHttpAuthenticationPolicy().hasEnabledMechanism()) {
         intentToReturn = LoginActivity.getAuthenticateIntent(context, response);
       } else {
         intentToReturn =
@@ -205,6 +205,14 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       return result;
     }
 
+    HttpAuthenticationPolicy httpPolicy = getHttpAuthenticationPolicy();
+    if (!httpPolicy.hasEnabledMechanism()) {
+      result.putInt(
+          Constants.KEY_SPNEGO_RESULT, HttpSpnegoResult.ERR_UNSUPPORTED_AUTH_SCHEME);
+      Log.i(TAG, "HTTP_AUTH_RESULT mechanism=NONE code=6");
+      return result;
+    }
+
     // Check if the account details via managed config have changed from what's stored in the
     // AccountManager. If there's a mismatch and the account needs to be updated, also call
     // getAuthenticateIntent as it will remove the old account and add a new one.
@@ -212,7 +220,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     boolean needReAuthentication = configuredRealm == null
         || !krbAccount.getDomain().equalsIgnoreCase(configuredRealm);
 
-    if (!needReAuthentication && !tgtValidityChecker.hasValidTgt(krbAccount)) {
+    if (httpPolicy.kerberosEnabled
+        && !needReAuthentication
+        && !tgtValidityChecker.hasValidTgt(krbAccount)) {
       if (tgtRenewer.renew(context, krbAccount)) {
         Log.i(TAG, "TGT_RENEWAL result=success");
       } else {
@@ -248,12 +258,11 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       return result;
     }
 
-    NtlmPolicy ntlmPolicy = getNtlmPolicy();
     NtlmCredentialProvider ntlmCredentials = new NtlmCredentialProvider(context);
     if (negotiationState == null) {
       boolean ntlmEligible =
-          ntlmPolicy.enabled
-              && ntlmPolicy.domain != null
+          httpPolicy.ntlmEnabled
+              && httpPolicy.ntlmDomain != null
               && ntlmCredentials.isAvailable(krbAccount.getName(), krbAccount.getDomain());
       Log.i(TAG, "SPNEGO_OFFER ntlmEligible=" + ntlmEligible);
     }
@@ -287,12 +296,16 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             serviceName,
             krbAccount.getName(),
             krbAccount.getDomain(),
-            ntlmPolicy.domain,
-            ntlmPolicy.enabled,
+            httpPolicy.ntlmDomain,
+            httpPolicy.kerberosEnabled,
+            httpPolicy.ntlmEnabled,
             incomingAuthToken,
             negotiationState);
     if (negotiationState != null) {
-      Log.i(TAG, "SPNEGO_SELECTED mechanism=" + mechanismName(negotiationState, authResult));
+      Log.i(
+          TAG,
+          "SPNEGO_SELECTED mechanism="
+              + mechanismName(negotiationState, authResult, httpPolicy));
     }
     if (authResult.getStatus() != HttpSpnegoResult.OK || authResult.getToken() == null) {
       SharedPreferences sharedPref =
@@ -301,7 +314,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
           sharedPref,
           serviceName,
           new Date().getTime(),
-          mechanismName(negotiationState, authResult),
+          mechanismName(negotiationState, authResult, httpPolicy),
           "ERROR_" + authResult.getStatus());
       result.putInt(Constants.KEY_SPNEGO_RESULT, authResult.getStatus());
       Log.i(TAG, "HTTP_AUTH_RESULT code=" + authResult.getStatus());
@@ -327,9 +340,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             ? serviceName
             : authResult.getSelectedService(),
         new Date().getTime(),
-        mechanismName(negotiationState, authResult),
+        mechanismName(negotiationState, authResult, httpPolicy),
         "SUCCESS");
-    String mechanism = mechanismName(negotiationState, authResult);
+    String mechanism = mechanismName(negotiationState, authResult, httpPolicy);
     Log.i(TAG, "HTTP_AUTH_RESULT mechanism=" + mechanism + " code=0");
     return result;
   }
@@ -397,7 +410,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
   }
 
   private static String mechanismName(
-      SpnegoNegotiationState previousState, HttpSpnegoResult result) {
+      SpnegoNegotiationState previousState,
+      HttpSpnegoResult result,
+      HttpAuthenticationPolicy policy) {
     if (result.getSelectedMechanism() == SpnegoNegotiationState.Mechanism.NTLM) {
       return "NTLM";
     }
@@ -405,21 +420,33 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         && previousState.getMechanism() == SpnegoNegotiationState.Mechanism.NTLM) {
       return "NTLM";
     }
+    if (!policy.kerberosEnabled && policy.ntlmEnabled) return "NTLM";
     return "KERBEROS";
   }
 
-  private NtlmPolicy getNtlmPolicy() {
+  private HttpAuthenticationPolicy getHttpAuthenticationPolicy() {
     return getFromAccountConfiguration(
-        config -> new NtlmPolicy(config.isHttpNtlmConfigured(), config.getNtlmDomain()));
+        config ->
+            new HttpAuthenticationPolicy(
+                config.isHttpKerberosEnabled(),
+                config.isHttpNtlmConfigured(),
+                config.getNtlmDomain()));
   }
 
-  private static final class NtlmPolicy {
-    final boolean enabled;
-    final String domain;
+  private static final class HttpAuthenticationPolicy {
+    final boolean kerberosEnabled;
+    final boolean ntlmEnabled;
+    final String ntlmDomain;
 
-    NtlmPolicy(boolean enabled, String domain) {
-      this.enabled = enabled;
-      this.domain = domain;
+    HttpAuthenticationPolicy(
+        boolean kerberosEnabled, boolean ntlmEnabled, String ntlmDomain) {
+      this.kerberosEnabled = kerberosEnabled;
+      this.ntlmEnabled = ntlmEnabled;
+      this.ntlmDomain = ntlmDomain;
+    }
+
+    boolean hasEnabledMechanism() {
+      return kerberosEnabled || ntlmEnabled;
     }
   }
 
@@ -489,7 +516,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         return result;
       }
     }
-    result.putBoolean(AccountManager.KEY_BOOLEAN_RESULT, true);
+    result.putBoolean(
+        AccountManager.KEY_BOOLEAN_RESULT,
+        features.length == 0 || getHttpAuthenticationPolicy().hasEnabledMechanism());
     return result;
   }
 

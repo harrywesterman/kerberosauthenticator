@@ -14,6 +14,7 @@ public final class SpnegoNegotiationState {
   private final String selectedService;
   private final byte[] kerberosContext;
   private final byte[] ntlmType1;
+  private final boolean ntlmOffered;
 
   private SpnegoNegotiationState(
       String host,
@@ -21,24 +22,44 @@ public final class SpnegoNegotiationState {
       Phase phase,
       String selectedService,
       byte[] kerberosContext,
-      byte[] ntlmType1) {
+      byte[] ntlmType1,
+      boolean ntlmOffered) {
     this.host = host;
     this.mechanism = mechanism;
     this.phase = phase;
     this.selectedService = selectedService;
     this.kerberosContext = copy(kerberosContext);
     this.ntlmType1 = copy(ntlmType1);
+    this.ntlmOffered = ntlmOffered;
     validate();
   }
 
   public static SpnegoNegotiationState offered(String host) {
-    return new SpnegoNegotiationState(host, Mechanism.UNSELECTED, Phase.OFFERED, null, null, null);
+    return new SpnegoNegotiationState(
+        host, Mechanism.UNSELECTED, Phase.OFFERED, null, null, null, false);
+  }
+
+  public static SpnegoNegotiationState offered(String host, boolean ntlmOffered) {
+    return new SpnegoNegotiationState(
+        host, Mechanism.UNSELECTED, Phase.OFFERED, null, null, null, ntlmOffered);
   }
 
   public static SpnegoNegotiationState offered(
       String host, String selectedService, byte[] kerberosContext) {
     return new SpnegoNegotiationState(
-        host, Mechanism.UNSELECTED, Phase.OFFERED, selectedService, kerberosContext, null);
+        host, Mechanism.UNSELECTED, Phase.OFFERED, selectedService, kerberosContext, null, false);
+  }
+
+  public static SpnegoNegotiationState offered(
+      String host, String selectedService, byte[] kerberosContext, boolean ntlmOffered) {
+    return new SpnegoNegotiationState(
+        host,
+        Mechanism.UNSELECTED,
+        Phase.OFFERED,
+        selectedService,
+        kerberosContext,
+        null,
+        ntlmOffered);
   }
 
   public static SpnegoNegotiationState kerberos(
@@ -49,17 +70,18 @@ public final class SpnegoNegotiationState {
         Phase.KERBEROS_CONTINUE,
         selectedService,
         kerberosContext,
-        null);
+        null,
+        false);
   }
 
   public static SpnegoNegotiationState ntlmType1Sent(String host, byte[] ntlmType1) {
     return new SpnegoNegotiationState(
-        host, Mechanism.NTLM, Phase.NTLM_TYPE1_SENT, null, null, ntlmType1);
+        host, Mechanism.NTLM, Phase.NTLM_TYPE1_SENT, null, null, ntlmType1, false);
   }
 
   public static SpnegoNegotiationState ntlmType3Sent(String host) {
     return new SpnegoNegotiationState(
-        host, Mechanism.NTLM, Phase.NTLM_TYPE3_SENT, null, null, null);
+        host, Mechanism.NTLM, Phase.NTLM_TYPE3_SENT, null, null, null, false);
   }
 
   static SpnegoNegotiationState decoded(
@@ -68,9 +90,10 @@ public final class SpnegoNegotiationState {
       Phase phase,
       String selectedService,
       byte[] kerberosContext,
-      byte[] ntlmType1) {
+      byte[] ntlmType1,
+      boolean ntlmOffered) {
     return new SpnegoNegotiationState(
-        host, mechanism, phase, selectedService, kerberosContext, ntlmType1);
+        host, mechanism, phase, selectedService, kerberosContext, ntlmType1, ntlmOffered);
   }
 
   private void validate() {
@@ -88,6 +111,7 @@ public final class SpnegoNegotiationState {
             || kerberosContext == null) {
           throw new IllegalArgumentException("Invalid Kerberos state");
         }
+        if (ntlmOffered) throw new IllegalArgumentException("Invalid Kerberos offer state");
         break;
       case NTLM:
         if (phase == Phase.NTLM_TYPE1_SENT && ntlmType1 == null) {
@@ -96,6 +120,7 @@ public final class SpnegoNegotiationState {
         if (phase != Phase.NTLM_TYPE1_SENT && phase != Phase.NTLM_TYPE3_SENT) {
           throw new IllegalArgumentException("Invalid NTLM phase");
         }
+        if (ntlmOffered) throw new IllegalArgumentException("Invalid NTLM offer state");
         break;
       default:
         throw new IllegalArgumentException("Unknown mechanism");
@@ -113,6 +138,8 @@ public final class SpnegoNegotiationState {
   public byte[] getKerberosContext() { return copy(kerberosContext); }
 
   public byte[] getNtlmType1() { return copy(ntlmType1); }
+
+  public boolean wasNtlmOffered() { return ntlmOffered; }
 
   private static byte[] copy(byte[] value) {
     return value == null ? null : Arrays.copyOf(value, value.length);

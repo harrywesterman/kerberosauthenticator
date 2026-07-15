@@ -85,6 +85,10 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
             accountConfiguration.isHttpNtlmConfigured(),
             ntlmCredentialsAvailable));
 
+    TextView kerberosStatus = findViewById(R.id.http_kerberos_status);
+    kerberosStatus.setVisibility(View.VISIBLE);
+    kerberosStatus.setText(httpKerberosStatus(accountConfiguration.isHttpKerberosEnabled()));
+
     TextView notificationStatus = findViewById(R.id.notification_status);
     if (accountConfiguration.isManagedDeployment()
         && new CredentialVault(this).hasCredentials()
@@ -109,5 +113,9 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
       return "HTTP NTLMv2: unavailable (secure credentials missing)";
     }
     return "HTTP NTLMv2: ready; TLS channel binding unavailable (Extended Protection unsupported)";
+  }
+
+  static String httpKerberosStatus(boolean enabled) {
+    return enabled ? "HTTP Kerberos: ready" : "HTTP Kerberos: disabled by policy";
   }
 }

@@ -49,6 +49,14 @@ public final class AuthenticatorStatusActivityTest {
   }
 
   @Test
+  public void httpKerberosStatusExplainsManagedPolicy() {
+    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(false))
+        .isEqualTo("HTTP Kerberos: disabled by policy");
+    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(true))
+        .isEqualTo("HTTP Kerberos: ready");
+  }
+
+  @Test
   public void signedOutAccountDestinationStartsAccountModeLogin() {
     Bundle managed = new Bundle();
     managed.putString(AccountConfiguration.AD_REALM_KEY, TestHelper.TEST_AD_DOMAIN);
@@ -83,12 +91,15 @@ public final class AuthenticatorStatusActivityTest {
         Robolectric.buildActivity(AuthenticatorStatusActivity.class).setup().get();
     int toolbarId = resourceId(activity, "accountStatusTopAppBar");
     int accountNameId = resourceId(activity, "accountName");
+    int kerberosStatusId = resourceId(activity, "http_kerberos_status");
 
     assertThat(toolbarId).isNotEqualTo(0);
     assertThat(((MaterialToolbar) activity.findViewById(toolbarId)).getTitle().toString())
         .isEqualTo("Account");
     assertThat(((TextView) activity.findViewById(accountNameId)).getText().toString())
         .isEqualTo(TestHelper.USERNAME);
+    assertThat(((TextView) activity.findViewById(kerberosStatusId)).getText().toString())
+        .isEqualTo("HTTP Kerberos: ready");
     assertThat((View) activity.findViewById(R.id.refresh_btn))
         .isInstanceOf(MaterialButton.class);
     assertThat((View) activity.findViewById(R.id.logout_btn))

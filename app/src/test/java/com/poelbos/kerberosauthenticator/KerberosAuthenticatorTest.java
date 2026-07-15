@@ -36,6 +36,8 @@ import androidx.test.core.app.ApplicationProvider;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult.ResultCode;
 import com.poelbos.kerberosauthenticator.internal.spnego.GetSpnegoTicketTask;
+import com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoResult;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -116,6 +118,21 @@ public class KerberosAuthenticatorTest {
     authenticator = new KerberosAuthenticator(context);
     Bundle result = authenticator.addAccount(null, null, null, new String[] {}, getTestOptions());
     assertThat(((Intent) result.get("intent")).getComponent().getClassName())
+        .isEqualTo(DeclineAddingAccountActivity.class.getName());
+  }
+
+  @Test
+  public void addAccountDeclinesSpnegoWhenAllHttpMechanismsAreDisabled() {
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, false);
+    setTestRestrictions(restrictions);
+
+    Bundle result =
+        authenticator.addAccount(
+            null, null, null, new String[] {Constants.SPNEGO}, getTestOptions());
+
+    assertThat(((Intent) result.get(AccountManager.KEY_INTENT)).getComponent().getClassName())
         .isEqualTo(DeclineAddingAccountActivity.class.getName());
   }
 
@@ -394,6 +411,69 @@ public class KerberosAuthenticatorTest {
   }
 
   @Test
+  public void allHttpMechanismsDisabledRejectsTokenWithoutCheckingTgt() {
+    AtomicInteger tgtChecks = new AtomicInteger();
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(
+        account -> {
+          tgtChecks.incrementAndGet();
+          return false;
+        });
+    Account account = addTestAccount();
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, false);
+    setTestRestrictions(restrictions);
+
+    Bundle result =
+        authenticator.getAuthToken(
+            null,
+            account,
+            "SPNEGO:HOSTBASED:HTTP@portal.example.com",
+            getTestOptions());
+
+    assertThat(result.getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_UNSUPPORTED_AUTH_SCHEME);
+    assertThat(tgtChecks.get()).isEqualTo(0);
+    assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
+  }
+
+  @Test
+  public void ntlmOnlyDoesNotCheckTgtOrRequestKerberosTicket() {
+    AtomicInteger tgtChecks = new AtomicInteger();
+    AtomicInteger kerberosRequests = new AtomicInteger();
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(
+        account -> {
+          tgtChecks.incrementAndGet();
+          return false;
+        });
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, serviceName, account, incoming, contextBytes) -> {
+          kerberosRequests.incrementAndGet();
+          return new GetSpnegoTicketTask.SpnegoTicketResult(
+              new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, "must not be called"), null);
+        });
+    Account account = addTestAccount();
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, true);
+    restrictions.putString(AccountConfiguration.NTLM_DOMAIN_KEY, "EXAMPLE");
+    setTestRestrictions(restrictions);
+
+    Bundle result =
+        authenticator.getAuthToken(
+            null,
+            account,
+            "SPNEGO:HOSTBASED:HTTP@portal.example.com",
+            getTestOptions());
+
+    assertThat(result.getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_MISSING_AUTH_CREDENTIALS);
+    assertThat(tgtChecks.get()).isEqualTo(0);
+    assertThat(kerberosRequests.get()).isEqualTo(0);
+    assertThat(result.containsKey(AccountManager.KEY_INTENT)).isFalse();
+  }
+
+  @Test
   public void testHasFeatures() {
     Account account = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(account);
@@ -409,12 +489,43 @@ public class KerberosAuthenticatorTest {
     assertThat(response.get(AccountManager.KEY_BOOLEAN_RESULT)).isEqualTo(true);
   }
 
+  @Test
+  public void hasFeaturesRejectsSpnegoWhenAllHttpMechanismsAreDisabled() {
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, false);
+    setTestRestrictions(restrictions);
+    Account account = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
+
+    Bundle response = authenticator.hasFeatures(null, account, new String[] {Constants.SPNEGO});
+
+    assertThat(response.getBoolean(AccountManager.KEY_BOOLEAN_RESULT)).isFalse();
+  }
+
   private void setTestRestrictions() {
     RestrictionsManager restrictionsManager =
         (RestrictionsManager)
             context.getSystemService(context.getSystemServiceName(RestrictionsManager.class));
     Bundle restrictionsBundle = TestHelper.makeRestrictionsBundle();
     shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+  }
+
+  private void setTestRestrictions(Bundle restrictionsBundle) {
+    RestrictionsManager restrictionsManager =
+        (RestrictionsManager)
+            context.getSystemService(context.getSystemServiceName(RestrictionsManager.class));
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+  }
+
+  private Account addTestAccount() {
+    KerberosAccount.setAccountVisibilitySetterForTesting(
+        (manager, account, packageName, visibility) -> true);
+    Account account = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
+    shadowOf(accountManager).addAccount(account);
+    accountManager.setUserData(account, KerberosAccount.KEY_AD_DC, AD_DC);
+    accountManager.setUserData(account, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
+    accountManager.setUserData(account, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
+    return account;
   }
 
   private static void assertIsAuthenticationActivity(Intent intent) {

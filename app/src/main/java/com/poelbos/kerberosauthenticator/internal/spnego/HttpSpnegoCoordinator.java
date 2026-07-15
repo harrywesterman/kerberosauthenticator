@@ -67,6 +67,7 @@ public final class HttpSpnegoCoordinator {
       String accountName,
       String realm,
       String ntlmDomain,
+      boolean kerberosEnabled,
       boolean ntlmEnabled,
       byte[] incomingToken,
       SpnegoNegotiationState state) {
@@ -82,7 +83,16 @@ public final class HttpSpnegoCoordinator {
     }
 
     if (state == null) {
-      return initialOffer(host, accountName, realm, ntlmDomain, ntlmEnabled);
+      return initialOffer(
+          host, accountName, realm, ntlmDomain, kerberosEnabled, ntlmEnabled);
+    }
+    if (state.getMechanism() == SpnegoNegotiationState.Mechanism.KERBEROS
+        && !kerberosEnabled) {
+      return disabledMechanism("HTTP Kerberos is disabled");
+    }
+    if (state.getMechanism() == SpnegoNegotiationState.Mechanism.NTLM
+        && !ntlmEnabled) {
+      return disabledMechanism("HTTP NTLMv2 is disabled");
     }
     if (state.getPhase() == SpnegoNegotiationState.Phase.NTLM_TYPE3_SENT) {
       return HttpSpnegoResult.failure(
@@ -96,12 +106,21 @@ public final class HttpSpnegoCoordinator {
     try {
       NegTokenTarg server = new NegTokenTarg().read(incomingToken);
       if (HttpNtlmV2Engine.NTLMSSP_OID.equals(server.getSupportedMech())) {
+        if (!state.wasNtlmOffered()) {
+          return HttpSpnegoResult.failure(
+              HttpSpnegoResult.ERR_INVALID_RESPONSE,
+              "Server selected NTLMSSP when it was not offered");
+        }
         return selectNtlm(
             host, accountName, realm, ntlmDomain, ntlmEnabled, incomingToken, server);
       }
     } catch (Exception error) {
       return HttpSpnegoResult.failure(
           HttpSpnegoResult.ERR_INVALID_RESPONSE, "Invalid SPNEGO server response");
+    }
+
+    if (!kerberosEnabled) {
+      return disabledMechanism("HTTP Kerberos is disabled");
     }
 
     KerberosRound round =
@@ -133,7 +152,17 @@ public final class HttpSpnegoCoordinator {
       String accountName,
       String realm,
       String ntlmDomain,
+      boolean kerberosEnabled,
       boolean ntlmEnabled) {
+    if (!kerberosEnabled && !ntlmEnabled) {
+      return disabledMechanism("HTTP authentication is disabled");
+    }
+    if (!kerberosEnabled) {
+      HttpSpnegoResult eligibility =
+          ensureNtlmEligible(accountName, realm, ntlmDomain, ntlmEnabled);
+      if (eligibility != null) return eligibility;
+      return initialNtlmOffer(host);
+    }
     KerberosRound round = kerberos.next(host, null, null, null);
     if (!round.successful || round.token == null) {
       return HttpSpnegoResult.failure(
@@ -154,9 +183,27 @@ public final class HttpSpnegoCoordinator {
     }
     SpnegoNegotiationState nextState =
         round.context == null
-            ? SpnegoNegotiationState.offered(host)
-            : SpnegoNegotiationState.offered(host, round.selectedService, round.context);
+            ? SpnegoNegotiationState.offered(host, ntlmEligible)
+            : SpnegoNegotiationState.offered(
+                host, round.selectedService, round.context, ntlmEligible);
     return HttpSpnegoResult.success(token, nextState);
+  }
+
+  private HttpSpnegoResult initialNtlmOffer(String host) {
+    try {
+      byte[] wrappedType1 = ntlm.createType1();
+      byte[] type1 = HttpNtlmV2Engine.responseToken(wrappedType1);
+      NegTokenInit offer = new NegTokenInit();
+      offer.addSupportedMech(HttpNtlmV2Engine.NTLMSSP_OID);
+      offer.setMechToken(type1);
+      Buffer.PlainBuffer encoded = new Buffer.PlainBuffer(Endian.LE);
+      offer.write(encoded);
+      return HttpSpnegoResult.success(
+          encoded.getCompactData(), SpnegoNegotiationState.ntlmType1Sent(host, type1));
+    } catch (Exception error) {
+      return HttpSpnegoResult.failure(
+          HttpSpnegoResult.ERR_UNEXPECTED, "Unable to create NTLM initial offer");
+    }
   }
 
   private HttpSpnegoResult selectNtlm(
@@ -237,6 +284,11 @@ public final class HttpSpnegoCoordinator {
           HttpSpnegoResult.ERR_MISSING_AUTH_CREDENTIALS, "NTLM credentials unavailable");
     }
     return null;
+  }
+
+  private static HttpSpnegoResult disabledMechanism(String diagnostic) {
+    return HttpSpnegoResult.failure(
+        HttpSpnegoResult.ERR_UNSUPPORTED_AUTH_SCHEME, diagnostic);
   }
 
   private static byte[] appendNtlm(byte[] kerberosToken) throws Exception {

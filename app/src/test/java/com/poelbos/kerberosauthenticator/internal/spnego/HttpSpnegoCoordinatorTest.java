@@ -26,7 +26,7 @@ public final class HttpSpnegoCoordinatorTest {
 
     HttpSpnegoResult result =
         coordinator.nextToken(
-            "portal.example.com", "alex", "EXAMPLE.COM", "EXAMPLE", true, null, null);
+            "portal.example.com", "alex", "EXAMPLE.COM", "EXAMPLE", true, true, null, null);
 
     InspectableNegTokenInit offer = new InspectableNegTokenInit();
     offer.read(result.getToken());
@@ -38,6 +38,7 @@ public final class HttpSpnegoCoordinatorTest {
     assertThat(result.getState().getPhase())
         .isEqualTo(SpnegoNegotiationState.Phase.OFFERED);
     assertThat(result.getState().getSelectedService()).isEqualTo("backend.example.com");
+    assertThat(result.getState().wasNtlmOffered()).isTrue();
     assertThat(result.getSelectedService()).isEqualTo("backend.example.com");
     assertThat(result.getSelectedMechanism())
         .isEqualTo(SpnegoNegotiationState.Mechanism.UNSELECTED);
@@ -50,11 +51,54 @@ public final class HttpSpnegoCoordinatorTest {
 
     HttpSpnegoResult result =
         coordinator.nextToken(
-            "portal.example.com", "alex", "EXAMPLE.COM", null, false, null, null);
+            "portal.example.com", "alex", "EXAMPLE.COM", null, true, false, null, null);
 
     InspectableNegTokenInit offer = new InspectableNegTokenInit();
     offer.read(result.getToken());
     assertThat(offer.getSupportedMechTypes()).containsExactly(KERBEROS);
+    assertThat(result.getState().wasNtlmOffered()).isFalse();
+  }
+
+  @Test
+  public void establishedInitialKerberosTokenCanStillOfferNtlmWithoutContext() {
+    HttpSpnegoCoordinator coordinator = coordinator(kerberosSuccessWithoutContext(), true);
+
+    HttpSpnegoResult result =
+        coordinator.nextToken(
+            "portal.example.com",
+            "alex",
+            "EXAMPLE.COM",
+            "EXAMPLE",
+            true,
+            true,
+            null,
+            null);
+
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.OK);
+    assertThat(result.getState().getSelectedService()).isNull();
+    assertThat(result.getState().getKerberosContext()).isNull();
+    assertThat(result.getState().wasNtlmOffered()).isTrue();
+  }
+
+  @Test
+  public void establishedInitialKerberosTokenWithoutNtlmKeepsContextlessState() {
+    HttpSpnegoCoordinator coordinator = coordinator(kerberosSuccessWithoutContext(), true);
+
+    HttpSpnegoResult result =
+        coordinator.nextToken(
+            "portal.example.com",
+            "alex",
+            "EXAMPLE.COM",
+            null,
+            true,
+            false,
+            null,
+            null);
+
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.OK);
+    assertThat(result.getState().getSelectedService()).isNull();
+    assertThat(result.getState().getKerberosContext()).isNull();
+    assertThat(result.getState().wasNtlmOffered()).isFalse();
   }
 
   @Test
@@ -67,7 +111,7 @@ public final class HttpSpnegoCoordinatorTest {
 
     HttpSpnegoResult result =
         coordinator.nextToken(
-            "portal.example.com", "alex", "EXAMPLE.COM", "EXAMPLE", true, null, null);
+            "portal.example.com", "alex", "EXAMPLE.COM", "EXAMPLE", true, true, null, null);
 
     assertThat(result.getStatus())
         .isEqualTo(HttpSpnegoResult.ERR_UNEXPECTED_SECURITY_LIBRARY_STATUS);
@@ -79,7 +123,7 @@ public final class HttpSpnegoCoordinatorTest {
     HttpSpnegoCoordinator coordinator = coordinator(kerberosSuccess(new byte[] {1}), true);
     SpnegoNegotiationState state =
         SpnegoNegotiationState.offered(
-            "portal.example.com", "backend.example.com", new byte[] {2});
+            "portal.example.com", "backend.example.com", new byte[] {2}, true);
     NegTokenTarg selection = new NegTokenTarg();
     selection.setSupportedMech(HttpNtlmV2Engine.NTLMSSP_OID);
     Buffer.PlainBuffer encoded = new Buffer.PlainBuffer(Endian.LE);
@@ -91,6 +135,7 @@ public final class HttpSpnegoCoordinatorTest {
             "alex",
             "EXAMPLE.COM",
             "EXAMPLE",
+            true,
             true,
             encoded.getCompactData(),
             state);
@@ -118,9 +163,10 @@ public final class HttpSpnegoCoordinatorTest {
             "EXAMPLE.COM",
             "EXAMPLE",
             true,
+            true,
             encoded.getCompactData(),
             SpnegoNegotiationState.offered(
-                "portal.example.com", "backend.example.com", new byte[] {2}));
+                "portal.example.com", "backend.example.com", new byte[] {2}, true));
 
     assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.ERR_MISSING_AUTH_CREDENTIALS);
   }
@@ -136,6 +182,7 @@ public final class HttpSpnegoCoordinatorTest {
             "EXAMPLE.COM",
             "EXAMPLE",
             true,
+            true,
             new byte[] {1},
             SpnegoNegotiationState.ntlmType3Sent("portal.example.com"));
 
@@ -143,10 +190,117 @@ public final class HttpSpnegoCoordinatorTest {
     assertThat(result.getToken()).isNull();
   }
 
+  @Test
+  public void ntlmOnlyInitialOfferDoesNotCallKerberos() throws Exception {
+    int[] kerberosCalls = {0};
+    HttpSpnegoCoordinator coordinator =
+        coordinator(
+            (host, incoming, context, selectedService) -> {
+              kerberosCalls[0]++;
+              return HttpSpnegoCoordinator.KerberosRound.failure("must not be called");
+            },
+            true);
+
+    HttpSpnegoResult result =
+        coordinator.nextToken(
+            "portal.example.com",
+            "alex",
+            "EXAMPLE.COM",
+            "EXAMPLE",
+            false,
+            true,
+            null,
+            null);
+
+    InspectableNegTokenInit offer = new InspectableNegTokenInit();
+    offer.read(result.getToken());
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.OK);
+    assertThat(kerberosCalls[0]).isEqualTo(0);
+    assertThat(offer.getSupportedMechTypes()).containsExactly(HttpNtlmV2Engine.NTLMSSP_OID);
+    assertThat(Arrays.copyOf(offer.optimisticToken(), 8))
+        .isEqualTo(new byte[] {'N', 'T', 'L', 'M', 'S', 'S', 'P', 0});
+    assertThat(result.getState().getMechanism())
+        .isEqualTo(SpnegoNegotiationState.Mechanism.NTLM);
+    assertThat(result.getState().getPhase())
+        .isEqualTo(SpnegoNegotiationState.Phase.NTLM_TYPE1_SENT);
+  }
+
+  @Test
+  public void allHttpMechanismsDisabledReturnsUnsupportedScheme() {
+    HttpSpnegoCoordinator coordinator = coordinator(kerberosSuccess(new byte[] {1}), true);
+
+    HttpSpnegoResult result =
+        coordinator.nextToken(
+            "portal.example.com",
+            "alex",
+            "EXAMPLE.COM",
+            "EXAMPLE",
+            false,
+            false,
+            null,
+            null);
+
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.ERR_UNSUPPORTED_AUTH_SCHEME);
+    assertThat(result.getToken()).isNull();
+  }
+
+  @Test
+  public void disablingSelectedMechanismDuringContinuationIsRejected() throws Exception {
+    HttpSpnegoCoordinator coordinator = coordinator(kerberosSuccess(new byte[] {1}), true);
+    NegTokenTarg continuation = new NegTokenTarg();
+    continuation.setSupportedMech(KERBEROS);
+    Buffer.PlainBuffer encoded = new Buffer.PlainBuffer(Endian.LE);
+    continuation.write(encoded);
+
+    HttpSpnegoResult result =
+        coordinator.nextToken(
+            "portal.example.com",
+            "alex",
+            "EXAMPLE.COM",
+            "EXAMPLE",
+            false,
+            true,
+            encoded.getCompactData(),
+            SpnegoNegotiationState.kerberos(
+                "portal.example.com", "portal.example.com", new byte[] {1}));
+
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.ERR_UNSUPPORTED_AUTH_SCHEME);
+  }
+
+  @Test
+  public void enablingNtlmDuringKerberosOnlyContinuationDoesNotPermitSelection() throws Exception {
+    HttpSpnegoCoordinator coordinator = coordinator(kerberosSuccess(new byte[] {1}), true);
+    NegTokenTarg selection = new NegTokenTarg();
+    selection.setSupportedMech(HttpNtlmV2Engine.NTLMSSP_OID);
+    Buffer.PlainBuffer encoded = new Buffer.PlainBuffer(Endian.LE);
+    selection.write(encoded);
+
+    HttpSpnegoResult result =
+        coordinator.nextToken(
+            "portal.example.com",
+            "alex",
+            "EXAMPLE.COM",
+            "EXAMPLE",
+            true,
+            true,
+            encoded.getCompactData(),
+            SpnegoNegotiationState.offered(
+                "portal.example.com", "backend.example.com", new byte[] {2}));
+
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertThat(result.getToken()).isNull();
+  }
+
   private static HttpSpnegoCoordinator.KerberosProvider kerberosSuccess(byte[] optimistic) {
     return (host, incoming, context, selectedService) ->
         HttpSpnegoCoordinator.KerberosRound.success(
             initialKerberosToken(optimistic), new byte[] {42}, "backend.example.com");
+  }
+
+  private static HttpSpnegoCoordinator.KerberosProvider kerberosSuccessWithoutContext() {
+    return (host, incoming, context, selectedService) ->
+        HttpSpnegoCoordinator.KerberosRound.success(
+            initialKerberosToken(new byte[] {1}), null, "backend.example.com");
   }
 
   private static HttpSpnegoCoordinator coordinator(
