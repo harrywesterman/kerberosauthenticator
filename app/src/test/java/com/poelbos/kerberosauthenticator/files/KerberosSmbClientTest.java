@@ -3,6 +3,7 @@ package com.poelbos.kerberosauthenticator.files;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_2_1;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_1_1;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -10,6 +11,8 @@ import static org.junit.Assert.assertTrue;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.SpnegoAuthenticator;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import org.junit.Test;
 import org.ietf.jgss.GSSException;
 import sun.security.krb5.KrbException;
@@ -64,19 +67,56 @@ public final class KerberosSmbClientTest {
     assertTrue(KerberosSmbClient.createConfig(true).isEncryptData());
   }
 
-  @Test public void usesConcreteDomainControllerForDomainBasedDfsNamespace() {
+  @Test public void usesDomainControllersForDomainBasedDfsNamespace() {
     assertEquals(
-        "dc01.example.test",
-        KerberosSmbClient.initialConnectionHost(
+        Arrays.asList("dc01.example.test", "dc02.example.test"),
+        KerberosSmbClient.initialConnectionHosts(
             "example.test", "EXAMPLE.TEST",
-            "dc01.example.test dc02.example.test"));
+            "dc01.example.test dc02.example.test", "kdc01.example.test"));
+  }
+
+  @Test public void normalizesAndDeduplicatesDomainControllers() {
+    assertEquals(
+        Arrays.asList("dc01.example.test", "dc02.example.test"),
+        KerberosSmbClient.initialConnectionHosts(
+            "example.test.", "EXAMPLE.TEST",
+            "DC01.EXAMPLE.TEST. dc01.example.test dc02.example.test.",
+            "kdc01.example.test"));
+  }
+
+  @Test public void fallsBackToKerberosServersWithoutDomainControllers() {
+    assertEquals(
+        Arrays.asList("kdc01.example.test", "kdc02.example.test"),
+        KerberosSmbClient.initialConnectionHosts(
+            "example.test", "EXAMPLE.TEST", null,
+            "kdc01.example.test kdc02.example.test"));
   }
 
   @Test public void keepsShareHostForNonDomainNamespace() {
     assertEquals(
-        "files.example.test",
-        KerberosSmbClient.initialConnectionHost(
-            "files.example.test", "EXAMPLE.TEST", "dc01.example.test"));
+        Collections.singletonList("files.example.test"),
+        KerberosSmbClient.initialConnectionHosts(
+            "files.example.test", "EXAMPLE.TEST",
+            "dc01.example.test", "kdc01.example.test"));
+  }
+
+  @Test public void retriesNetworkFailureBeforeSessionEstablishment() {
+    assertTrue(KerberosSmbClient.shouldRetryBootstrap(new IOException("unreachable"), false));
+    assertFalse(KerberosSmbClient.shouldRetryBootstrap(new IOException("access denied"), true));
+  }
+
+  @Test public void retriesUnknownServicePrincipalAfterConnecting() {
+    GSSException gssException = new GSSException(GSSException.FAILURE, -1, null);
+    gssException.initCause(new KrbException(7));
+
+    assertTrue(KerberosSmbClient.shouldRetryBootstrap(gssException, true));
+  }
+
+  @Test public void stopsForOtherKerberosFailures() {
+    GSSException gssException = new GSSException(GSSException.FAILURE, -1, null);
+    gssException.initCause(new KrbException(6));
+
+    assertFalse(KerberosSmbClient.shouldRetryBootstrap(gssException, true));
   }
 
   @Test public void reportsOnlyNumericGssStatusForNestedGssException() {
