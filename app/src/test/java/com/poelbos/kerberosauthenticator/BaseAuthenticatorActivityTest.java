@@ -67,7 +67,7 @@ public class BaseAuthenticatorActivityTest {
 
     KerberosAccountDetails accountDetails = accConfigs.getAccountDetails();
     assertThat(accountDetails).isNotNull();
-    assertThat(accountDetails.getUsername()).isEqualTo(TestHelper.TEST_USERNAME);
+    assertThat(accountDetails.getUsername()).isNull();
     assertThat(new String(accountDetails.copyPassword())).isEqualTo(TestHelper.TEST_PASSWORD);
     assertThat(accountDetails.getActiveDirectoryDomain()).isEqualTo(TestHelper.TEST_AD_DOMAIN);
     assertThat(accountDetails.getAdDomainController()).isEmpty();
@@ -113,7 +113,7 @@ public class BaseAuthenticatorActivityTest {
     AccountConfiguration accConfigs = baseAuthenticatorActivity.accountConfiguration;
 
     // Change one restriction
-    assertThat(accConfigs.getAccountDetails().getUsername()).isEqualTo(TestHelper.TEST_USERNAME);
+    assertThat(accConfigs.getAccountDetails().getUsername()).isNull();
     restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, TestHelper.TEST_USERNAME + "1");
 
     // Broadcast the restriction change
@@ -125,8 +125,7 @@ public class BaseAuthenticatorActivityTest {
     shadowOf(Looper.getMainLooper()).idle();
 
     // Check the username restriction is updated.
-    assertThat(accConfigs.getAccountDetails().getUsername())
-        .isEqualTo(TestHelper.TEST_USERNAME + "1");
+    assertThat(accConfigs.getAccountDetails().getUsername()).isNull();
 
     // Unregister receiver.
     LocalBroadcastManager.getInstance(context).unregisterReceiver(receiver);

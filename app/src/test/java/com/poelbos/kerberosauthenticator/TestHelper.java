@@ -85,7 +85,7 @@ public class TestHelper {
     Bundle restrictionsBundle = new Bundle();
     restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, TEST_USERNAME);
     restrictionsBundle.putString(AccountConfiguration.PASSWORD_KEY, TEST_PASSWORD);
-    restrictionsBundle.putString(AccountConfiguration.AD_DOMAIN_KEY, TEST_AD_DOMAIN);
+    restrictionsBundle.putString(AccountConfiguration.AD_REALM_KEY, TEST_AD_DOMAIN);
     return restrictionsBundle;
   }
 

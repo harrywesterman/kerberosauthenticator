@@ -20,7 +20,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.RestrictionsManager;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
@@ -94,26 +93,18 @@ public class AccountConfiguration {
         || (previousRealm != null && !previousRealm.equalsIgnoreCase(directlyManagedRealm))) {
       new com.poelbos.kerberosauthenticator.files.EnterpriseFileCache(context).cleanup();
     }
-    if (restrictionsBundle.isEmpty()) {
-      SharedPreferences localPrefs = context
-          .getSharedPreferences(EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE);
-      String localUser = localPrefs.getString(USERNAME_KEY, null);
-      String localDomain = localPrefs.getString(AD_DOMAIN_KEY, null);
-      // Remove credentials written by versions that predate session-only local authentication.
-      localPrefs.edit().remove(PASSWORD_KEY).apply();
-      if (localUser != null && localDomain != null) {
-        restrictionsBundle.putString(USERNAME_KEY, localUser);
-        restrictionsBundle.putString(AD_DOMAIN_KEY, localDomain);
-      }
-    }
+    // Remove local identity data written by versions that allowed users to configure their own
+    // realm. Enterprise authentication now accepts the AD realm only from managed restrictions.
+    context
+        .getSharedPreferences(
+            EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .clear()
+        .apply();
     // Obtain managed configs.
     String configuredDomain = restrictionsBundle.getString(AD_REALM_KEY);
-    if (Strings.isNullOrEmpty(configuredDomain)) {
-      configuredDomain = restrictionsBundle.getString(AD_DOMAIN_KEY);
-    }
     if (!Strings.isNullOrEmpty(configuredDomain)) {
       adDomain = configuredDomain;
-      username = restrictionsBundle.getString(USERNAME_KEY);
     }
     httpNtlmEnabled = restrictionsBundle.getBoolean(ENABLE_HTTP_NTLM_KEY, false);
     String configuredNtlmDomain = restrictionsBundle.getString(NTLM_DOMAIN_KEY);
