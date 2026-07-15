@@ -96,10 +96,26 @@ public final class KerberosSmbClientTest {
 
   @Test public void keepsShareHostForNonDomainNamespace() {
     assertEquals(
-        Collections.singletonList("files.example.test"),
+        Collections.singletonList("Files.EXAMPLE.TEST."),
         KerberosSmbClient.initialConnectionHosts(
-            "files.example.test", "EXAMPLE.TEST",
+            "Files.EXAMPLE.TEST.", "OTHER.EXAMPLE.TEST",
             "dc01.example.test", "kdc01.example.test"));
+  }
+
+  @Test public void retriesOnlyIoFailuresFromInitialConnect() {
+    IOException networkFailure = new IOException("unreachable");
+    IOException retryable = KerberosSmbClient.bootstrapConnectFailure(networkFailure);
+
+    assertTrue(retryable instanceof KerberosSmbClient.RetryableBootstrapException);
+    assertSame(networkFailure, retryable.getCause());
+
+    RuntimeException programmingFailure = new IllegalStateException("sensitive");
+    IOException mapped = KerberosSmbClient.bootstrapConnectFailure(programmingFailure);
+
+    assertFalse(mapped instanceof KerberosSmbClient.RetryableBootstrapException);
+    assertEquals(
+        "Kerberos sign-in to the share failed (IllegalStateException)", mapped.getMessage());
+    assertSame(programmingFailure, mapped.getCause());
   }
 
   @Test public void retriesNetworkFailureBeforeSessionEstablishment() {

@@ -124,7 +124,7 @@ public final class KerberosSmbClient implements Closeable {
       try {
         connection = client.connect(host, resolvedShare.getPort());
       } catch (RuntimeException | IOException exception) {
-        throw new RetryableBootstrapException(exception);
+        throw bootstrapConnectFailure(exception);
       }
       GSSAuthenticationContext authentication = new GSSAuthenticationContext(
           account.getName(), account.getDomain(), subject, null);
@@ -169,7 +169,7 @@ public final class KerberosSmbClient implements Closeable {
       String shareHost, String realm, String domainControllers, String kerberosServers) {
     String normalizedHost = normalizeHost(shareHost);
     if (!normalizedHost.equals(normalizeHost(realm))) {
-      return Collections.singletonList(normalizedHost);
+      return Collections.singletonList(shareHost);
     }
 
     String candidates = isBlank(domainControllers) ? kerberosServers : domainControllers;
@@ -193,6 +193,13 @@ public final class KerberosSmbClient implements Closeable {
       if (cause instanceof IOException) containsIoFailure = true;
     }
     return !sessionEstablished && containsIoFailure;
+  }
+
+  static IOException bootstrapConnectFailure(Exception exception) {
+    if (exception instanceof IOException) {
+      return new RetryableBootstrapException(exception);
+    }
+    return connectionFailure(exception);
   }
 
   interface BootstrapCandidateConnector<T> {
