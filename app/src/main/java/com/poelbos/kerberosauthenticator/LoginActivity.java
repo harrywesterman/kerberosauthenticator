@@ -30,6 +30,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.google.android.material.progressindicator.CircularProgressIndicator;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
@@ -45,8 +48,10 @@ import javax.security.auth.Subject;
 public class LoginActivity extends BaseAuthenticatorActivity implements
     UserAuthenticationResultListener {
 
+  public static final String RETURN_TO_ACCOUNT = "return_to_account";
   boolean isPasswordRetry = false;
   private boolean refreshStatusAfterAuth = false;
+  private boolean accountMode = false;
   private char[] pendingPassword;
 
   /** Returns an intent that can be used to authenticate an account. */
@@ -72,24 +77,35 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     return intent;
   }
 
+  public static Intent getAccountSignInIntent(Context context) {
+    return new Intent(context, LoginActivity.class).putExtra(RETURN_TO_ACCOUNT, true);
+  }
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
 
-    // Let the user know an account cannot be added because managed config is missing.
+    accountMode = getIntent().getBooleanExtra(RETURN_TO_ACCOUNT, false);
+
+    // A realm can only be supplied by managed configuration.
     if (!accountConfiguration.hasManagedConfigs()) {
-      Intent intent = EditConfigurationActivity.getEditIntent(
-          this,
-          getIntent().getParcelableExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE),
-          getIntent().getStringExtra(Constants.SERVICE_NAME));
-      startActivity(intent);
-      finish();
+      if (accountMode) {
+        showMissingManagedConfiguration();
+      } else {
+        setErrorResultAndFinish(
+            AccountManager.ERROR_CODE_BAD_ARGUMENTS, "Managed account configuration missing");
+      }
       return;
     }
 
     isPasswordRetry = false;
     Intent intent = getIntent();
     refreshStatusAfterAuth = intent.getBooleanExtra(Constants.REFRESH_STATUS_AFTER_AUTH, false);
+
+    if (accountMode) {
+      showAccountSignIn();
+      return;
+    }
 
     setContentView(R.layout.authenticator);
 
@@ -166,7 +182,7 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (serviceName == null) {
       result.putString(AccountManager.KEY_ACCOUNT_NAME, account.getName());
       result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
-      if (refreshStatusAfterAuth) {
+      if (accountMode || refreshStatusAfterAuth) {
         Intent statusIntent = new Intent(this, AuthenticatorStatusActivity.class);
         statusIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(statusIntent);
@@ -249,6 +265,35 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     }
   }
 
+  private void saveAccountCredentials() {
+    TextInputLayout usernameLayout = findViewById(R.id.accountUsernameLayout);
+    TextInputLayout passwordLayout = findViewById(R.id.accountPasswordLayout);
+    TextInputEditText usernameInput = findViewById(R.id.accountUsername);
+    TextInputEditText passwordInput = findViewById(R.id.accountPassword);
+    String username = String.valueOf(usernameInput.getText()).trim();
+    Editable passwordText = passwordInput.getText();
+    char[] password = copyCharacters(passwordText);
+    if (passwordText != null) passwordText.clear();
+
+    usernameLayout.setError(username.isEmpty() ? getString(R.string.username_required) : null);
+    passwordLayout.setError(password.length == 0 ? getString(R.string.password_required) : null);
+    if (username.isEmpty() || password.length == 0) {
+      java.util.Arrays.fill(password, '\0');
+      return;
+    }
+
+    KerberosAccountDetails configured = accountConfiguration.getAccountDetails();
+    try {
+      initiateUserAuthenticationTask(new KerberosAccountDetails(
+          username,
+          password,
+          configured.getActiveDirectoryDomain(),
+          configured.getAdDomainController()));
+    } finally {
+      java.util.Arrays.fill(password, '\0');
+    }
+  }
+
   private void initiateUserAuthenticationTask(
       KerberosAccount account, KerberosAccountDetails configured) {
     char[] password = account.copyPassword();
@@ -262,7 +307,12 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   }
 
   private void initiateUserAuthenticationTask(KerberosAccountDetails accountDetails) {
-    setRefreshingStatus(getTGTTimestampTextViewId());
+    if (accountMode) {
+      findViewById(R.id.accountSignInButton).setEnabled(false);
+      findViewById(R.id.accountSignInProgress).setVisibility(View.VISIBLE);
+    } else {
+      setRefreshingStatus(getTGTTimestampTextViewId());
+    }
     clearPendingPassword();
     pendingPassword = accountDetails.copyPassword();
     KerberosAccount account = KerberosAccount.getAccount(this);
@@ -327,13 +377,19 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   }
 
   private void showUserLoginUI() {
+    if (accountMode) {
+      findViewById(R.id.accountSignInProgress).setVisibility(View.GONE);
+      findViewById(R.id.accountSignInButton).setEnabled(true);
+      if (isPasswordRetry) {
+        ((TextInputLayout) findViewById(R.id.accountPasswordLayout))
+            .setError(getString(R.string.sign_in_failed));
+      }
+      return;
+    }
     TextView username = findViewById(R.id.editTextUser);
     KerberosAccount existing = KerberosAccount.getAccount(this);
     if (existing != null) username.setText(existing.getName());
     username.setVisibility(View.VISIBLE);
-    TextView realm = findViewById(R.id.managedRealm);
-    realm.setText("Work environment: " + accountConfiguration.getRealm());
-    realm.setVisibility(View.VISIBLE);
     View pwField = findViewById(R.id.editTextPw);
     pwField.setVisibility(View.VISIBLE);
     Button loginBtn = findViewById(R.id.ok_btn);
@@ -343,8 +399,12 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   }
 
   private void hideUserLoginUI() {
+    if (accountMode) {
+      findViewById(R.id.accountSignInButton).setEnabled(false);
+      findViewById(R.id.accountSignInProgress).setVisibility(View.VISIBLE);
+      return;
+    }
     findViewById(R.id.editTextUser).setVisibility(View.GONE);
-    findViewById(R.id.managedRealm).setVisibility(View.GONE);
     findViewById(R.id.editTextPw).setVisibility(View.GONE);
     findViewById(R.id.ok_btn).setVisibility(View.GONE);
     setText(getTGTTimestampTextViewId(), getText(R.string.not_available).toString());
@@ -360,6 +420,24 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       // information available already.
       showLastServiceAuth();
     }
+  }
+
+  private void showAccountSignIn() {
+    setContentView(R.layout.activity_account_login);
+    findViewById(R.id.managedConfigurationError).setVisibility(View.GONE);
+    ((TextView) findViewById(R.id.accountUsername)).setText("");
+    ((TextView) findViewById(R.id.accountPassword)).setText("");
+    findViewById(R.id.accountSignInButton).setOnClickListener(v -> saveAccountCredentials());
+    ((com.google.android.material.appbar.MaterialToolbar) findViewById(R.id.accountTopAppBar))
+        .setNavigationOnClickListener(v -> finish());
+  }
+
+  private void showMissingManagedConfiguration() {
+    setContentView(R.layout.activity_account_login);
+    findViewById(R.id.accountForm).setVisibility(View.GONE);
+    findViewById(R.id.managedConfigurationError).setVisibility(View.VISIBLE);
+    ((com.google.android.material.appbar.MaterialToolbar) findViewById(R.id.accountTopAppBar))
+        .setNavigationOnClickListener(v -> finish());
   }
 
   private static char[] copyCharacters(CharSequence value) {

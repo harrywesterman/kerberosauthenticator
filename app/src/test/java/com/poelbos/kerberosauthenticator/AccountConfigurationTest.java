@@ -53,7 +53,7 @@ public class AccountConfigurationTest {
         context.getSystemServiceName(RestrictionsManager.class));
     restrictionsBundle = TestHelper.makeRestrictionsBundle();
     context.getSharedPreferences(
-            EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
+            AccountConfiguration.LEGACY_LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
         .clear()
         .apply();
@@ -109,7 +109,7 @@ public class AccountConfigurationTest {
     shadowOf(restrictionsManager).setApplicationRestrictions(new Bundle());
     SharedPreferences prefs =
         context.getSharedPreferences(
-            EditConfigurationActivity.LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE);
+            AccountConfiguration.LEGACY_LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE);
     prefs
         .edit()
         .putString(AccountConfiguration.USERNAME_KEY, TestHelper.TEST_USERNAME)

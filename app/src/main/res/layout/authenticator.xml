@@ -73,13 +73,6 @@
           android:visibility="gone" />
 
       <TextView
-          android:id="@+id/managedRealm"
-          android:layout_width="match_parent"
-          android:layout_height="wrap_content"
-          android:textColor="@color/material_grey_600"
-          android:visibility="gone" />
-
-      <TextView
           android:id="@+id/automatic_refresh_status"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"

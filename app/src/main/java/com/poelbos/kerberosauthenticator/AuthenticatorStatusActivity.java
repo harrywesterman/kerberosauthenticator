@@ -37,15 +37,18 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     super.onCreate(savedInstanceState);
 
     if (!accountConfiguration.hasManagedConfigs()) {
-      startActivity(new Intent(this, EditConfigurationActivity.class));
-      finish();
+      setContentView(R.layout.activity_account_login);
+      findViewById(R.id.accountForm).setVisibility(View.GONE);
+      findViewById(R.id.managedConfigurationError).setVisibility(View.VISIBLE);
+      ((com.google.android.material.appbar.MaterialToolbar) findViewById(R.id.accountTopAppBar))
+          .setNavigationOnClickListener(view -> finish());
       return;
     }
 
     setContentView(R.layout.authenticator);
 
     if (KerberosAccount.getAccount(this) == null) {
-      startActivity(LoginActivity.getAuthenticateIntent(this, null));
+      startActivity(LoginActivity.getAccountSignInIntent(this));
       finish();
       return;
     }
