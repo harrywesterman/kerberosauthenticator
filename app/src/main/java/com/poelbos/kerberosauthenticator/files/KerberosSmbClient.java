@@ -1,11 +1,13 @@
 package com.poelbos.kerberosauthenticator.files;
 
+import static com.poelbos.kerberosauthenticator.Constants.TAG;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_2_1;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_0;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_0_2;
 import static com.hierynomus.mssmb2.SMB2Dialect.SMB_3_1_1;
 
 import android.content.Context;
+import android.util.Log;
 import com.hierynomus.msfscc.FileAttributes;
 import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation;
 import com.hierynomus.mssmb2.SMBApiException;
@@ -25,7 +27,7 @@ import com.hierynomus.mssmb2.SMB2CreateDisposition;
 import com.hierynomus.mssmb2.SMB2CreateOptions;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
 import com.poelbos.kerberosauthenticator.KerberosAccount;
-import com.poelbos.kerberosauthenticator.internal.KerberosEnvironment;
+import com.poelbos.kerberosauthenticator.internal.DnsKdcDiscovery;
 import com.poelbos.kerberosauthenticator.internal.KerberosRuntimeCoordinator;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import java.io.Closeable;
@@ -44,7 +46,6 @@ import java.util.Locale;
 import java.util.Set;
 import javax.security.auth.Subject;
 import org.ietf.jgss.GSSException;
-import sun.security.jgss.GSSUtil;
 import sun.security.krb5.KrbException;
 
 /** Kerberos-only SMB 2.1+ session. No password/NTLM authenticator is ever constructed. */
@@ -80,9 +81,9 @@ public final class KerberosSmbClient implements Closeable {
         account.getDomainController(),
         resolvedShare.getHost(),
         subject,
-        configuredDomainController -> connectConfigured(
+        configuredKerberosServers -> connectConfigured(
             context.getApplicationContext(), account, resolvedShare, requireEncryption, subject,
-            configuredDomainController));
+            configuredKerberosServers));
   }
 
   private static KerberosSmbClient connectConfigured(
@@ -91,19 +92,53 @@ public final class KerberosSmbClient implements Closeable {
       ManagedShare resolvedShare,
       boolean requireEncryption,
       Subject subject,
-      String domainController) throws IOException {
+      String configuredKerberosServers) throws IOException {
+    String domainControllers = normalizeHost(resolvedShare.getHost())
+            .equals(normalizeHost(account.getDomain()))
+        ? DnsKdcDiscovery.discoverDomainControllers(context, account.getDomain())
+        : null;
+    List<String> candidates = initialConnectionHosts(
+        resolvedShare.getHost(), account.getDomain(), domainControllers,
+        configuredKerberosServers);
+    try {
+      return tryBootstrapCandidates(
+          candidates,
+          host -> connectCandidate(
+              context, account, resolvedShare, requireEncryption, subject, host));
+    } catch (RetryableBootstrapException exception) {
+      throw connectionFailure(exception);
+    }
+  }
+
+  private static KerberosSmbClient connectCandidate(
+      Context context,
+      KerberosAccount account,
+      ManagedShare resolvedShare,
+      boolean requireEncryption,
+      Subject subject,
+      String host) throws IOException {
     SmbConfig config = createConfig(requireEncryption);
     SMBClient client = new SMBClient(config);
     Connection connection = null;
     try {
-      connection = client.connect(
-          initialConnectionHost(
-              resolvedShare.getHost(), account.getDomain(), domainController),
-          resolvedShare.getPort());
+      try {
+        connection = client.connect(host, resolvedShare.getPort());
+      } catch (RuntimeException | IOException exception) {
+        throw new RetryableBootstrapException(exception);
+      }
       GSSAuthenticationContext authentication = new GSSAuthenticationContext(
           account.getName(), account.getDomain(), subject, null);
-      Session session = connection.authenticate(authentication);
+      Session session;
+      try {
+        session = connection.authenticate(authentication);
+      } catch (RuntimeException exception) {
+        if (shouldRetryBootstrap(exception, false)) {
+          throw new RetryableBootstrapException(exception);
+        }
+        throw exception;
+      }
       DiskShare share = (DiskShare) session.connectShare(resolvedShare.getShareName());
+      Log.i(TAG, "SMB_BOOTSTRAP_SELECTED host=" + host);
       return new KerberosSmbClient(
           context, account.getDomain(), account.getDomainController(), subject,
           resolvedShare, client, connection, session, share,
@@ -111,6 +146,13 @@ public final class KerberosSmbClient implements Closeable {
     } catch (RuntimeException | IOException exception) {
       if (connection != null) try { connection.close(); } catch (Exception ignored) {}
       try { client.close(); } catch (Exception ignored) {}
+      if (exception instanceof RetryableBootstrapException) {
+        Log.i(
+            TAG,
+            "SMB_BOOTSTRAP_RESULT host=" + host
+                + " result=" + bootstrapFailureCategory(exception));
+        throw (RetryableBootstrapException) exception;
+      }
       throw connectionFailure(exception);
     }
   }
@@ -121,11 +163,6 @@ public final class KerberosSmbClient implements Closeable {
     } catch (IllegalArgumentException exception) {
       throw new IOException("The managed share path is invalid", exception);
     }
-  }
-
-  static String initialConnectionHost(
-      String shareHost, String realm, String domainController) {
-    return initialConnectionHosts(shareHost, realm, domainController, domainController).get(0);
   }
 
   static List<String> initialConnectionHosts(
@@ -147,13 +184,50 @@ public final class KerberosSmbClient implements Closeable {
     return new ArrayList<>(unique);
   }
 
-  static boolean shouldRetryBootstrap(Throwable exception, boolean connectionEstablished) {
+  static boolean shouldRetryBootstrap(Throwable exception, boolean sessionEstablished) {
+    boolean containsIoFailure = false;
     for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
       if (cause instanceof KrbException) {
         return ((KrbException) cause).returnCode() == 7;
       }
+      if (cause instanceof IOException) containsIoFailure = true;
     }
-    return !connectionEstablished && exception instanceof IOException;
+    return !sessionEstablished && containsIoFailure;
+  }
+
+  interface BootstrapCandidateConnector<T> {
+    T connect(String host) throws IOException;
+  }
+
+  static <T> T tryBootstrapCandidates(
+      List<String> candidates, BootstrapCandidateConnector<T> connector) throws IOException {
+    if (candidates == null || candidates.isEmpty()) {
+      throw new IOException("No SMB bootstrap candidates are available");
+    }
+    for (int index = 0; index < candidates.size(); index++) {
+      String candidate = candidates.get(index);
+      try {
+        return connector.connect(candidate);
+      } catch (RetryableBootstrapException exception) {
+        if (index + 1 >= candidates.size()) throw exception;
+      }
+    }
+    throw new IOException("No SMB bootstrap candidate succeeded");
+  }
+
+  private static String bootstrapFailureCategory(Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause instanceof KrbException) {
+        return "KRB_" + ((KrbException) cause).returnCode();
+      }
+    }
+    return "CONNECT";
+  }
+
+  static final class RetryableBootstrapException extends IOException {
+    RetryableBootstrapException(Throwable cause) {
+      super("SMB bootstrap candidate unavailable", cause);
+    }
   }
 
   private static boolean isBlank(String value) {
