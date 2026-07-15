@@ -45,7 +45,7 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
       return;
     }
 
-    setContentView(R.layout.authenticator);
+    setContentView(R.layout.activity_account_status);
 
     if (KerberosAccount.getAccount(this) == null) {
       startActivity(LoginActivity.getAccountSignInIntent(this));
@@ -53,10 +53,9 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
       return;
     }
 
-    boolean isLaunchedByUser = Intent.ACTION_MAIN.equals(getIntent().getAction());
-    // Initialise the UI, showing a "Dismiss" button.
-    initUI(isLaunchedByUser, "");
-    showOkBtn(true);
+    ((com.google.android.material.appbar.MaterialToolbar)
+        findViewById(R.id.accountStatusTopAppBar)).setNavigationOnClickListener(view -> finish());
+    initUI(true, "");
     showRefreshBtn(accountConfiguration.hasManagedConfigs());
     showLogoutBtn(accountConfiguration.hasManagedConfigs());
     long lastRefresh = getSharedPreferences(TgtRefreshWorker.STATUS_PREFS, MODE_PRIVATE)
@@ -66,9 +65,10 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     String category = getSharedPreferences(TgtRefreshWorker.STATUS_PREFS, MODE_PRIVATE)
         .getString(TgtRefreshWorker.LAST_CATEGORY, "not run yet");
     refreshStatus.setText(lastRefresh == 0L
-        ? "Automatic refresh: " + category
-        : "Last automatic refresh: "
-            + DateFormat.getDateTimeInstance().format(new Date(lastRefresh)));
+        ? getString(R.string.automatic_refresh_not_run, category)
+        : getString(
+            R.string.automatic_refresh_last_success,
+            DateFormat.getDateTimeInstance().format(new Date(lastRefresh))));
     KerberosAccount account = KerberosAccount.getAccount(this);
     boolean ntlmCredentialsAvailable =
         account != null

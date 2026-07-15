@@ -113,4 +113,8 @@
     <string name="password_required">Enter your password</string>
     <string name="sign_in_failed">Sign-in failed. Check your username and password.</string>
     <string name="managed_configuration_missing">Managed account configuration is missing. Contact your administrator.</string>
+    <string name="signed_in_as">Signed in as</string>
+    <string name="authentication_status">Authentication status</string>
+    <string name="automatic_refresh_not_run">Automatic refresh: %1$s</string>
+    <string name="automatic_refresh_last_success">Last automatic refresh: %1$s</string>
 </resources>
