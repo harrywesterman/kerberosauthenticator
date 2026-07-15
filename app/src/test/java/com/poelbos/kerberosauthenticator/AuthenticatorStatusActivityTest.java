@@ -4,12 +4,16 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.robolectric.Shadows.shadowOf;
 
 import android.accounts.AccountManager;
+import android.accounts.Account;
 import android.content.Context;
 import android.content.Intent;
 import android.content.RestrictionsManager;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.TextView;
 import androidx.test.core.app.ApplicationProvider;
+import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.button.MaterialButton;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -68,5 +72,72 @@ public final class AuthenticatorStatusActivityTest {
         "managedConfigurationError", "id", activity.getPackageName());
     assertThat(errorId).isNotEqualTo(0);
     assertThat(activity.findViewById(errorId).getVisibility()).isEqualTo(View.VISIBLE);
+  }
+
+  @Test
+  public void signedInAccountUsesMaterialStatusLayout() {
+    configureManagedRealm();
+    addSignedInAccount();
+
+    AuthenticatorStatusActivity activity =
+        Robolectric.buildActivity(AuthenticatorStatusActivity.class).setup().get();
+    int toolbarId = resourceId(activity, "accountStatusTopAppBar");
+    int accountNameId = resourceId(activity, "accountName");
+
+    assertThat(toolbarId).isNotEqualTo(0);
+    assertThat(((MaterialToolbar) activity.findViewById(toolbarId)).getTitle().toString())
+        .isEqualTo("Account");
+    assertThat(((TextView) activity.findViewById(accountNameId)).getText().toString())
+        .isEqualTo(TestHelper.USERNAME);
+    assertThat((View) activity.findViewById(R.id.refresh_btn))
+        .isInstanceOf(MaterialButton.class);
+    assertThat((View) activity.findViewById(R.id.logout_btn))
+        .isInstanceOf(MaterialButton.class);
+    assertThat((View) activity.findViewById(R.id.ok_btn)).isNull();
+    assertThat((View) activity.findViewById(R.id.editTextUser)).isNull();
+    assertThat((View) activity.findViewById(R.id.editTextPw)).isNull();
+  }
+
+  @Test
+  public void signOutClearsIdentityAndOpensEmptyAccountSignIn() {
+    configureManagedRealm();
+    addSignedInAccount();
+    context.getSharedPreferences(
+            AccountConfiguration.LEGACY_LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putString(AccountConfiguration.USERNAME_KEY, "previous-user")
+        .putString(AccountConfiguration.AD_DOMAIN_KEY, TestHelper.TEST_AD_DOMAIN)
+        .apply();
+    AuthenticatorStatusActivity activity =
+        Robolectric.buildActivity(AuthenticatorStatusActivity.class).setup().get();
+
+    activity.findViewById(R.id.logout_btn).performClick();
+
+    assertThat(KerberosAccount.getAccount(context)).isNull();
+    assertThat(context.getSharedPreferences(
+            AccountConfiguration.LEGACY_LOCAL_CONFIG_PREFS_NAME, Context.MODE_PRIVATE).getAll())
+        .isEmpty();
+    Intent started = shadowOf(activity).getNextStartedActivity();
+    assertThat(started.getComponent().getClassName()).isEqualTo(LoginActivity.class.getName());
+    assertThat(started.getBooleanExtra(LoginActivity.RETURN_TO_ACCOUNT, false)).isTrue();
+  }
+
+  private void configureManagedRealm() {
+    Bundle managed = new Bundle();
+    managed.putString(AccountConfiguration.AD_REALM_KEY, TestHelper.TEST_AD_DOMAIN);
+    shadowOf(restrictions).setApplicationRestrictions(managed);
+  }
+
+  private void addSignedInAccount() {
+    Bundle data = new Bundle();
+    data.putString(KerberosAccount.KEY_AD_DOMAIN, TestHelper.TEST_AD_DOMAIN);
+    data.putString(KerberosAccount.KEY_AD_DC, TestHelper.AD_DC);
+    data.putString(KerberosAccount.KEY_TGT, TestHelper.TGT_B64);
+    AccountManager.get(context).addAccountExplicitly(
+        new Account(TestHelper.USERNAME, Constants.KERBEROS_ACCOUNT_TYPE), null, data);
+  }
+
+  private static int resourceId(AuthenticatorStatusActivity activity, String name) {
+    return activity.getResources().getIdentifier(name, "id", activity.getPackageName());
   }
 }

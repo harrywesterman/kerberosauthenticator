@@ -30,7 +30,6 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
-import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import java.text.DateFormat;
 import java.util.Date;
@@ -64,15 +63,16 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
 
   /** UI Helper methods. */
   protected void showAccountInfo() {
-    if (accountConfiguration.hasManagedConfigs()) {
-      KerberosAccountDetails accountDetails = accountConfiguration.getAccountDetails();
-      ((TextView) findViewById(R.id.subtitle))
-          .setText(
-              getResources()
-                  .getString(
-                      R.string.subtitle_user_creds,
-                      accountDetails.getUsername(),
-                      accountDetails.getActiveDirectoryDomain()));
+    KerberosAccount account = KerberosAccount.getAccount(this);
+    if (account == null) return;
+    TextView accountName = findViewById(R.id.accountName);
+    if (accountName != null) {
+      accountName.setText(account.getName());
+      return;
+    }
+    TextView subtitle = findViewById(R.id.subtitle);
+    if (subtitle != null) {
+      subtitle.setText(account.getName());
     }
   }
 
@@ -214,11 +214,13 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
   }
 
   protected void showOkBtn(boolean isUserVisible) {
+    View okButton = findViewById(R.id.ok_btn);
+    if (okButton == null) return;
     if (isUserVisible) {
-      findViewById(R.id.ok_btn).setVisibility(View.VISIBLE);
-      findViewById(R.id.ok_btn).setOnClickListener(v -> finish());
+      okButton.setVisibility(View.VISIBLE);
+      okButton.setOnClickListener(v -> finish());
     } else {
-      findViewById(R.id.ok_btn).setVisibility(View.GONE);
+      okButton.setVisibility(View.GONE);
     }
   }
 
