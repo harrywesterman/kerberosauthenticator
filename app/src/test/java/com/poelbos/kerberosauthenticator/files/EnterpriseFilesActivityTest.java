@@ -77,6 +77,20 @@ public final class EnterpriseFilesActivityTest {
   }
 
   @Test
+  public void accountSignInIsNotOfferedAgainAfterActivityRecreation() {
+    setManagedRealm("EXAMPLE.COM");
+    ActivityController<EnterpriseFilesActivity> controller =
+        Robolectric.buildActivity(EnterpriseFilesActivity.class).setup();
+    EnterpriseFilesActivity activity = controller.get();
+    assertThat(shadowOf(activity).getNextStartedActivity()).isNotNull();
+
+    controller.recreate();
+    EnterpriseFilesActivity recreatedActivity = controller.get();
+
+    assertThat(shadowOf(recreatedActivity).getNextStartedActivity()).isNull();
+  }
+
+  @Test
   public void accountInManagedRealmDoesNotOpenAccountSignIn() {
     setManagedRealm("EXAMPLE.COM");
     Account account = new Account("alice", "AndroidEnterpriseKerberos");
