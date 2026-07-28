@@ -146,6 +146,7 @@ For the integrated file app, for example:
   "enable_http_kerberos": true,
   "enable_http_ntlm": true,
   "ntlm_domain": "EXAMPLE",
+  "enable_shares": true,
   "require_smb_encryption": true,
   "allow_local_cache": true,
   "allow_screenshots": false,
@@ -228,7 +229,8 @@ Then use the Test DPC UI to set managed configuration for the app.
 |---|---|---|---|
 | `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
 | `username` | string | no | Editable default for every Active Directory sign-in field and login flow; the password is never supplied through this restriction |
-| `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and static or username-templated start path |
+| `enable_shares` | bool | no | Show managed SMB shares in the app; default `true`. Does not affect the Kerberos account, ticket renewal, or HTTP authentication |
+| `shares` | bundle array | when shares are enabled | Managed SMB shares with ID, label, DNS host, port, share and static or username-templated start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
 | `enable_http_kerberos` | bool | no | Permit Kerberos inside HTTP Negotiate; default `true`. Does not affect the Kerberos account or SMB |

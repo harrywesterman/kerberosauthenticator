@@ -105,6 +105,30 @@ public final class EnterpriseFilesActivityTest {
   }
 
   @Test
+  public void disabledSharesShowManagedPolicyStateWithoutConfigurationError() {
+    Bundle managed = new Bundle();
+    managed.putString(EnterpriseConfiguration.REALM, "EXAMPLE.COM");
+    managed.putBoolean(EnterpriseConfiguration.ENABLE_SHARES, false);
+    shadowOf(restrictions).setApplicationRestrictions(managed);
+    Account account = new Account("alice", "AndroidEnterpriseKerberos");
+    Bundle userData = new Bundle();
+    userData.putString("ad_domain", "EXAMPLE.COM");
+    assertThat(accountManager.addAccountExplicitly(account, null, userData)).isTrue();
+
+    EnterpriseFilesActivity activity =
+        Robolectric.buildActivity(EnterpriseFilesActivity.class).setup().get();
+
+    int titleId = activity.getResources().getIdentifier(
+        "emptyTitle", "id", activity.getPackageName());
+    int messageId = activity.getResources().getIdentifier(
+        "emptyMessage", "id", activity.getPackageName());
+    assertThat(((android.widget.TextView) activity.findViewById(titleId)).getText().toString())
+        .isEqualTo("Enterprise shares are disabled");
+    assertThat(((android.widget.TextView) activity.findViewById(messageId)).getText().toString())
+        .isEqualTo("Enterprise shares are disabled by your administrator.");
+  }
+
+  @Test
   public void accountOverflowItemOpensAccountDestination() {
     EnterpriseFilesActivity activity =
         Robolectric.buildActivity(EnterpriseFilesActivity.class).setup().get();
