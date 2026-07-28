@@ -39,6 +39,8 @@ import java.net.URLConnection;
 
 /** Focused enterprise file browser. Shares can only originate from managed configuration. */
 public final class EnterpriseFilesActivity extends AppCompatActivity {
+  private static final String STATE_ACCOUNT_SIGN_IN_OFFERED = "account_sign_in_offered";
+
   private ActivityEnterpriseFilesBinding binding;
   private EnterpriseConfiguration configuration;
   private KerberosSmbClient smbClient;
@@ -56,6 +58,8 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
 
   @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
+    accountSignInOffered =
+        state != null && state.getBoolean(STATE_ACCOUNT_SIGN_IN_OFFERED, false);
     fileCache = new EnterpriseFileCache(this);
     fileCache.cleanup();
     binding = ActivityEnterpriseFilesBinding.inflate(getLayoutInflater());
@@ -80,6 +84,11 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
         if (currentShare == null) finish(); else navigateBack();
       }
     });
+  }
+
+  @Override protected void onSaveInstanceState(@NonNull Bundle outState) {
+    outState.putBoolean(STATE_ACCOUNT_SIGN_IN_OFFERED, accountSignInOffered);
+    super.onSaveInstanceState(outState);
   }
 
   @Override protected void onResume() {
