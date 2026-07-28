@@ -127,7 +127,7 @@ The app reads its configuration from Android's [managed configuration](https://d
 
 ### Omnissa Workspace ONE UEM
 
-Create one application configuration for this app and one for Chrome. MDM provides the Kerberos realm and share definitions; the user enters their own username and password. The Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
+Create one application configuration for this app and one for Chrome. MDM provides the Kerberos realm and share definitions and can optionally provide an editable username default; the user always enters their own password. The Chrome configuration tells Chrome which Android account type to use for HTTP Negotiate/Kerberos.
 
 #### Kerberos Authenticator app
 
@@ -141,6 +141,7 @@ For the integrated file app, for example:
 ```json
 {
   "ad_realm": "EXAMPLE.COM",
+  "username": "user@example.com",
   "enable_http_kerberos": true,
   "enable_http_ntlm": true,
   "ntlm_domain": "EXAMPLE",
@@ -175,7 +176,12 @@ For UEM systems that consume `{username}` as their own lookup value, use
 `host` and `share_name` remain fixed administrator-controlled values. Static paths continue to
 work unchanged.
 
-The user signs in to the app with their own AD username and password. After a successful login, the app requests a new TGT daily through WorkManager. Android may delay the exact execution time because of Doze. The app discovers KDCs through DNS SRV records such as `_kerberos._udp.example.com`.
+The user signs in to the app with their own AD username and password. An optional managed
+`username` is used as an editable default in every Active Directory sign-in field and login flow;
+the user can replace it before signing in. The password is never supplied through this restriction
+or any other managed configuration. After a successful login, the app requests a new TGT daily
+through WorkManager. Android may delay the exact execution time because of Doze. The app discovers
+KDCs through DNS SRV records such as `_kerberos._udp.example.com`.
 
 #### Chrome app
 
@@ -218,6 +224,7 @@ Then use the Test DPC UI to set managed configuration for the app.
 | Key | Type | Required | Description |
 |---|---|---|---|
 | `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
+| `username` | string | no | Editable default for every Active Directory sign-in field and login flow; the password is never supplied through this restriction |
 | `shares` | bundle array | yes | Managed SMB shares with ID, label, DNS host, port, share and static or username-templated start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
