@@ -4,7 +4,13 @@
 
 **Goal:** Restore an editable UEM-managed username default in every login flow and open sign-in automatically when the launcher starts without an account.
 
-**Architecture:** Keep `RestrictionsManager` access centralized in `AccountConfiguration`, which normalizes the optional `username` restriction and exposes it through `KerberosAccountDetails`. `LoginActivity` applies one username-precedence rule to both of its presentations. `EnterpriseFilesActivity` offers account sign-in once per launcher instance when a managed realm exists but no Kerberos account does.
+**Architecture:** Keep `RestrictionsManager` access centralized in `AccountConfiguration`, which
+normalizes the optional `username` restriction and exposes it through `KerberosAccountDetails`.
+`LoginActivity` applies the precedence existing account > managed username > empty, while guarding
+legacy retries from overwriting an edited field and replacing an existing account only when the
+submitted identity changes. `EnterpriseFilesActivity` offers account sign-in once for a cold
+launcher instance when a managed realm exists but no Kerberos account does, and preserves that
+one-time guard across activity recreation.
 
 **Tech Stack:** Android Java 17, Android managed app restrictions, AccountManager, Robolectric, JUnit 4, Truth, Gradle.
 
@@ -134,7 +140,12 @@ public void accountModePrefillsEditableManagedUsername() {
 
 Add a second test that launches `LoginActivity.getAuthenticateIntent(context, null)` and asserts
 that `editTextUser` contains `managed-user`. This covers the Android/Chrome authenticator
-presentation.
+presentation. Add these regression tests as well:
+
+- `accountModeSubmitsEditedUsernameInsteadOfExistingAccountName` edits the account-mode username
+  and verifies that authentication uses the edited identity rather than the existing account name.
+- `authenticatorModeKeepsEditedUsernameWhenLoginUiIsShownAgain` edits the legacy authenticator
+  field and verifies that showing the login UI again does not restore the managed default.
 
 Add a focused pure precedence test by extracting the following package-visible helper:
 
@@ -159,27 +170,52 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
 ```
 
 Expected: FAIL because both login presentations currently start with an empty username when no
-account exists.
+account exists, and the editable-identity safeguards are not implemented.
 
-**Step 3: Implement one precedence rule**
+**Step 3: Implement the precedence and editable-field safeguards**
 
-Add `preferredUsername(...)` to `LoginActivity`. In `showUserLoginUI()`, replace the
-existing-account-only assignment with:
+Add `preferredUsername(...)` to `LoginActivity` with the precedence existing account > managed
+username > empty. Add a package-visible helper that writes the preferred value only when the
+current field is empty:
 
 ```java
-username.setText(preferredUsername(
-    KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails()));
+static void prefillUsername(
+    TextView username, KerberosAccount existing, KerberosAccountDetails configured) {
+  if (TextUtils.isEmpty(username.getText())) {
+    username.setText(preferredUsername(existing, configured));
+  }
+}
 ```
 
-In `showAccountSignIn()`, replace the empty username assignment with:
+Use it in the legacy `showUserLoginUI()` path so a failed authentication that shows the UI again
+does not overwrite a manually edited username:
+
+```java
+prefillUsername(
+    username, KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails());
+```
+
+In `showAccountSignIn()`, initialize the new account-mode field directly from the same precedence
+rule:
 
 ```java
 ((TextView) findViewById(R.id.accountUsername)).setText(preferredUsername(
     KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails()));
 ```
 
-Leave both XML fields enabled and editable. Do not change `saveUserCredentials()` or
-`saveAccountCredentials()`; they already authenticate with the final field content.
+Leave both XML fields enabled and editable. Keep `saveUserCredentials()` unchanged. In
+`saveAccountCredentials()`, compare the trimmed submitted username with the existing account and
+remove the existing account before initiating authentication when the names differ:
+
+```java
+KerberosAccount existing = KerberosAccount.getAccount(this);
+if (existing != null && !existing.getName().equals(username)) {
+  KerberosAccount.removeAccount(this);
+}
+```
+
+This ensures that an account-mode edit selects the submitted identity instead of reusing the
+previous account name.
 
 **Step 4: Run the focused tests and verify GREEN**
 
@@ -204,7 +240,8 @@ git commit -m "feat: prefill managed username in login flows"
 **Step 1: Write failing launcher tests**
 
 Give `EnterpriseFilesActivityTest` a setup method that removes all Kerberos accounts and resets
-application restrictions. Add tests for these three cases:
+application restrictions. Add tests for the initial offer, missing realm, pause/resume, recreation,
+and an existing account. The recreation regression is:
 
 ```java
 @Test
@@ -241,9 +278,25 @@ public void launcherOffersSignInOnlyOncePerActivityInstance() {
 
   assertThat(shadowOf(activity).getNextStartedActivity()).isNull();
 }
+
+@Test
+public void accountSignInIsNotOfferedAgainAfterActivityRecreation() {
+  setManagedRealm("EXAMPLE.COM");
+  ActivityController<EnterpriseFilesActivity> controller =
+      Robolectric.buildActivity(EnterpriseFilesActivity.class).setup();
+  EnterpriseFilesActivity activity = controller.get();
+  assertThat(shadowOf(activity).getNextStartedActivity()).isNotNull();
+
+  controller.recreate();
+  EnterpriseFilesActivity recreatedActivity = controller.get();
+
+  assertThat(shadowOf(recreatedActivity).getNextStartedActivity()).isNull();
+}
 ```
 
-Also add a test with an AccountManager Kerberos account and assert that no login intent starts.
+A cold newly created activity without saved state starts with a clear one-time guard and therefore
+offers sign-in again. Also add a test with an AccountManager Kerberos account and assert that no
+login intent starts.
 
 **Step 2: Run the focused tests and verify RED**
 
@@ -255,14 +308,28 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
   --tests com.poelbos.kerberosauthenticator.files.EnterpriseFilesActivityTest
 ```
 
-Expected: FAIL because the launcher does not start `LoginActivity`.
+Expected: FAIL because the launcher does not start `LoginActivity` and does not yet preserve the
+one-time offer across recreation.
 
 **Step 3: Add the guarded launcher redirect**
 
-Add an instance field:
+Add a private saved-state key and an instance field:
 
 ```java
+private static final String STATE_ACCOUNT_SIGN_IN_OFFERED = "account_sign_in_offered";
 private boolean accountSignInOffered;
+```
+
+Restore the guard in `onCreate()` and save it in `onSaveInstanceState()`:
+
+```java
+accountSignInOffered =
+    state != null && state.getBoolean(STATE_ACCOUNT_SIGN_IN_OFFERED, false);
+
+@Override protected void onSaveInstanceState(@NonNull Bundle outState) {
+  outState.putBoolean(STATE_ACCOUNT_SIGN_IN_OFFERED, accountSignInOffered);
+  super.onSaveInstanceState(outState);
+}
 ```
 
 In `onResume()`, after assigning `configuration` and removing any account whose realm no longer
@@ -278,7 +345,9 @@ if (!accountSignInOffered
 }
 ```
 
-Import `LoginActivity`. Setting the guard before `startActivity` prevents a back-navigation loop.
+Import `LoginActivity`. Setting the guard before `startActivity` prevents a back-navigation loop;
+saved instance state also prevents a configuration-change recreation from offering sign-in again.
+A cold new activity without saved state starts with a clear guard and can offer sign-in again.
 Checking only the managed realm preserves the current configuration error handling for missing
 shares while still making the account login usable.
 
@@ -389,7 +458,8 @@ Configure UEM `username` with the enrolled AD username and synchronize the devic
 - a signed-out cold app start opens account sign-in;
 - both login presentations show the managed username;
 - the username remains editable and a test override is used for authentication;
-- going back does not immediately reopen sign-in in the same launcher instance;
+- going back, resuming, or recreating the same launcher does not immediately reopen sign-in;
+- a cold new launcher instance without saved state offers sign-in again when still signed out;
 - an existing signed-in account is not replaced by the managed default.
 
 **Step 5: Verify Chrome SPNEGO**

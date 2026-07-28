@@ -42,7 +42,8 @@ to HTTPS by blocking cleartext HTTP URLs with Chrome's managed `URLBlocklist` po
 - SMB uses Kerberos GSS/SPNEGO, signing, and at least SMB 2.1. There is no NTLM, guest, or anonymous fallback.
 - Managed DFS namespaces and referrals are followed directly with Kerberos-only SMB.
 - Browsing, downloading/opening, uploading, creating folders, renaming, and deleting are available within the user's AD permissions.
-- The user enters their own AD username and password. MDM never supplies credentials.
+- The user confirms or edits their AD username and enters their own password. MDM can prefill an
+  editable username, but never supplies a password.
 - On a device with a secure screen lock, the password is device-bound encrypted with a hardware-backed Android Keystore key. The app uses this to request a completely new TGT every day. Storage no longer requires the realm to be supplied through one specific Android RestrictionsManager source.
 - If secure hardware storage is unavailable, sign-in remains possible but the password is not stored persistently.
 - Screenshots are blocked by default and SMB 3 encryption can be required by MDM.
@@ -178,10 +179,12 @@ work unchanged.
 
 The user signs in to the app with their own AD username and password. An optional managed
 `username` is used as an editable default in every Active Directory sign-in field and login flow;
-the user can replace it before signing in. The password is never supplied through this restriction
-or any other managed configuration. After a successful login, the app requests a new TGT daily
-through WorkManager. Android may delay the exact execution time because of Doze. The app discovers
-KDCs through DNS SRV records such as `_kerberos._udp.example.com`.
+the user can replace it before signing in. An existing signed-in account name takes precedence
+over this default, and a managed-configuration update does not automatically replace that account.
+The password is never supplied through this restriction or any other managed configuration. After
+a successful login, the app requests a new TGT daily through WorkManager. Android may delay the
+exact execution time because of Doze. The app discovers KDCs through DNS SRV records such as
+`_kerberos._udp.example.com`.
 
 #### Chrome app
 
