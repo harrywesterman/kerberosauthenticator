@@ -13,6 +13,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.RestrictionsManager;
 import android.os.Bundle;
+import android.widget.TextView;
 import androidx.test.core.app.ApplicationProvider;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -81,6 +82,42 @@ public final class LoginActivityTest {
   }
 
   @Test
+  public void accountModePrefillsManagedUsernameAndKeepsItEditable() {
+    setManagedRestrictionsWithUsername("managed-user");
+
+    LoginActivity activity = Robolectric.buildActivity(
+        LoginActivity.class, LoginActivity.getAccountSignInIntent(context)).setup().get();
+    TextInputEditText username = activity.findViewById(resourceId(activity, "accountUsername"));
+
+    assertThat(username.getText().toString()).isEqualTo("managed-user");
+    assertThat(username.isEnabled()).isTrue();
+
+    username.setText("test-user");
+
+    assertThat(username.getText().toString()).isEqualTo("test-user");
+  }
+
+  @Test
+  public void authenticatorModePrefillsManagedUsername() {
+    setManagedRestrictionsWithUsername("managed-user");
+
+    LoginActivity activity = Robolectric.buildActivity(
+        LoginActivity.class, LoginActivity.getAuthenticateIntent(context, null)).setup().get();
+    TextView username = activity.findViewById(resourceId(activity, "editTextUser"));
+
+    assertThat(username.getText().toString()).isEqualTo("managed-user");
+  }
+
+  @Test
+  public void preferredUsernameUsesExistingAccountBeforeManagedUsername() {
+    KerberosAccount existing = TestHelper.createKerberosAccount();
+    KerberosAccountDetails configured =
+        new KerberosAccountDetails("managed-user", PASSWORD, AD_DOMAIN, AD_DC);
+
+    assertThat(LoginActivity.preferredUsername(existing, configured)).isEqualTo(USERNAME);
+  }
+
+  @Test
   public void accountModeRequiresUsernameAndPassword() {
     Intent intent = new Intent(context, LoginActivity.class)
         .putExtra("return_to_account", true);
@@ -107,5 +144,14 @@ public final class LoginActivityTest {
 
   private static int resourceId(LoginActivity activity, String name) {
     return activity.getResources().getIdentifier(name, "id", activity.getPackageName());
+  }
+
+  private void setManagedRestrictionsWithUsername(String username) {
+    RestrictionsManager restrictions =
+        (RestrictionsManager) context.getSystemService(Context.RESTRICTIONS_SERVICE);
+    Bundle managed = new Bundle();
+    managed.putString(AccountConfiguration.AD_REALM_KEY, AD_DOMAIN);
+    managed.putString(AccountConfiguration.USERNAME_KEY, username);
+    shadowOf(restrictions).setApplicationRestrictions(managed);
   }
 }

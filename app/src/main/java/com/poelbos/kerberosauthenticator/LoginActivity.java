@@ -376,6 +376,13 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     return account;
   }
 
+  static String preferredUsername(
+      KerberosAccount existing, KerberosAccountDetails configured) {
+    if (existing != null) return existing.getName();
+    if (configured == null || configured.getUsername() == null) return "";
+    return configured.getUsername();
+  }
+
   private void showUserLoginUI() {
     if (accountMode) {
       findViewById(R.id.accountSignInProgress).setVisibility(View.GONE);
@@ -387,8 +394,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       return;
     }
     TextView username = findViewById(R.id.editTextUser);
-    KerberosAccount existing = KerberosAccount.getAccount(this);
-    if (existing != null) username.setText(existing.getName());
+    username.setText(preferredUsername(
+        KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails()));
     username.setVisibility(View.VISIBLE);
     View pwField = findViewById(R.id.editTextPw);
     pwField.setVisibility(View.VISIBLE);
@@ -426,7 +433,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     setContentView(R.layout.activity_account_login);
     SystemBarInsets.applyToTopAppBar(findViewById(R.id.accountTopAppBar));
     findViewById(R.id.managedConfigurationError).setVisibility(View.GONE);
-    ((TextView) findViewById(R.id.accountUsername)).setText("");
+    ((TextView) findViewById(R.id.accountUsername)).setText(preferredUsername(
+        KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails()));
     ((TextView) findViewById(R.id.accountPassword)).setText("");
     findViewById(R.id.accountSignInButton).setOnClickListener(v -> saveAccountCredentials());
     ((com.google.android.material.appbar.MaterialToolbar) findViewById(R.id.accountTopAppBar))
