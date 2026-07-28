@@ -21,6 +21,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.poelbos.kerberosauthenticator.AuthenticatorStatusActivity;
 import com.poelbos.kerberosauthenticator.KerberosAccount;
+import com.poelbos.kerberosauthenticator.LoginActivity;
 import com.poelbos.kerberosauthenticator.R;
 import com.poelbos.kerberosauthenticator.SystemBarInsets;
 import com.poelbos.kerberosauthenticator.databinding.ActivityEnterpriseFilesBinding;
@@ -51,6 +52,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   private volatile boolean destroyed;
   private File pendingViewedFile;
   private Uri pendingViewedUri;
+  private boolean accountSignInOffered;
 
   @Override protected void onCreate(Bundle state) {
     super.onCreate(state);
@@ -102,6 +104,12 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       KerberosAccount.removeAccount(this);
       invalidateSession();
       fileCache.cleanup();
+    }
+    if (!accountSignInOffered && KerberosAccount.getAccount(this) == null
+        && !configuration.getRealm().isEmpty()) {
+      accountSignInOffered = true;
+      startActivity(LoginActivity.getAccountSignInIntent(this));
+      return;
     }
     if (currentShare == null) showOverview(); else loadDirectory();
   }
