@@ -142,7 +142,7 @@ For the integrated file app, for example:
 ```json
 {
   "ad_realm": "EXAMPLE.COM",
-  "username": "user@example.com",
+  "username": "user12342",
   "enable_http_kerberos": true,
   "enable_http_ntlm": true,
   "ntlm_domain": "EXAMPLE",
