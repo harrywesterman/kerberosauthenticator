@@ -35,7 +35,8 @@ import java.util.regex.Pattern;
  * <p>When a password is not supplied through managed restrictions, this class will obtain it from
  * the user interface, which will prompt the user to enter a password.
  *
- * <p>A DPC supplies the realm and KDC policy. The user supplies their own username and password.
+ * <p>A DPC supplies the realm and KDC policy and may suggest a username. The user supplies their
+ * password and may edit the username.
  */
 public class AccountConfiguration {
 
@@ -110,6 +111,13 @@ public class AccountConfiguration {
     if (!Strings.isNullOrEmpty(configuredDomain)) {
       adDomain = configuredDomain;
     }
+    String configuredUsername = restrictionsBundle.getString(USERNAME_KEY);
+    if (!Strings.isNullOrEmpty(configuredUsername)) {
+      String normalizedUsername = configuredUsername.trim();
+      if (!normalizedUsername.isEmpty()) {
+        username = normalizedUsername;
+      }
+    }
     httpKerberosEnabled = restrictionsBundle.getBoolean(ENABLE_HTTP_KERBEROS_KEY, true);
     httpNtlmEnabled = restrictionsBundle.getBoolean(ENABLE_HTTP_NTLM_KEY, false);
     String configuredNtlmDomain = restrictionsBundle.getString(NTLM_DOMAIN_KEY);
@@ -166,7 +174,7 @@ public class AccountConfiguration {
   }
 
   boolean hasManagedConfigs() {
-    // A managed deployment only needs to publish the realm. Username is entered by the user.
+    // A managed deployment only needs to publish the realm. The managed username is optional.
     boolean emptyDomain = Strings.isNullOrEmpty(adDomain);
     boolean hasManagedConfigs = !emptyDomain;
     if (!hasManagedConfigs) {

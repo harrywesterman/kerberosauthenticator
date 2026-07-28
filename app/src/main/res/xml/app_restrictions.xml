@@ -6,6 +6,11 @@
         android:description="@string/mdm_realm_description"
         android:restrictionType="string" />
     <restriction
+        android:key="username"
+        android:title="@string/username"
+        android:description="@string/mdm_username_description"
+        android:restrictionType="string" />
+    <restriction
         android:key="enable_http_kerberos"
         android:title="@string/mdm_enable_http_kerberos_title"
         android:description="@string/mdm_enable_http_kerberos_description"
