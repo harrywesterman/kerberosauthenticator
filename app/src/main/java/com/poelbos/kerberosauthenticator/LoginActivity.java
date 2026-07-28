@@ -283,6 +283,10 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     }
 
     KerberosAccountDetails configured = accountConfiguration.getAccountDetails();
+    KerberosAccount existing = KerberosAccount.getAccount(this);
+    if (existing != null && !existing.getName().equals(username)) {
+      KerberosAccount.removeAccount(this);
+    }
     try {
       initiateUserAuthenticationTask(new KerberosAccountDetails(
           username,
@@ -383,6 +387,13 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     return configured.getUsername();
   }
 
+  static void prefillUsername(
+      TextView username, KerberosAccount existing, KerberosAccountDetails configured) {
+    if (TextUtils.isEmpty(username.getText())) {
+      username.setText(preferredUsername(existing, configured));
+    }
+  }
+
   private void showUserLoginUI() {
     if (accountMode) {
       findViewById(R.id.accountSignInProgress).setVisibility(View.GONE);
@@ -394,8 +405,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       return;
     }
     TextView username = findViewById(R.id.editTextUser);
-    username.setText(preferredUsername(
-        KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails()));
+    prefillUsername(
+        username, KerberosAccount.getAccount(this), accountConfiguration.getAccountDetails());
     username.setVisibility(View.VISIBLE);
     View pwField = findViewById(R.id.editTextPw);
     pwField.setVisibility(View.VISIBLE);

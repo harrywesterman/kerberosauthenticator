@@ -18,6 +18,7 @@ import androidx.test.core.app.ApplicationProvider;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.poelbos.kerberosauthenticator.internal.KerberosAccountDetails;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,11 +35,18 @@ public final class LoginActivityTest {
   public void setUp() {
     context = ApplicationProvider.getApplicationContext();
     shadowOf(AccountManager.get(context)).removeAllAccounts();
+    KerberosAccount.setAccountVisibilitySetterForTesting(
+        (accountManager, account, packageName, visibility) -> true);
     RestrictionsManager restrictions =
         (RestrictionsManager) context.getSystemService(Context.RESTRICTIONS_SERVICE);
     Bundle managed = new Bundle();
     managed.putString(AccountConfiguration.AD_REALM_KEY, AD_DOMAIN);
     shadowOf(restrictions).setApplicationRestrictions(managed);
+  }
+
+  @After
+  public void tearDown() {
+    KerberosAccount.resetAccountVisibilitySetterForTesting();
   }
 
   @Test
@@ -98,6 +106,22 @@ public final class LoginActivityTest {
   }
 
   @Test
+  public void accountModeSubmitsEditedUsernameInsteadOfExistingAccountName() {
+    TestHelper.createKerberosAccount().save(context);
+    setManagedRestrictionsWithUsername("managed-user");
+    LoginActivity activity = Robolectric.buildActivity(
+        LoginActivity.class, LoginActivity.getAccountSignInIntent(context)).setup().get();
+    TextInputEditText username = activity.findViewById(resourceId(activity, "accountUsername"));
+    TextInputEditText password = activity.findViewById(resourceId(activity, "accountPassword"));
+
+    username.setText("test-user");
+    password.setText("test-password");
+    activity.findViewById(resourceId(activity, "accountSignInButton")).performClick();
+
+    assertThat(KerberosAccount.getAccount(context).getName()).isEqualTo("test-user");
+  }
+
+  @Test
   public void authenticatorModePrefillsManagedUsername() {
     setManagedRestrictionsWithUsername("managed-user");
 
@@ -106,6 +130,21 @@ public final class LoginActivityTest {
     TextView username = activity.findViewById(resourceId(activity, "editTextUser"));
 
     assertThat(username.getText().toString()).isEqualTo("managed-user");
+  }
+
+  @Test
+  public void authenticatorModeKeepsEditedUsernameWhenLoginUiIsShownAgain() {
+    setManagedRestrictionsWithUsername("managed-user");
+    LoginActivity activity = Robolectric.buildActivity(
+        LoginActivity.class, LoginActivity.getAuthenticateIntent(context, null)).setup().get();
+    TextView username = activity.findViewById(resourceId(activity, "editTextUser"));
+    KerberosAccountDetails configured =
+        new KerberosAccountDetails("managed-user", PASSWORD, AD_DOMAIN, AD_DC);
+
+    username.setText("test-user");
+    LoginActivity.prefillUsername(username, null, configured);
+
+    assertThat(username.getText().toString()).isEqualTo("test-user");
   }
 
   @Test
