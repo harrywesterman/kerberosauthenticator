@@ -124,12 +124,23 @@ public class AccountConfigurationTest {
   }
 
   @Test
-  public void managedRealmDoesNotPreconfigureUsername() {
-    restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, "managed-user");
+  public void managedUsernameIsTrimmedAndPreconfigured() {
+    restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, "  managed-user  ");
     shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
 
     accConfig = new AccountConfiguration(context);
 
+    assertThat(accConfig.getAccountDetails().getUsername()).isEqualTo("managed-user");
+  }
+
+  @Test
+  public void blankManagedUsernameRemainsOptional() {
+    restrictionsBundle.putString(AccountConfiguration.USERNAME_KEY, "   ");
+    shadowOf(restrictionsManager).setApplicationRestrictions(restrictionsBundle);
+
+    accConfig = new AccountConfiguration(context);
+
+    assertThat(accConfig.hasManagedConfigs()).isTrue();
     assertThat(accConfig.getAccountDetails().getUsername()).isNull();
   }
 
