@@ -14,6 +14,7 @@ import java.util.Locale;
 /** Strict parser for Android Enterprise managed configuration. */
 public final class EnterpriseConfiguration {
   public static final String REALM = "ad_realm";
+  public static final String ENABLE_SHARES = "enable_shares";
   public static final String SHARES = "shares";
   public static final String KDC_HOSTS = "kdc_hosts";
   public static final String REQUIRE_ENCRYPTION = "require_smb_encryption";
@@ -22,6 +23,7 @@ public final class EnterpriseConfiguration {
   public static final String SUPPORT_CONTACT = "support_contact";
 
   private final String realm;
+  private final boolean sharesEnabled;
   private final List<ManagedShare> shares;
   private final List<String> kdcHosts;
   private final boolean requireEncryption;
@@ -43,10 +45,11 @@ public final class EnterpriseConfiguration {
     // Backwards compatibility with the existing authenticator MDM key.
     if (realm.isEmpty()) realm = clean(bundle.getString("adDomain"));
     if (realm.isEmpty()) errors.add("Active Directory realm is missing");
+    boolean sharesEnabled = bundle.getBoolean(ENABLE_SHARES, true);
 
     List<ManagedShare> shares = new ArrayList<>();
     Set<String> ids = new LinkedHashSet<>();
-    Parcelable[] configuredShares = bundle.getParcelableArray(SHARES);
+    Parcelable[] configuredShares = sharesEnabled ? bundle.getParcelableArray(SHARES) : null;
     if (configuredShares != null) {
       for (int index = 0; index < configuredShares.length; index++) {
         if (!(configuredShares[index] instanceof Bundle)) {
@@ -66,7 +69,7 @@ public final class EnterpriseConfiguration {
         }
       }
     }
-    if (shares.isEmpty()) errors.add("No valid enterprise shares are configured");
+    if (sharesEnabled && shares.isEmpty()) errors.add("No valid enterprise shares are configured");
 
     List<String> kdcs = new ArrayList<>();
     String[] configuredKdcs = bundle.getStringArray(KDC_HOSTS);
@@ -81,17 +84,18 @@ public final class EnterpriseConfiguration {
       }
     }
     return new EnterpriseConfiguration(
-        realm.toUpperCase(Locale.ROOT), shares, kdcs,
+        realm.toUpperCase(Locale.ROOT), sharesEnabled, shares, kdcs,
         bundle.getBoolean(REQUIRE_ENCRYPTION, true),
         bundle.getBoolean(ALLOW_CACHE, false),
         bundle.getBoolean(ALLOW_SCREENSHOTS, false), clean(bundle.getString(SUPPORT_CONTACT)), errors);
   }
 
   private EnterpriseConfiguration(
-      String realm, List<ManagedShare> shares, List<String> kdcHosts,
+      String realm, boolean sharesEnabled, List<ManagedShare> shares, List<String> kdcHosts,
       boolean requireEncryption, boolean allowCache, boolean allowScreenshots,
       String supportContact, List<String> errors) {
     this.realm = realm;
+    this.sharesEnabled = sharesEnabled;
     this.shares = Collections.unmodifiableList(new ArrayList<>(shares));
     this.kdcHosts = Collections.unmodifiableList(new ArrayList<>(kdcHosts));
     this.requireEncryption = requireEncryption;
@@ -104,6 +108,7 @@ public final class EnterpriseConfiguration {
   private static String clean(String value) { return value == null ? "" : value.trim(); }
   public boolean isValid() { return errors.isEmpty(); }
   public String getRealm() { return realm; }
+  public boolean isSharesEnabled() { return sharesEnabled; }
   public List<ManagedShare> getShares() { return shares; }
   public List<String> getKdcHosts() { return kdcHosts; }
   public boolean isRequireEncryption() { return requireEncryption; }

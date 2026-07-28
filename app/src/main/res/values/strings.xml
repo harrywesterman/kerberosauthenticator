@@ -25,6 +25,8 @@
     <string name="mdm_ntlm_domain_title">NTLM domain</string>
     <string name="mdm_ntlm_domain_description">NetBIOS domain required for HTTP NTLMv2, for example EXAMPLE.</string>
     <string name="mdm_username_description">Username supplied by MDM; the password is never sent through MDM.</string>
+    <string name="mdm_enable_shares_title">Enable enterprise shares</string>
+    <string name="mdm_enable_shares_description">Show managed SMB shares in the app. This does not disable the Kerberos account, ticket renewal, or HTTP authentication.</string>
     <string name="mdm_shares_title">Enterprise shares</string>
     <string name="mdm_shares_description">SMB shares visible in the app.</string>
     <string name="mdm_share_id">Unique ID</string>

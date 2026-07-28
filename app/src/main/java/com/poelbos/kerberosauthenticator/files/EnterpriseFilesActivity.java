@@ -136,6 +136,13 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
       showState("Configuration required", String.join("\n", configuration.getErrors()), false);
       return;
     }
+    if (!configuration.isSharesEnabled()) {
+      showState(
+          "Enterprise shares are disabled",
+          "Enterprise shares are disabled by your administrator.",
+          false);
+      return;
+    }
     List<Row> rows = new ArrayList<>();
     for (ManagedShare share : configuration.getShares()) {
       rows.add(Row.forShare(share));
@@ -405,6 +412,7 @@ public final class EnterpriseFilesActivity extends AppCompatActivity {
   private static boolean sessionPolicyChanged(
       EnterpriseConfiguration previous, EnterpriseConfiguration updated) {
     return !previous.getRealm().equals(updated.getRealm())
+        || previous.isSharesEnabled() != updated.isSharesEnabled()
         || !previous.getShares().equals(updated.getShares())
         || previous.isRequireEncryption() != updated.isRequireEncryption()
         || previous.isAllowCache() != updated.isAllowCache();

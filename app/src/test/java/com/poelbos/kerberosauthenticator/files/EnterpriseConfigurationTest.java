@@ -58,6 +58,29 @@ public final class EnterpriseConfigurationTest {
     assertEquals(2, configuration.getErrors().size());
   }
 
+  @Test public void disabledSharesDoNotRequireManagedShareDefinitions() {
+    Bundle restrictions = new Bundle();
+    restrictions.putString("ad_realm", "EXAMPLE.COM");
+    restrictions.putBoolean(EnterpriseConfiguration.ENABLE_SHARES, false);
+
+    EnterpriseConfiguration configuration = EnterpriseConfiguration.from(restrictions);
+
+    assertTrue(configuration.isValid());
+    assertTrue(configuration.getShares().isEmpty());
+  }
+
+  @Test public void disabledSharesAreHiddenEvenWhenDefinitionsRemainConfigured() {
+    Bundle restrictions = new Bundle();
+    restrictions.putString("ad_realm", "EXAMPLE.COM");
+    restrictions.putBoolean(EnterpriseConfiguration.ENABLE_SHARES, false);
+    restrictions.putParcelableArray("shares", new Parcelable[] {share("docs", "Docs")});
+
+    EnterpriseConfiguration configuration = EnterpriseConfiguration.from(restrictions);
+
+    assertTrue(configuration.isValid());
+    assertTrue(configuration.getShares().isEmpty());
+  }
+
   @Test public void duplicateShareIdsFailClosed() {
     Bundle first = share("same", "First");
     Bundle second = share("same", "Second");
