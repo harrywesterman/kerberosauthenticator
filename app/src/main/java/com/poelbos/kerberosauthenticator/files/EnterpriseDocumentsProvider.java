@@ -60,7 +60,27 @@ public final class EnterpriseDocumentsProvider extends DocumentsProvider {
     for (ProxyHandle handle : handles) handle.close();
     context.revokeUriPermission(Uri.parse("content://" + AUTHORITY),
         Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+    notifyRoots(context);
+  }
+
+  public static void notifyRoots(Context context) {
     context.getContentResolver().notifyChange(DocumentsContract.buildRootsUri(AUTHORITY), null);
+  }
+
+  /** Refresh roots and visible directories after a new ticket is stored. */
+  public static void notifyTicketChanged(Context context) {
+    notifyRoots(context);
+    EnterpriseConfiguration config = EnterpriseConfiguration.from(context);
+    KerberosAccount account = KerberosAccount.getAccount(context);
+    if (!available(config) || account == null || !account.hasUsableTicket()
+        || !config.getRealm().equalsIgnoreCase(account.getDomain())) return;
+    String epoch = KerberosAccount.getDocumentEpoch(context);
+    for (ManagedShare share : config.getShares()) {
+      String rootId = ManagedDocumentId.encode(epoch, account.getName(), config.getRealm(),
+          share.resolveForUsername(account.getName()), config.isRequireEncryption(), "");
+      context.getContentResolver().notifyChange(
+          DocumentsContract.buildChildDocumentsUri(AUTHORITY, rootId), null);
+    }
   }
 
   private Context context() { return getContext(); }
@@ -109,7 +129,8 @@ public final class EnterpriseDocumentsProvider extends DocumentsProvider {
     EnterpriseConfiguration config = configuration();
     if (!available(config)) return cursor;
     KerberosAccount account = KerberosAccount.getAccount(context());
-    if (account == null || !config.getRealm().equalsIgnoreCase(account.getDomain())) {
+    if (account == null || !config.getRealm().equalsIgnoreCase(account.getDomain())
+        || !account.hasUsableTicket()) {
       add(cursor, DocumentsContract.Root.COLUMN_ROOT_ID, SIGN_IN_ID,
           DocumentsContract.Root.COLUMN_DOCUMENT_ID, SIGN_IN_ID,
           DocumentsContract.Root.COLUMN_TITLE, context().getString(R.string.enterprise_files),

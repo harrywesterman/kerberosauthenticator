@@ -96,7 +96,15 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
 
     TextView kerberosStatus = findViewById(R.id.http_kerberos_status);
     kerberosStatus.setVisibility(View.VISIBLE);
-    kerberosStatus.setText(httpKerberosStatus(accountConfiguration.isHttpKerberosEnabled()));
+    boolean hasTicket = account != null && account.hasUsableTicket();
+    kerberosStatus.setText(httpKerberosStatus(accountConfiguration.isHttpKerberosEnabled(), hasTicket));
+    if (!hasTicket) {
+      com.google.android.material.button.MaterialButton refreshButton =
+          findViewById(R.id.refresh_btn);
+      refreshButton.setText(R.string.sign_in);
+      refreshButton.setOnClickListener(view ->
+          startActivity(LoginActivity.getAccountSignInIntent(this)));
+    }
 
     TextView notificationStatus = findViewById(R.id.notification_status);
     if (accountConfiguration.isManagedDeployment()
@@ -124,7 +132,8 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     return "HTTP NTLMv2: ready; TLS channel binding unavailable (Extended Protection unsupported)";
   }
 
-  static String httpKerberosStatus(boolean enabled) {
-    return enabled ? "HTTP Kerberos: ready" : "HTTP Kerberos: disabled by policy";
+  static String httpKerberosStatus(boolean enabled, boolean hasTicket) {
+    if (!enabled) return "HTTP Kerberos: disabled by policy";
+    return hasTicket ? "HTTP Kerberos: ready" : "HTTP Kerberos: sign in required";
   }
 }

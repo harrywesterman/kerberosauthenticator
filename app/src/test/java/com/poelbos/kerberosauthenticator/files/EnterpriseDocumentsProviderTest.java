@@ -19,6 +19,11 @@ import androidx.test.core.app.ApplicationProvider;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Date;
+import javax.security.auth.Subject;
+import krb.javax.security.auth.kerberos.KerberosPrincipal;
+import krb.javax.security.auth.kerberos.KerberosTicket;
+import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -60,9 +65,21 @@ public final class EnterpriseDocumentsProviderTest {
   private void signIn(String name) {
     Bundle data = new Bundle();
     data.putString("ad_domain", "EXAMPLE.COM");
-    data.putString("ticket_granting_ticket", "");
+    data.putString("ticket_granting_ticket", android.util.Base64.encodeToString(
+        validTicket(name), android.util.Base64.NO_WRAP));
     assertThat(accounts.addAccountExplicitly(
         new Account(name, "AndroidEnterpriseKerberos"), null, data)).isTrue();
+  }
+
+  private static byte[] validTicket(String name) {
+    long now = System.currentTimeMillis();
+    Subject subject = new Subject();
+    subject.getPrivateCredentials().add(new KerberosTicket(new byte[] {1},
+        new KerberosPrincipal(name + "@EXAMPLE.COM"),
+        new KerberosPrincipal("krbtgt/EXAMPLE.COM@EXAMPLE.COM"),
+        new byte[16], 17, new boolean[32], new Date(now - 1000L),
+        new Date(now - 1000L), new Date(now + 3600000L), null, null));
+    return new TicketGrantingTicket(subject).asSerialized();
   }
 
   private String firstRoot() {
@@ -83,6 +100,19 @@ public final class EnterpriseDocumentsProviderTest {
     }
     assertThrows(FileNotFoundException.class,
         () -> provider.openDocument("sign-in", "r", null));
+  }
+
+  @Test public void accountWithoutTicketOffersSignInInsteadOfUnusableShares()
+      throws Exception {
+    Bundle data = new Bundle();
+    data.putString("ad_domain", "EXAMPLE.COM");
+    data.putString("ticket_granting_ticket", "");
+    accounts.addAccountExplicitly(new Account("alice", "AndroidEnterpriseKerberos"), null, data);
+    assertThat(firstRoot()).isEqualTo("sign-in");
+    Account record = accounts.getAccountsByType("AndroidEnterpriseKerberos")[0];
+    accounts.setUserData(record, "ticket_granting_ticket", android.util.Base64.encodeToString(
+        validTicket("alice"), android.util.Base64.NO_WRAP));
+    assertThat(firstRoot()).isNotEqualTo("sign-in");
   }
 
   @Test public void signedInRootsUseManagedSharesAndBecomeInvalidOnPolicyChange()

@@ -27,6 +27,7 @@ import androidx.annotation.VisibleForTesting;
 import android.util.Base64;
 import android.util.Log;
 import com.poelbos.kerberosauthenticator.BaseAuthenticatorActivity.ServiceTicketInfo;
+import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import java.util.Objects;
 import java.util.Arrays;
 import java.util.UUID;
@@ -78,6 +79,7 @@ public class KerberosAccount {
     if (accounts.length > 0) {
       am.removeAccountExplicitly(accounts[0]);
     }
+    com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider.notifyRoots(context);
     ServiceTicketInfo.clearServiceTicketInfo(
         context.getSharedPreferences(Constants.PREFERENCE_NAME, Activity.MODE_PRIVATE));
   }
@@ -134,7 +136,21 @@ public class KerberosAccount {
   }
 
   public byte[] getTicketGrantingTicket() {
-    return Base64.decode(userData.getString(KEY_TGT), Base64.NO_WRAP);
+    String encoded = userData.getString(KEY_TGT);
+    return encoded == null || encoded.isEmpty()
+        ? new byte[0] : Base64.decode(encoded, Base64.NO_WRAP);
+  }
+
+  public boolean hasUsableTicket() {
+    try {
+      byte[] encoded = getTicketGrantingTicket();
+      if (encoded.length == 0) return false;
+      TicketGrantingTicket ticket = TicketGrantingTicket.fromSerializedSubject(encoded);
+      return ticket != null && ticket.getExpiryDate() != null
+          && ticket.getExpiryDate().getTime() > System.currentTimeMillis();
+    } catch (IllegalArgumentException | ClassCastException exception) {
+      return false;
+    }
   }
 
   void setTicketGrantingTicket(byte[] tgt) {
@@ -167,6 +183,8 @@ public class KerberosAccount {
 
     account = accounts[0];
     Log.i(TAG, "Updating stored TGT.");
+    boolean ticketChanged = !Objects.equals(
+        am.getUserData(account, KEY_TGT), userData.getString(KEY_TGT));
     am.setUserData(account, KEY_TGT, userData.getString(KEY_TGT));
 
     // The account manager persists the TGT and account metadata, never the AD password.
@@ -186,6 +204,10 @@ public class KerberosAccount {
       am.setUserData(account, KEY_AD_DC, domainController);
     }
     allowChromeToSeeAccount(am, account);
+    if (ticketChanged) {
+      com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider
+          .notifyTicketChanged(context);
+    }
   }
 
   private static void allowChromeToSeeAccount(AccountManager accountManager, Account account) {

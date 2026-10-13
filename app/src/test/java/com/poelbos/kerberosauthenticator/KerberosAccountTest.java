@@ -34,6 +34,11 @@ import android.content.SharedPreferences;
 import androidx.test.core.app.ApplicationProvider;
 import com.poelbos.kerberosauthenticator.BaseAuthenticatorActivity.ServiceTicketInfo;
 import java.util.Base64;
+import java.util.Date;
+import javax.security.auth.Subject;
+import krb.javax.security.auth.kerberos.KerberosPrincipal;
+import krb.javax.security.auth.kerberos.KerberosTicket;
+import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -75,6 +80,21 @@ public final class KerberosAccountTest {
   public void testAccountGetters() {
     KerberosAccount account = TestHelper.createKerberosAccount();
     assertKerberosAccount(account);
+  }
+
+  @Test
+  public void missingOrExpiredTicketRequiresSignIn() {
+    KerberosAccount account = new KerberosAccount(USERNAME, (String) null, AD_DOMAIN, AD_DC);
+    assertThat(account.hasUsableTicket()).isFalse();
+    long now = System.currentTimeMillis();
+    Subject subject = new Subject();
+    subject.getPrivateCredentials().add(new KerberosTicket(new byte[] {1},
+        new KerberosPrincipal("alice@EXAMPLE.COM"),
+        new KerberosPrincipal("krbtgt/EXAMPLE.COM@EXAMPLE.COM"),
+        new byte[16], 17, new boolean[32], new Date(now - 7200000L),
+        new Date(now - 7200000L), new Date(now - 3600000L), null, null));
+    account.setTicketGrantingTicket(new TicketGrantingTicket(subject).asSerialized());
+    assertThat(account.hasUsableTicket()).isFalse();
   }
 
   @Test

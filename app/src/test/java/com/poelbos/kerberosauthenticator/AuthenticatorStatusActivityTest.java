@@ -50,9 +50,11 @@ public final class AuthenticatorStatusActivityTest {
 
   @Test
   public void httpKerberosStatusExplainsManagedPolicy() {
-    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(false))
+    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(false, false))
         .isEqualTo("HTTP Kerberos: disabled by policy");
-    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(true))
+    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(true, false))
+        .isEqualTo("HTTP Kerberos: sign in required");
+    assertThat(AuthenticatorStatusActivity.httpKerberosStatus(true, true))
         .isEqualTo("HTTP Kerberos: ready");
   }
 
@@ -99,7 +101,12 @@ public final class AuthenticatorStatusActivityTest {
     assertThat(((TextView) activity.findViewById(accountNameId)).getText().toString())
         .isEqualTo(TestHelper.USERNAME);
     assertThat(((TextView) activity.findViewById(kerberosStatusId)).getText().toString())
-        .isEqualTo("HTTP Kerberos: ready");
+        .isEqualTo("HTTP Kerberos: sign in required");
+    assertThat(((MaterialButton) activity.findViewById(R.id.refresh_btn)).getText().toString())
+        .isEqualTo("Sign in");
+    activity.findViewById(R.id.refresh_btn).performClick();
+    assertThat(shadowOf(activity).getNextStartedActivity().getComponent().getClassName())
+        .isEqualTo(LoginActivity.class.getName());
     assertThat((View) activity.findViewById(R.id.refresh_btn))
         .isInstanceOf(MaterialButton.class);
     assertThat((View) activity.findViewById(R.id.logout_btn))
@@ -143,7 +150,7 @@ public final class AuthenticatorStatusActivityTest {
     Bundle data = new Bundle();
     data.putString(KerberosAccount.KEY_AD_DOMAIN, TestHelper.TEST_AD_DOMAIN);
     data.putString(KerberosAccount.KEY_AD_DC, TestHelper.AD_DC);
-    data.putString(KerberosAccount.KEY_TGT, TestHelper.TGT_B64);
+    data.putString(KerberosAccount.KEY_TGT, "");
     AccountManager.get(context).addAccountExplicitly(
         new Account(TestHelper.USERNAME, Constants.KERBEROS_ACCOUNT_TYPE), null, data);
   }
