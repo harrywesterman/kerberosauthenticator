@@ -41,6 +41,10 @@ final class ManagedPathTemplate {
       throw new IllegalArgumentException("The managed path requires a signed-in username");
     }
     if (USERNAME.equals(placeholder) || USERNAME_FULL.equals(placeholder)) {
+      if (username.equals(".") || username.equals("..")
+          || username.matches(".*[\\\\/:*?\"<>|\\p{Cntrl}].*")) {
+        throw new IllegalArgumentException("The username is not safe for a managed path");
+      }
       return username;
     }
     char lastCharacter = username.charAt(username.length() - 1);

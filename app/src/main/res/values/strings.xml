@@ -46,7 +46,7 @@
     <string name="mdm_http_spn_host">Kerberos SPN host</string>
     <string name="mdm_require_encryption">Require SMB encryption</string>
     <string name="mdm_require_encryption_description">Reject shares without SMB 3 encryption.</string>
-    <string name="mdm_allow_cache">Allow local encrypted cache</string>
+    <string name="mdm_allow_cache">Legacy local cache setting (unused)</string>
     <string name="mdm_allow_screenshots">Allow screenshots</string>
     <string name="mdm_support_contact">Support contact</string>
     <!-- [CHAR_LIMIT=100] -->
@@ -110,6 +110,7 @@
     <string name="notification_permission_missing">Sign-in alerts are disabled. Tap to open notification settings.</string>
     <string name="account">Account</string>
     <string name="enterprise_files">Enterprise Files</string>
+    <string name="open_system_files">Open Files</string>
     <string name="sign_in">Sign in</string>
     <string name="sign_in_title">Sign in to your work account</string>
     <string name="sign_in_supporting_text">Enter your username and password. Your work environment is configured by your administrator.</string>

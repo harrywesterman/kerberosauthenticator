@@ -3,7 +3,7 @@
 An Android Enterprise app for Active Directory/Kerberos with two components in one APK:
 
 - a Kerberos authenticator for SSO and ticket management
-- an enterprise file browser for SMB 2/3 shares with Kerberos-only access
+- an Android document provider that shows managed SMB 2/3 shares in system Files
 
 The app is based on the existing [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase and has been extended with an integrated enterprise file experience. Chrome can still use the same Kerberos account for HTTP Negotiate.
 
@@ -36,17 +36,22 @@ once and may save it in Chrome for later automatic reuse. The app never exports 
 vault to Chrome. Basic must be enabled through Chrome's managed `AuthSchemes` policy and restricted
 to HTTPS by blocking cleartext HTTP URLs with Chrome's managed `URLBlocklist` policy.
 
-## Enterprise files
+## Enterprise files in Android Files
 
-- MDM determines which shares are visible; users cannot add their own SMB server.
+- MDM determines which shares appear as storage locations in Android's system Files picker;
+  users cannot add their own SMB server.
 - SMB uses Kerberos GSS/SPNEGO, signing, and at least SMB 2.1. There is no NTLM, guest, or anonymous fallback.
 - Managed DFS namespaces and referrals are followed directly with Kerberos-only SMB.
-- Browsing, downloading/opening, uploading, creating folders, renaming, and deleting are available within the user's AD permissions.
+- Opening, saving, creating folders, renaming, and deleting are available through Android's
+  standard document interface within the user's AD permissions. Data streams directly through
+  the Kerberos-only SMB session; the app does not make complete local working copies.
 - The user confirms or edits their AD username and enters their own password. MDM can prefill an
   editable username, but never supplies a password.
 - On a device with a secure screen lock, the password is device-bound encrypted with a hardware-backed Android Keystore key. The app uses this to request a completely new TGT every day. Storage no longer requires the realm to be supplied through one specific Android RestrictionsManager source.
 - If secure hardware storage is unavailable, sign-in remains possible but the password is not stored persistently.
-- Screenshots are blocked by default and SMB 3 encryption can be required by MDM.
+- Screenshots of this app's own account screens are blocked by default and SMB 3 encryption can
+  be required by MDM. External apps that open a selected file control their own screenshots and
+  local copies; Android Enterprise/MDM policy controls sharing across profiles.
 
 ## Differences from the original
 
@@ -58,7 +63,7 @@ to HTTPS by blocking cleartext HTTP URLs with Chrome's managed `URLBlocklist` po
 - Manual config UI for testing without MDM
 - DNS-based KDC discovery from SRV records (`_kerberos._udp.<realm>`)
 - App version, TGT validity, and service ticket info shown in the status UI
-- Integrated enterprise file browser with managed shares, FileProvider-based external opening, and Kerberos-only SMB sessions
+- Android DocumentsProvider for managed shares, backed by Kerberos-only SMB sessions
 - GitHub Actions release workflow that publishes APKs on push to `main`
 - Logout button that removes the account and clears local config
 
@@ -148,7 +153,7 @@ For the integrated file app, for example:
   "ntlm_domain": "EXAMPLE",
   "enable_shares": true,
   "require_smb_encryption": true,
-  "allow_local_cache": true,
+  "allow_local_cache": false,
   "allow_screenshots": false,
   "shares": [
     {
@@ -229,7 +234,7 @@ Then use the Test DPC UI to set managed configuration for the app.
 |---|---|---|---|
 | `ad_realm` | string | yes | Kerberos realm (e.g. `EXAMPLE.COM`) |
 | `username` | string | no | Editable default for every Active Directory sign-in field and login flow; the password is never supplied through this restriction |
-| `enable_shares` | bool | no | Show managed SMB shares in the app; default `true`. Does not affect the Kerberos account, ticket renewal, or HTTP authentication |
+| `enable_shares` | bool | no | Show managed SMB shares in Android Files; default `true`. Does not affect the Kerberos account, ticket renewal, or HTTP authentication |
 | `shares` | bundle array | when shares are enabled | Managed SMB shares with ID, label, DNS host, port, share and static or username-templated start path |
 | `kdc_hosts` | string | no | Comma-separated KDC hosts; omit for DNS SRV discovery |
 | `http_spn_mappings` | bundle array | no | Exact HTTP request-host to SPN-host overrides for exceptional web aliases |
@@ -237,8 +242,8 @@ Then use the Test DPC UI to set managed configuration for the app.
 | `enable_http_ntlm` | bool | no | Advertise NTLMSSP inside HTTP Negotiate when secure credentials are available; default `false` |
 | `ntlm_domain` | string | when HTTP NTLM is enabled | NetBIOS domain, 1–15 characters, for example `EXAMPLE` |
 | `require_smb_encryption` | bool | no | Require SMB 3 encryption; default `true` |
-| `allow_local_cache` | bool | no | Permit short-lived app-private files for external viewers; default `false` |
-| `allow_screenshots` | bool | no | Permit screenshots; default `false` |
+| `allow_local_cache` | bool | no | Legacy setting retained for MDM compatibility; document access does not create full app-private copies or depend on this value |
+| `allow_screenshots` | bool | no | Permit screenshots of this app's own account screens; default `false`. External apps set their own screenshot policy |
 | `support_contact` | string | no | IT support text or URL |
 
 When no domain controller is specified, the app automatically discovers KDCs through DNS SRV lookups (`_kerberos._udp.<domain>` and `_kerberos._tcp.<domain>`).

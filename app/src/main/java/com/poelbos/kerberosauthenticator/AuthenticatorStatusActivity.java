@@ -29,6 +29,7 @@ import android.provider.Settings;
 import java.text.DateFormat;
 import java.util.Date;
 import com.poelbos.kerberosauthenticator.internal.ntlm.NtlmCredentialProvider;
+import com.poelbos.kerberosauthenticator.files.EnterpriseConfiguration;
 
 /** Show the authentication status for the current account. */
 public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
@@ -49,7 +50,13 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     setContentView(R.layout.activity_account_status);
     SystemBarInsets.applyToTopAppBar(findViewById(R.id.accountStatusTopAppBar));
 
-    if (KerberosAccount.getAccount(this) == null) {
+    KerberosAccount currentAccount = KerberosAccount.getAccount(this);
+    if (currentAccount != null && !currentAccount.getDomain().equalsIgnoreCase(
+        EnterpriseConfiguration.from(this).getRealm())) {
+      KerberosAccount.removeAccount(this);
+      currentAccount = null;
+    }
+    if (currentAccount == null) {
       startActivity(LoginActivity.getAccountSignInIntent(this));
       finish();
       return;
@@ -60,6 +67,8 @@ public class AuthenticatorStatusActivity extends BaseAuthenticatorActivity {
     initUI(true, "");
     showRefreshBtn(accountConfiguration.hasManagedConfigs());
     showLogoutBtn(accountConfiguration.hasManagedConfigs());
+    findViewById(R.id.open_system_files_btn).setOnClickListener(view ->
+        startActivity(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)));
     long lastRefresh = getSharedPreferences(TgtRefreshWorker.STATUS_PREFS, MODE_PRIVATE)
         .getLong(TgtRefreshWorker.LAST_SUCCESS, 0L);
     TextView refreshStatus = findViewById(R.id.automatic_refresh_status);

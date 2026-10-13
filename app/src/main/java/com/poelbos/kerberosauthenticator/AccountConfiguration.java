@@ -78,7 +78,6 @@ public class AccountConfiguration {
   }
 
   private void setManagedConfigs() {
-    String previousRealm = adDomain;
     username = null;
     password = null;
     adDomain = null;
@@ -94,10 +93,6 @@ public class AccountConfiguration {
     }
     String directlyManagedRealm = restrictionsBundle.getString(AD_REALM_KEY);
     managedDeployment = !Strings.isNullOrEmpty(directlyManagedRealm);
-    if (!managedDeployment
-        || (previousRealm != null && !previousRealm.equalsIgnoreCase(directlyManagedRealm))) {
-      new com.poelbos.kerberosauthenticator.files.EnterpriseFileCache(context).cleanup();
-    }
     // Remove local identity data written by versions that allowed users to configure their own
     // realm. Enterprise authentication now accepts the AD realm only from managed restrictions.
     context
@@ -219,6 +214,7 @@ public class AccountConfiguration {
     @Override
     public void onReceive(@NonNull Context context, Intent intent) {
       Log.d(Constants.TAG, "New managed configuration received.");
+      com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider.invalidate(context);
       setManagedConfigs();
     }
   }

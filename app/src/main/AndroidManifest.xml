@@ -34,23 +34,34 @@
                 android:resource="@xml/kerberos_authenticator" />
         </service>
         <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.files"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
+            android:name=".files.EnterpriseDocumentsProvider"
+            android:authorities="com.poelbos.kerberosauthenticator.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
         </provider>
+        <receiver
+            android:name=".files.ManagedSharesChangedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_RESTRICTIONS_CHANGED" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".AuthenticatorStatusActivity"
-            android:exported="false" />
-        <activity
-            android:name=".files.EnterpriseFilesActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.provider.action.DOCUMENT_SETTINGS" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content"
+                    android:host="com.poelbos.kerberosauthenticator.documents" />
             </intent-filter>
         </activity>
         <activity android:name=".DeclineAddingAccountActivity" android:exported="true"/>

@@ -29,12 +29,14 @@ import android.util.Log;
 import com.poelbos.kerberosauthenticator.BaseAuthenticatorActivity.ServiceTicketInfo;
 import java.util.Objects;
 import java.util.Arrays;
+import java.util.UUID;
 
 /** Kerberos account functionality. */
 public class KerberosAccount {
   @VisibleForTesting static final String KEY_AD_DOMAIN = "ad_domain";
   @VisibleForTesting static final String KEY_AD_DC = "domain_controller";
   @VisibleForTesting static final String KEY_TGT = "ticket_granting_ticket";
+  private static final String KEY_DOCUMENT_EPOCH = "document_epoch";
   private static final AccountVisibilitySetter DEFAULT_ACCOUNT_VISIBILITY_SETTER =
       AccountManager::setAccountVisibility;
   private static AccountVisibilitySetter accountVisibilitySetter =
@@ -68,6 +70,7 @@ public class KerberosAccount {
   }
 
   public static void removeAccount(Context context) {
+    com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider.invalidate(context);
     new CredentialVault(context).delete();
     TgtRefreshScheduler.cancel(context);
     AccountManager am = AccountManager.get(context);
@@ -102,6 +105,19 @@ public class KerberosAccount {
     return new KerberosAccount(
         account.name, password == null ? null : password.toCharArray(),
         adDomain, domainController, base64Tgt);
+  }
+
+  /** A new account record gets a new epoch, even when the username is reused. */
+  public static String getDocumentEpoch(Context context) {
+    AccountManager am = AccountManager.get(context);
+    Account[] accounts = am.getAccountsByType(KERBEROS_ACCOUNT_TYPE);
+    if (accounts.length != 1) return null;
+    String epoch = am.getUserData(accounts[0], KEY_DOCUMENT_EPOCH);
+    if (epoch == null || epoch.isEmpty()) {
+      epoch = UUID.randomUUID().toString();
+      am.setUserData(accounts[0], KEY_DOCUMENT_EPOCH, epoch);
+    }
+    return epoch;
   }
 
   public String getName() {
@@ -141,9 +157,11 @@ public class KerberosAccount {
     final Account account;
     if (hasNoAccount) {
       Log.i(TAG, "Adding Kerberos account.");
+      userData.putString(KEY_DOCUMENT_EPOCH, UUID.randomUUID().toString());
       account = new Account(name, KERBEROS_ACCOUNT_TYPE);
       am.addAccountExplicitly(account, null, userData);
       allowChromeToSeeAccount(am, account);
+      com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider.invalidate(context);
       return;
     }
 

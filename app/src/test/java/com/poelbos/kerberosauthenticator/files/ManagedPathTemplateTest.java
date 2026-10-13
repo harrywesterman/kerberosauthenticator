@@ -57,4 +57,11 @@ public final class ManagedPathTemplateTest {
 
     assertEquals("The managed path requires a username ending in a digit", exception.getMessage());
   }
+
+  @Test public void rejectsUsernameThatWouldChangeManagedPathSegments() {
+    assertThrows(IllegalArgumentException.class,
+        () -> ManagedPathTemplate.resolve("users\\${username}", "other\\folder"));
+    assertThrows(IllegalArgumentException.class,
+        () -> ManagedPathTemplate.resolve("users\\${username:full}", ".."));
+  }
 }

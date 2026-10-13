@@ -29,6 +29,8 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
+import com.poelbos.kerberosauthenticator.files.EnterpriseConfiguration;
 import android.widget.TextView;
 import com.poelbos.kerberosauthenticator.internal.TicketGrantingTicket;
 import java.text.DateFormat;
@@ -50,6 +52,15 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
       // null after being removed.
       ServiceTicketInfo.clearServiceTicketInfo(
           getSharedPreferences(Constants.PREFERENCE_NAME, Activity.MODE_PRIVATE));
+    }
+  }
+
+  @Override protected void onResume() {
+    super.onResume();
+    if (EnterpriseConfiguration.from(this).isAllowScreenshots()) {
+      getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+    } else {
+      getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
   }
 
@@ -244,7 +255,6 @@ public class BaseAuthenticatorActivity extends AccountAuthenticatorActivity {
 
   protected void onLogoutRequested() {
     KerberosAccount.removeAccount(this);
-    new com.poelbos.kerberosauthenticator.files.EnterpriseFileCache(this).cleanup();
     getSharedPreferences(AccountConfiguration.LEGACY_LOCAL_CONFIG_PREFS_NAME, MODE_PRIVATE)
         .edit()
         .clear()

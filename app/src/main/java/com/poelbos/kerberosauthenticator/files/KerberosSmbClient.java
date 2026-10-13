@@ -480,6 +480,59 @@ public final class KerberosSmbClient implements Closeable {
     });
   }
 
+  /** Create a file without replacing an existing object. */
+  public void createFile(String parent, String name) throws IOException {
+    validateFileName(name);
+    withResolvedTarget(join(parent, name), target -> {
+      try (com.hierynomus.smbj.share.File ignored = target.share.openFile(
+          target.path, EnumSet.of(AccessMask.GENERIC_WRITE),
+          EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL), SMB2ShareAccess.ALL,
+          SMB2CreateDisposition.FILE_CREATE,
+          EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE))) {
+        return null;
+      }
+    });
+  }
+
+  /** The returned handle owns its SMB session and must be closed by the caller. */
+  public RemoteFile openFile(String relativePath, boolean writable, boolean truncate)
+      throws IOException {
+    com.hierynomus.smbj.share.File file = withResolvedTarget(relativePath, target ->
+        target.share.openFile(target.path,
+            writable ? EnumSet.of(AccessMask.GENERIC_READ, AccessMask.GENERIC_WRITE)
+                : EnumSet.of(AccessMask.GENERIC_READ),
+            EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL), SMB2ShareAccess.ALL,
+            SMB2CreateDisposition.FILE_OPEN,
+            EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE)));
+    try {
+      if (truncate) file.setLength(0);
+      return new RemoteFile(file);
+    } catch (RuntimeException exception) {
+      file.close();
+      throw connectionFailure(exception);
+    }
+  }
+
+  public static final class RemoteFile implements SmbRandomAccess {
+    private final com.hierynomus.smbj.share.File file;
+    private RemoteFile(com.hierynomus.smbj.share.File file) { this.file = file; }
+    public long size() {
+      return file.getFileInformation(
+          com.hierynomus.msfscc.fileinformation.FileStandardInformation.class).getEndOfFile();
+    }
+    public int read(byte[] buffer, long offset, int bufferOffset, int length) {
+      return file.read(buffer, offset, bufferOffset, length);
+    }
+    public int write(byte[] buffer, long offset, int bufferOffset, int length) throws IOException {
+      long written = file.write(buffer, offset, bufferOffset, length);
+      if (written < 0 || written > length) throw new IOException("Invalid SMB write length");
+      return (int) written;
+    }
+    public void truncate(long length) { file.setLength(length); }
+    public void flush() { file.flush(); }
+    @Override public void close() { file.close(); }
+  }
+
   public void delete(String relativePath, boolean directory) throws IOException {
     withResolvedTarget(relativePath, target -> {
       if (directory) target.share.rmdir(target.path, true); else target.share.rm(target.path);

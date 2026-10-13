@@ -162,6 +162,13 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/open_system_files_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/open_system_files" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/refresh_btn"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
