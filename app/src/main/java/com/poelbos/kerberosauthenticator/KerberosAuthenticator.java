@@ -246,7 +246,8 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             + " phase="
             + (options.getBundle(Constants.KEY_SPNEGO_CONTEXT) == null
                 ? "INITIAL"
-                : "CONTINUE"));
+                : "CONTINUE")
+            + " incomingTokenPresent=" + options.containsKey(Constants.KEY_INCOMING_AUTH_TOKEN));
     byte[] incomingAuthToken;
     SpnegoNegotiationState negotiationState;
     try {
@@ -331,7 +332,12 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       result.putBundle(
           Constants.KEY_SPNEGO_CONTEXT, SpnegoStateCodec.encode(authResult.getState()));
     }
-    krbAccount.save(context);
+    Log.i(TAG, "HTTP_AUTH_STATE host=" + serviceName
+        + " returnedContext=" + (authResult.getState() != null)
+        + " phase=" + (authResult.getState() == null ? "NONE" : authResult.getState().getPhase()));
+    // HTTP token generation does not change the account. Saving here would
+    // invalidate AccountManager tokens and broadcast account changes mid-round.
+    // TGT renewal persists its changes in renewTicketGrantingTicket instead.
     SharedPreferences sharedPref =
         context.getSharedPreferences(Constants.PREFERENCE_NAME, Context.MODE_PRIVATE);
     BaseAuthenticatorActivity.ServiceTicketInfo.saveHttpAuthInfo(

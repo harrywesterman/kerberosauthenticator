@@ -263,12 +263,15 @@ public class KerberosAuthenticatorTest {
                 "backend.example.com"));
     KerberosAuthenticator.setTgtValidityCheckerForTesting(krbAccount -> true);
     KerberosAccount.setAccountVisibilitySetterForTesting(
-        (manager, visibleAccount, packageName, visibility) -> true);
+        (manager, visibleAccount, packageName, visibility) -> {
+          throw new AssertionError("HTTP token requests must not mutate account visibility");
+        });
     Account testAccount = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(testAccount);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DC, AD_DC);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_AD_DOMAIN, TEST_AD_DOMAIN);
     accountManager.setUserData(testAccount, KerberosAccount.KEY_TGT, TestHelper.B64_SUBJECT);
+    accountManager.setPassword(testAccount, "synthetic-legacy-password");
     setTestRestrictions();
 
     Bundle result =
@@ -288,6 +291,7 @@ public class KerberosAuthenticatorTest {
             com.poelbos.kerberosauthenticator.internal.spnego.SpnegoNegotiationState.Phase.OFFERED);
     assertThat(state.getSelectedService()).isEqualTo("backend.example.com");
     assertThat(state.getKerberosContext()).isEqualTo(new byte[] {9, 8, 7});
+    assertThat(accountManager.getPassword(testAccount)).isEqualTo("synthetic-legacy-password");
   }
 
   @Test

@@ -185,10 +185,16 @@ public class KerberosAccount {
     Log.i(TAG, "Updating stored TGT.");
     boolean ticketChanged = !Objects.equals(
         am.getUserData(account, KEY_TGT), userData.getString(KEY_TGT));
-    am.setUserData(account, KEY_TGT, userData.getString(KEY_TGT));
+    if (ticketChanged) {
+      am.setUserData(account, KEY_TGT, userData.getString(KEY_TGT));
+    }
 
     // The account manager persists the TGT and account metadata, never the AD password.
-    am.clearPassword(account);
+    // clearPassword broadcasts an account change even when already empty.
+    // Only migrate a legacy AccountManager password when one actually exists.
+    if (am.getPassword(account) != null) {
+      am.clearPassword(account);
+    }
 
     final String domain = userData.getString(KEY_AD_DOMAIN);
     final String currentDomain = am.getUserData(account, KEY_AD_DOMAIN);
