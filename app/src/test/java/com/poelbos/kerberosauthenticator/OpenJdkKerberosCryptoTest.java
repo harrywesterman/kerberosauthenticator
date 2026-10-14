@@ -28,6 +28,126 @@ import java.nio.file.Path;
 import org.junit.Test;
 
 public final class OpenJdkKerberosCryptoTest {
+  @Test
+  public void spnegoPropagatesTlsBindingIntoKerberosAuthenticator() throws Exception {
+    ClassLoader loader = openJdkKerberosClassLoader();
+    Class<?> principal = Class.forName("krb.javax.security.auth.kerberos.KerberosPrincipal", true, loader);
+    Class<?> ticket = Class.forName("krb.javax.security.auth.kerberos.KerberosTicket", true, loader);
+    byte[] encoded = java.util.Base64.getDecoder().decode(new String(
+        getClass().getClassLoader().getResourceAsStream("kerberos-synthetic-ticket.b64").readAllBytes(),
+        java.nio.charset.StandardCharsets.US_ASCII).trim());
+    byte[] key = hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+    Object client = principal.getConstructor(String.class).newInstance("synthetic@EXAMPLE.COM");
+    javax.security.auth.Subject subject = new javax.security.auth.Subject();
+    boolean[] flags = new boolean[32]; flags[9] = true;
+    java.util.Date now = new java.util.Date();
+    java.util.Date end = new java.util.Date(now.getTime() + 3600000);
+    for (String server : new String[] {"krbtgt/EXAMPLE.COM@EXAMPLE.COM", "HTTP/synthetic.example.com@EXAMPLE.COM"}) {
+      Object service = principal.getConstructor(String.class).newInstance(server);
+      subject.getPrivateCredentials().add(ticket.getConstructor(byte[].class, principal, principal,
+          byte[].class, int.class, boolean[].class, java.util.Date.class, java.util.Date.class,
+          java.util.Date.class, java.util.Date.class, java.net.InetAddress[].class)
+          .newInstance(encoded, client, service, key, 18, flags, now, now, end, null, null));
+    }
+    Class<?> util = Class.forName("sun.security.jgss.GSSUtil", true, loader);
+    Object previous = util.getMethod("getGloballySetSubject").invoke(null);
+    java.security.Provider originalProvider = java.security.Security.getProvider("SunJGSS");
+    int providerPosition = java.util.Arrays.asList(java.security.Security.getProviders())
+        .indexOf(originalProvider) + 1;
+    String originalRealm = System.getProperty("java.security.krb5.realm");
+    String originalKdc = System.getProperty("java.security.krb5.kdc");
+    try {
+      System.setProperty("java.security.krb5.realm", "EXAMPLE.COM");
+      System.setProperty("java.security.krb5.kdc", "127.0.0.1");
+      Class.forName("sun.security.krb5.Config", true, loader).getMethod("refresh").invoke(null);
+      java.security.Security.removeProvider("SunJGSS");
+      java.security.Security.addProvider((java.security.Provider)
+          Class.forName("sun.security.jgss.SunProvider", true, loader).getConstructor().newInstance());
+      util.getMethod("setGlobalSubject", javax.security.auth.Subject.class).invoke(null, subject);
+      Class<?> caller = Class.forName("sun.security.jgss.GSSCaller", true, loader);
+      Object manager = Class.forName("sun.security.jgss.GSSManagerImpl", true, loader)
+          .getConstructor(caller, boolean.class).newInstance(caller.getField("CALLER_INITIATE").get(null), false);
+      Class<?> oid = Class.forName("org.ietf.jgss.Oid", true, loader);
+      Object spnego = oid.getConstructor(String.class).newInstance("1.3.6.1.5.5.2");
+      Class<?> name = Class.forName("org.ietf.jgss.GSSName", true, loader);
+      Object target = manager.getClass().getMethod("createName", String.class, oid, oid)
+          .invoke(manager, "HTTP@synthetic.example.com", name.getField("NT_HOSTBASED_SERVICE").get(null), spnego);
+      Class<?> credential = Class.forName("org.ietf.jgss.GSSCredential", true, loader);
+      Object context = manager.getClass().getMethod("createContext", name, oid, credential, int.class)
+          .invoke(manager, target, spnego, null, 3600);
+      byte[] binding = "tls-server-end-point:synthetic-certificate-hash".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+      Object tlsBinding = Class.forName("sun.security.jgss.krb5.internal.TlsChannelBindingImpl", true, loader)
+          .getConstructor(byte[].class).newInstance((Object) binding);
+      Class<?> contextType = Class.forName("org.ietf.jgss.GSSContext", true, loader);
+      contextType.getMethod("setChannelBinding", Class.forName("org.ietf.jgss.ChannelBinding", true, loader))
+          .invoke(context, tlsBinding);
+      byte[] token = (byte[]) contextType.getMethod("initSecContext", byte[].class, int.class, int.class)
+          .invoke(context, new byte[0], 0, 0);
+      byte[] checksum = authenticatorChecksum(token, key);
+      java.nio.ByteBuffer serializedBinding = java.nio.ByteBuffer.allocate(20 + binding.length)
+          .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+      serializedBinding.position(16); serializedBinding.putInt(binding.length); serializedBinding.put(binding);
+      assertThat(java.util.Arrays.copyOfRange(checksum, 4, 20))
+          .isEqualTo(java.security.MessageDigest.getInstance("MD5").digest(serializedBinding.array()));
+      contextType.getMethod("dispose").invoke(context);
+    } finally {
+      util.getMethod("setGlobalSubject", javax.security.auth.Subject.class).invoke(null, previous);
+      java.security.Security.removeProvider("SunJGSS");
+      if (originalProvider != null) java.security.Security.insertProviderAt(originalProvider, providerPosition);
+      if (originalRealm == null) System.clearProperty("java.security.krb5.realm");
+      else System.setProperty("java.security.krb5.realm", originalRealm);
+      if (originalKdc == null) System.clearProperty("java.security.krb5.kdc");
+      else System.setProperty("java.security.krb5.kdc", originalKdc);
+    }
+  }
+
+  private static byte[] authenticatorChecksum(byte[] token, byte[] key) throws Exception {
+    Class<?> referenceData = Class.forName("sun.security.krb5.EncryptedData");
+    Class<?> referenceKey = Class.forName("sun.security.krb5.EncryptionKey");
+    for (int i = 0; i < token.length; i++) {
+      if ((token[i] & 255) != 0x6e) continue;
+      try {
+        Der sequence = Der.read(token, i).inner();
+        byte[] cipher = sequence.child(0xa4).inner().child(0xa2).inner().value;
+        Object encrypted = referenceData.getConstructor(int.class, Integer.class, byte[].class)
+            .newInstance(18, null, cipher);
+        Object sessionKey = referenceKey.getConstructor(byte[].class, int.class, Integer.class)
+            .newInstance(key, 18, null);
+        byte[] plaintext = (byte[]) referenceData.getMethod("decrypt", referenceKey, int.class)
+            .invoke(encrypted, sessionKey, 11);
+        return Der.read(plaintext, 0).inner().child(0xa3).inner().child(0xa1).inner().value;
+      } catch (Exception ignored) { }
+    }
+    throw new AssertionError("No independently decryptable AP-REQ authenticator");
+  }
+
+  /** Minimal test-fixture DER reader; the cryptographic verification uses JDK 17. */
+  private static final class Der {
+    final int tag, end;
+    final byte[] value;
+    Der(int tag, int end, byte[] value) { this.tag = tag; this.end = end; this.value = value; }
+    static Der read(byte[] data, int offset) {
+      int tag = data[offset++] & 255;
+      int length = data[offset++] & 255;
+      if ((length & 128) != 0) {
+        int count = length & 127;
+        if (count == 0 || count > 4) throw new IllegalArgumentException();
+        length = 0;
+        for (int i = 0; i < count; i++) length = (length << 8) | (data[offset++] & 255);
+      }
+      if (length < 0 || offset + length > data.length) throw new IllegalArgumentException();
+      return new Der(tag, offset + length, java.util.Arrays.copyOfRange(data, offset, offset + length));
+    }
+    Der inner() { return read(value, 0); }
+    Der child(int wanted) {
+      for (int offset = 0; offset < value.length;) {
+        Der child = read(value, offset);
+        if (child.tag == wanted) return child;
+        offset = child.end;
+      }
+      throw new IllegalArgumentException();
+    }
+  }
 
   @Test
   public void aes256AuthenticatorEncryptionInteroperatesWithJdk17() throws Exception {

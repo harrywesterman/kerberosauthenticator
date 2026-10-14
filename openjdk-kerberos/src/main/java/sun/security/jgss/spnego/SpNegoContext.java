@@ -865,6 +865,7 @@ public class SpNegoContext implements GSSContextSpi {
             mechContext.requestMutualAuth(mutualAuthState);
             mechContext.requestReplayDet(replayDetState);
             mechContext.requestSequenceDet(sequenceDetState);
+            mechContext.setChannelBinding(channelBinding);
             if (mechContext instanceof ExtendedGSSContext) {
                 ((ExtendedGSSContext)mechContext).requestDelegPolicy(
                         delegPolicyState);
@@ -899,6 +900,7 @@ public class SpNegoContext implements GSSContextSpi {
             }
             mechContext =
                 factory.manager.createContext(cred);
+            mechContext.setChannelBinding(channelBinding);
         }
 
         // pass token to mechanism acceptSecContext
@@ -1238,4 +1240,3 @@ public class SpNegoContext implements GSSContextSpi {
         }
     }
 }
-
