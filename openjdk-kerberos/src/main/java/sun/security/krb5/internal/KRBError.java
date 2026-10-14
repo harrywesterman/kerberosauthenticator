@@ -262,6 +262,11 @@ public class KRBError implements java.io.Serializable {
         pa = paList.toArray(new PAData[paList.size()]);
     }
 
+    /** Service principal reported by the peer; diagnostic information, not a trusted SPN. */
+    public final PrincipalName getServerPrincipal() {
+        return sname;
+    }
+
     public final KerberosTime getServerTime() {
         return sTime;
     }

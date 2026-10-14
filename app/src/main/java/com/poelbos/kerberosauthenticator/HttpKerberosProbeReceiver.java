@@ -95,6 +95,7 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
         String status = reader.readLine();
         int httpStatus = status == null ? 0 : Integer.parseInt(status.split(" ")[1]);
         int kerberosCode = 0;
+        String reportedPrincipal = "none";
         int size = 0;
         String line;
         while ((line = reader.readLine()) != null && !line.isEmpty()) {
@@ -103,26 +104,35 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
             try {
               byte[] response = android.util.Base64.decode(line.substring(28).trim(), android.util.Base64.DEFAULT);
               byte[] mechanism = new com.hierynomus.spnego.NegTokenTarg().read(response).getResponseToken();
-              if (mechanism != null) kerberosCode = errorCode(mechanism);
+              if (mechanism != null) {
+                sun.security.krb5.internal.KRBError error = kerberosError(mechanism);
+                if (error != null) {
+                  kerberosCode = error.getErrorCode();
+                  String name = String.valueOf(error.getServerPrincipal());
+                  if (name.matches("[a-zA-Z0-9._$/@-]{1,255}")) reportedPrincipal = name;
+                }
+              }
             } catch (Exception ignored) { }
           }
         }
         Log.i(Constants.TAG, "HTTP_TLS_PROBE host=" + host + " spn=" + spn
             + " binding=" + bindingEnabled + " httpStatus=" + httpStatus + " kerberosCode=" + kerberosCode
-            + " peerCertificateSha256=" + fingerprint);
+            + " peerCertificateSha256=" + fingerprint
+            + " remoteAddress=" + raw.getInetAddress().getHostAddress()
+            + " reportedPrincipal=" + reportedPrincipal);
       }
     }
   }
 
-  private static int errorCode(byte[] token) {
+  private static sun.security.krb5.internal.KRBError kerberosError(byte[] token) {
     for (int i = 0; i + 2 < token.length; i++) {
       if ((token[i] & 255) != 0x7e) continue;
       try {
         krb.sun.security.util.DerValue value = new krb.sun.security.util.DerValue(
             new java.io.ByteArrayInputStream(token, i, token.length - i));
-        return new sun.security.krb5.internal.KRBError(value.toByteArray()).getErrorCode();
+        return new sun.security.krb5.internal.KRBError(value.toByteArray());
       } catch (Exception ignored) { }
     }
-    return 0;
+    return null;
   }
 }
