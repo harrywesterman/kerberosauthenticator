@@ -16,6 +16,18 @@ import java.util.Random;
 import org.junit.Test;
 
 public final class HttpSpnegoCoordinatorTest {
+  @Test
+  public void serverResponseWithoutStateDoesNotStartAnotherOffer() {
+    HttpSpnegoCoordinator coordinator = coordinator((host, incoming, context, selected) -> {
+      throw new AssertionError("Must not restart Kerberos after losing context");
+    }, false);
+    HttpSpnegoResult result = coordinator.nextToken(
+        "portal.example.com", "alex", "EXAMPLE.COM", null, true, false,
+        new byte[] {1, 2, 3}, null);
+    assertThat(result.getStatus()).isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertThat(result.getToken()).isNull();
+  }
+
   private static final ASN1ObjectIdentifier KERBEROS =
       new ASN1ObjectIdentifier("1.2.840.113554.1.2.2");
 

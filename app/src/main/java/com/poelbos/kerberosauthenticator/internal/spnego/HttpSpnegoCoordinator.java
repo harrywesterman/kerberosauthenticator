@@ -83,6 +83,11 @@ public final class HttpSpnegoCoordinator {
     }
 
     if (state == null) {
+      if (incomingToken != null && incomingToken.length != 0) {
+        return HttpSpnegoResult.failure(
+            HttpSpnegoResult.ERR_INVALID_RESPONSE,
+            "Server response received without negotiation context");
+      }
       return initialOffer(
           host, accountName, realm, ntlmDomain, kerberosEnabled, ntlmEnabled);
     }

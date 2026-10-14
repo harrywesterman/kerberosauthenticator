@@ -30,6 +30,42 @@ import org.junit.Test;
 public final class OpenJdkKerberosCryptoTest {
 
   @Test
+  public void aes256AuthenticatorEncryptionInteroperatesWithJdk17() throws Exception {
+    ClassLoader vendored = openJdkKerberosClassLoader();
+    Class<?> localKey = Class.forName("sun.security.krb5.EncryptionKey", true, vendored);
+    Class<?> localData = Class.forName("sun.security.krb5.EncryptedData", true, vendored);
+    Class<?> referenceKey = Class.forName("sun.security.krb5.EncryptionKey");
+    Class<?> referenceData = Class.forName("sun.security.krb5.EncryptedData");
+    byte[] key = hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+    Object localSessionKey = localKey.getConstructor(byte[].class, int.class, Integer.class)
+        .newInstance(key, 18, null);
+    Object referenceSessionKey = referenceKey.getConstructor(byte[].class, int.class, Integer.class)
+        .newInstance(key, 18, null);
+    // Exercise both exact AES block boundaries and ciphertext stealing, using
+    // AP-REQ authenticator key usage 11. A local round-trip alone could conceal
+    // a matching bug in the vendored encrypt and decrypt implementations.
+    for (int length : new int[] {1, 15, 16, 17, 31, 32, 33, 127, 128, 129, 255}) {
+      byte[] plaintext = new byte[length];
+      for (int i = 0; i < length; i++) plaintext[i] = (byte) i;
+      Object encrypted = localData.getConstructor(localKey, byte[].class, int.class)
+          .newInstance(localSessionKey, plaintext, 11);
+      byte[] ciphertext = (byte[]) localData.getMethod("getBytes").invoke(encrypted);
+      Object referenceEncrypted = referenceData
+          .getConstructor(int.class, Integer.class, byte[].class)
+          .newInstance(18, null, ciphertext);
+      assertWithMessage("AES-256 authenticator length %s", length)
+          .that((byte[]) referenceData.getMethod("decrypt", referenceKey, int.class)
+              .invoke(referenceEncrypted, referenceSessionKey, 11))
+          .isEqualTo(plaintext);
+      Object wrongUsage = referenceData.getConstructor(int.class, Integer.class, byte[].class)
+          .newInstance(18, null, ciphertext);
+      assertThrows(InvocationTargetException.class,
+          () -> referenceData.getMethod("decrypt", referenceKey, int.class)
+              .invoke(wrongUsage, referenceSessionKey, 7));
+    }
+  }
+
+  @Test
   public void aesStringToKeyMatchesRfc3962Vectors() throws Exception {
     assertThat(
             stringToAesKey(

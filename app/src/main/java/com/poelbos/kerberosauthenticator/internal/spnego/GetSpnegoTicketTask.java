@@ -273,7 +273,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
     GSSContext gssContext =
         exportedContext == null
             ? manager.createContext(serverName, spnegoOid, null, GSSContext.DEFAULT_LIFETIME)
-            : manager.createContext(exportedContext);
+            : GssContextStore.INSTANCE.take(ticketService, exportedContext);
     byte[] spnegoToken = incomingAuthToken == null ? new byte[0] : incomingAuthToken;
     spnegoToken = gssContext.initSecContext(spnegoToken, 0, spnegoToken.length);
 
@@ -287,7 +287,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
         spnegoToken == null ? null : Base64.encodeToString(spnegoToken, Base64.NO_WRAP);
     byte[] nextContext = null;
     if (spnegoToken != null && !gssContext.isEstablished()) {
-      nextContext = gssContext.export();
+      nextContext = GssContextStore.INSTANCE.put(ticketService, gssContext);
     }
     if (!ticketService.equals(requestedService)) {
       Log.i(
