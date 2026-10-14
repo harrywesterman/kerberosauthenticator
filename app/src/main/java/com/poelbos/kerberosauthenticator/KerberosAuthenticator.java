@@ -253,6 +253,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             + " incomingTokenPresent=" + options.containsKey(Constants.KEY_INCOMING_AUTH_TOKEN));
     byte[] incomingAuthToken;
     SpnegoNegotiationState negotiationState;
+    boolean approvedRetry = false;
     String pendingIdentity = account.name.length() + ":" + account.name
         + krbAccount.getDomain().length() + ":" + krbAccount.getDomain()
         + ":" + serviceName.toLowerCase(java.util.Locale.ROOT);
@@ -270,10 +271,25 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
                 + " code=" + peerError.getErrorCode()
                 + " reportedPrincipal=" + (principal.matches("[a-zA-Z0-9._$/@-]{1,255}")
                     ? principal : "omitted"));
+            com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.Mapping mapping =
+                com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.get(
+                    context, krbAccount.getDomain(), serviceName);
+            String retryTarget = (options.getBundle(Constants.KEY_SPNEGO_CONTEXT) != null || pendingStates.hasPending(pendingIdentity))
+                ? com.poelbos.kerberosauthenticator.internal.HttpSpnRetryPolicy.INSTANCE.retry(
+                krbAccount.getDomain(), serviceName, mapping, peerError.getErrorCode(), principal) : null;
+            if (retryTarget != null) {
+              approvedRetry = true;
+              Log.i(TAG, "HTTP_SPN_RETRY host=" + serviceName + " target=" + retryTarget + " bindingRequired=true");
+            }
           }
         } catch (Exception ignored) { }
       }
       negotiationState = negotiationState(options, serviceName);
+      if (approvedRetry) {
+        incomingAuthToken = null;
+        negotiationState = null;
+        pendingStates.clear(pendingIdentity);
+      }
       if (negotiationState != null) {
         pendingStates.clear(pendingIdentity);
       } else if (incomingAuthToken != null) {

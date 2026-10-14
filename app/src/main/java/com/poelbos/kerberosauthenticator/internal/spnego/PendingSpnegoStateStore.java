@@ -28,6 +28,8 @@ public final class PendingSpnegoStateStore {
     return entry == null ? null : entry.state;
   }
 
+  public synchronized boolean hasPending(String identity) { prune(); return pending.containsKey(identity); }
+
   public synchronized void clear(String identity) { pending.remove(identity); }
 
   private void prune() {

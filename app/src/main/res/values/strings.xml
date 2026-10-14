@@ -124,4 +124,6 @@
     <string name="authentication_status">Authentication status</string>
     <string name="automatic_refresh_not_run">Automatic refresh: %1$s</string>
     <string name="automatic_refresh_last_success">Last automatic refresh: %1$s</string>
+    <string name="mdm_http_alternate_spns">Approved alternate HTTP SPN hosts</string>
+    <string name="mdm_http_alternate_spns_description">Optional comma-separated in-realm DNS hosts, at most four including the primary SPN. With verified TLS binding enabled, a Kerberos error 41 may select only one of these approved targets. Re-selection is limited to four attempts per origin per two minutes.</string>
 </resources>

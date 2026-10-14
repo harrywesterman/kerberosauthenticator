@@ -50,7 +50,7 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
     boolean bindingEnabled = intent.getBooleanExtra("channel_binding", false);
     String operation = intent.getStringExtra("operation");
     if ("set_mapping".equals(operation)) {
-      com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.setForShell(context, realm, host, spn, bindingEnabled);
+      com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.setForShell(context, realm, host, spn, bindingEnabled, intent.getStringExtra("approved_spn_hosts"));
       Log.i(Constants.TAG, "HTTP_SPN_ADMIN host=" + host + " spn=" + spn + " binding=" + bindingEnabled + " result=saved");
       return;
     }

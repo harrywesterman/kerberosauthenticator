@@ -375,3 +375,20 @@ For fleet deployment, prefer the equivalent managed configuration:
 ```json
 {"http_spn_mappings":[{"request_host":"portal.example.com","spn_host":"web01.example.com","tls_channel_binding":true}]}
 ```
+
+For an explicitly approved server farm, the same entry may optionally include
+`alternate_spn_hosts`, a comma-separated list of DNS SPN hosts in the account's
+realm. At most four unique targets are accepted, including `spn_host`. With
+`tls_channel_binding: true`, a peer error 41 containing an exact computer-account
+name may restart Kerberos with the matching approved target. This hint is not
+proof of server identity and never expands the configured list. TLS verification
+and Kerberos mutual authentication remain enabled. Re-selection requires an
+existing pending negotiation, is limited to four attempts per origin per two
+minutes, and the preferred target expires after two minutes. No NTLM downgrade
+is introduced. The shell diagnostic configuration accepts the equivalent
+`--es approved_spn_hosts web01.example.com,web02.example.com` with `set_mapping`.
+
+Diagnostic `spn` identifies the requested candidate; `selectedSpn` identifies the
+actual ticket SPN after configured mappings. App HTTPS probes connect directly;
+Chrome may use a managed proxy and reach a different farm node. A successful
+probe alone does not verify successful browser authentication.
