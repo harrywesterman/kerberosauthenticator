@@ -105,10 +105,10 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
               byte[] response = android.util.Base64.decode(line.substring(28).trim(), android.util.Base64.DEFAULT);
               byte[] mechanism = new com.hierynomus.spnego.NegTokenTarg().read(response).getResponseToken();
               if (mechanism != null) {
-                sun.security.krb5.internal.KRBError error = kerberosError(mechanism);
+                com.poelbos.kerberosauthenticator.internal.spnego.KerberosPeerError error = kerberosError(mechanism);
                 if (error != null) {
-                  kerberosCode = error.getErrorCode();
-                  String name = String.valueOf(error.getServerPrincipal());
+                  kerberosCode = error.code;
+                  String name = error.principal;
                   if (name.matches("[a-zA-Z0-9._$/@-]{1,255}")) reportedPrincipal = name;
                 }
               }
@@ -125,15 +125,7 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
     }
   }
 
-  static sun.security.krb5.internal.KRBError kerberosError(byte[] token) {
-    for (int i = 0; i + 2 < token.length; i++) {
-      if ((token[i] & 255) != 0x7e) continue;
-      try {
-        krb.sun.security.util.DerValue value = new krb.sun.security.util.DerValue(
-            new java.io.ByteArrayInputStream(token, i, token.length - i));
-        return new sun.security.krb5.internal.KRBError(value.toByteArray());
-      } catch (Exception ignored) { }
-    }
-    return null;
+  static com.poelbos.kerberosauthenticator.internal.spnego.KerberosPeerError kerberosError(byte[] token) {
+    return com.poelbos.kerberosauthenticator.internal.spnego.KerberosPeerError.parse(token);
   }
 }

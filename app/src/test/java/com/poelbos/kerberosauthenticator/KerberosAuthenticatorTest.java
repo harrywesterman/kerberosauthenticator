@@ -212,7 +212,7 @@ public class KerberosAuthenticatorTest {
   @Test
   public void testGetAuthTokenValidTGT() {
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
+        (requestContext, serviceName, krbAccount, incoming, contextBytes, approvedTarget) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
                 TEST_SPNEGO_TOKEN));
@@ -255,7 +255,7 @@ public class KerberosAuthenticatorTest {
     String encodedToken =
         Base64.encodeToString(new byte[] {1, 2, 3}, Base64.NO_WRAP);
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
+        (requestContext, serviceName, krbAccount, incoming, contextBytes, approvedTarget) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
                 encodedToken,
@@ -300,7 +300,7 @@ public class KerberosAuthenticatorTest {
     server.write(encoded);
     AtomicInteger continuations = new AtomicInteger();
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, incoming, contextBytes) -> {
+        (requestContext, serviceName, krbAccount, incoming, contextBytes, approvedTarget) -> {
           assertThat(serviceName).isEqualTo("backend.example.com");
           assertThat(contextBytes).isEqualTo(new byte[] {9, 8, 7});
           continuations.incrementAndGet();
@@ -314,6 +314,58 @@ public class KerberosAuthenticatorTest {
         "SPNEGO:HOSTBASED:HTTP@portal.example.com", continuationOptions);
     assertThat(continuation.getInt(Constants.KEY_SPNEGO_RESULT)).isEqualTo(HttpSpnegoResult.OK);
     assertThat(continuations.get()).isEqualTo(1);
+  }
+
+  @Test
+  public void approvedFarmRetryRequiresPendingRequestAndPinsItsTarget() throws Exception {
+    Account account = addTestAccount();
+    accountManager.setUserData(account, KerberosAccount.KEY_AD_DOMAIN, "EXAMPLE.COM");
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putString(AccountConfiguration.AD_REALM_KEY, "EXAMPLE.COM");
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, false);
+    setTestRestrictions(restrictions);
+    com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.setForShell(context,
+        "EXAMPLE.COM", "portal.example.com", "web1.example.com", true,
+        "web2.example.com,web3.example.com");
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(ignored -> true);
+    AtomicInteger calls = new AtomicInteger();
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, serviceName, krbAccount, incoming, contextBytes, approvedTarget) -> {
+          assertThat(serviceName).isEqualTo("portal.example.com");
+          assertThat(incoming).isNull();
+          assertThat(contextBytes).isNull();
+          if (calls.getAndIncrement() == 0) assertThat(approvedTarget).isNull();
+          else {
+            assertThat(approvedTarget).isEqualTo("web2.example.com");
+            // A concurrent origin preference update must not change this request's target.
+            com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.Mapping mapping =
+                com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.get(context, "EXAMPLE.COM", serviceName);
+            com.poelbos.kerberosauthenticator.internal.HttpSpnRetryPolicy.INSTANCE.retry(
+                "EXAMPLE.COM", serviceName, mapping, 41, "web3$@EXAMPLE.COM");
+            assertThat(approvedTarget).isEqualTo("web2.example.com");
+          }
+          return new GetSpnegoTicketTask.SpnegoTicketResult(
+              new TicketRequestResult(ResultCode.SUCCESS, "synthetic ticket"),
+              Base64.encodeToString(new byte[]{1,2,3}, Base64.NO_WRAP), new byte[]{9,8,7},
+              approvedTarget == null ? "web1.example.com" : approvedTarget);
+        });
+    // Synthetic KRB-ERROR 41 for web2$@EXAMPLE.COM; contains no real credentials.
+    byte[] error = Base64.decode("fkwwSqADAgEFoQMCAR6kERgPMjAyNjEwMTQxNDAwMDBapQMCAQCmAwIBKakNGwtFWEFNUExFLkNPTaoSMBCgAwIBAaEJMAcbBXdlYjIk", Base64.NO_WRAP);
+    com.hierynomus.spnego.NegTokenTarg server = new com.hierynomus.spnego.NegTokenTarg();
+    server.setResponseToken(error);
+    com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer encoded =
+        new com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer(com.hierynomus.protocol.commons.buffer.Endian.LE);
+    server.write(encoded);
+    Bundle options = getTestOptions();
+    options.putString(Constants.KEY_INCOMING_AUTH_TOKEN, Base64.encodeToString(encoded.getCompactData(), Base64.NO_WRAP));
+    assertThat(authenticator.getAuthToken(null, account, "SPNEGO:HOSTBASED:HTTP@portal.example.com", options)
+        .getInt(Constants.KEY_SPNEGO_RESULT)).isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertThat(calls.get()).isEqualTo(0);
+    authenticator.getAuthToken(null, account, "SPNEGO:HOSTBASED:HTTP@portal.example.com", getTestOptions());
+    Bundle retry = authenticator.getAuthToken(null, account, "SPNEGO:HOSTBASED:HTTP@portal.example.com", options);
+    assertThat(retry.getInt(Constants.KEY_SPNEGO_RESULT)).isEqualTo(HttpSpnegoResult.OK);
+    assertThat(calls.get()).isEqualTo(2);
+    com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.clearForShell(context, "EXAMPLE.COM", "portal.example.com");
   }
 
   @Test
@@ -372,7 +424,7 @@ public class KerberosAuthenticatorTest {
   @Test
   public void testGetAuthTokenRenewsExpiredTgtBeforePromptingForPassword() {
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, krbAccount, incoming, contextBytes) ->
+        (requestContext, serviceName, krbAccount, incoming, contextBytes, approvedTarget) ->
             new GetSpnegoTicketTask.SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.SUCCESS, "test service ticket"),
                 TEST_SPNEGO_TOKEN));
@@ -473,7 +525,7 @@ public class KerberosAuthenticatorTest {
           return false;
         });
     KerberosAuthenticator.setServiceTicketProviderForTesting(
-        (requestContext, serviceName, account, incoming, contextBytes) -> {
+        (requestContext, serviceName, account, incoming, contextBytes, approvedTarget) -> {
           kerberosRequests.incrementAndGet();
           return new GetSpnegoTicketTask.SpnegoTicketResult(
               new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, "must not be called"), null);

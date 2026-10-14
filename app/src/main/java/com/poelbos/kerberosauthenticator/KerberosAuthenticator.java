@@ -37,6 +37,7 @@ import com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoResult;
 import com.poelbos.kerberosauthenticator.internal.spnego.SpnegoNegotiationState;
 import com.poelbos.kerberosauthenticator.internal.spnego.SpnegoStateCodec;
 import com.poelbos.kerberosauthenticator.internal.spnego.PendingSpnegoStateStore;
+import com.poelbos.kerberosauthenticator.internal.TicketRequestResult;
 import com.hierynomus.smbj.SmbConfig;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -66,7 +67,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         String serviceName,
         KerberosAccount account,
         byte[] incomingAuthToken,
-        byte[] spnegoContext);
+        byte[] spnegoContext, String approvedTarget);
   }
 
   interface ChromeCallerValidator {
@@ -253,7 +254,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             + " incomingTokenPresent=" + options.containsKey(Constants.KEY_INCOMING_AUTH_TOKEN));
     byte[] incomingAuthToken;
     SpnegoNegotiationState negotiationState;
-    boolean approvedRetry = false;
+    String approvedRetryTarget = null;
     String pendingIdentity = account.name.length() + ":" + account.name
         + krbAccount.getDomain().length() + ":" + krbAccount.getDomain()
         + ":" + serviceName.toLowerCase(java.util.Locale.ROOT);
@@ -263,12 +264,12 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         try {
           byte[] mechanism = new com.hierynomus.spnego.NegTokenTarg()
               .read(incomingAuthToken).getResponseToken();
-          sun.security.krb5.internal.KRBError peerError = mechanism == null ? null
+          com.poelbos.kerberosauthenticator.internal.spnego.KerberosPeerError peerError = mechanism == null ? null
               : HttpKerberosProbeReceiver.kerberosError(mechanism);
           if (peerError != null) {
-            String principal = String.valueOf(peerError.getServerPrincipal());
+            String principal = peerError.principal;
             Log.i(TAG, "HTTP_KERBEROS_PEER_ERROR host=" + serviceName
-                + " code=" + peerError.getErrorCode()
+                + " code=" + peerError.code
                 + " reportedPrincipal=" + (principal.matches("[a-zA-Z0-9._$/@-]{1,255}")
                     ? principal : "omitted"));
             com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.Mapping mapping =
@@ -276,16 +277,16 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
                     context, krbAccount.getDomain(), serviceName);
             String retryTarget = (options.getBundle(Constants.KEY_SPNEGO_CONTEXT) != null || pendingStates.hasPending(pendingIdentity))
                 ? com.poelbos.kerberosauthenticator.internal.HttpSpnRetryPolicy.INSTANCE.retry(
-                krbAccount.getDomain(), serviceName, mapping, peerError.getErrorCode(), principal) : null;
+                krbAccount.getDomain(), serviceName, mapping, peerError.code, principal) : null;
             if (retryTarget != null) {
-              approvedRetry = true;
+              approvedRetryTarget = retryTarget;
               Log.i(TAG, "HTTP_SPN_RETRY host=" + serviceName + " target=" + retryTarget + " bindingRequired=true");
             }
           }
         } catch (Exception ignored) { }
       }
       negotiationState = negotiationState(options, serviceName);
-      if (approvedRetry) {
+      if (approvedRetryTarget != null) {
         incomingAuthToken = null;
         negotiationState = null;
         pendingStates.clear(pendingIdentity);
@@ -311,13 +312,14 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
               && ntlmCredentials.isAvailable(krbAccount.getName(), krbAccount.getDomain());
       Log.i(TAG, "SPNEGO_OFFER ntlmEligible=" + ntlmEligible);
     }
+    final String requestRetryTarget = approvedRetryTarget;
     HttpSpnegoCoordinator coordinator =
         new HttpSpnegoCoordinator(
             (host, incoming, exportedContext, selectedService) -> {
               String ticketHost = selectedService == null ? host : selectedService;
               GetSpnegoTicketTask.SpnegoTicketResult ticket =
                   serviceTicketProvider.getServiceTicket(
-                      context, ticketHost, krbAccount, incoming, exportedContext);
+                      context, ticketHost, krbAccount, incoming, exportedContext, requestRetryTarget);
               if (!ticket.getRequestResult().successful() || ticket.getServiceTicket() == null) {
                 return HttpSpnegoCoordinator.KerberosRound.failure(
                     ticket.getRequestResult().toString());
@@ -405,9 +407,20 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       String serviceName,
       KerberosAccount account,
       byte[] incomingAuthToken,
-      byte[] spnegoContext) {
+      byte[] spnegoContext, String approvedTarget) {
     TicketGrantingTicket tgt =
         TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
+    if (approvedTarget != null) {
+      try {
+        byte[] binding = com.poelbos.kerberosauthenticator.internal.spnego.TlsEndpointBinding.discover(context, serviceName);
+        Log.i(TAG, "HTTP_TLS_BINDING host=" + serviceName + " verified=true");
+        return GetSpnegoTicketTask.getServiceTicketWithChannelBinding(context, tgt.asSubject(),
+            account.getDomain(), account.getDomainController(), approvedTarget, null, null, binding);
+      } catch (java.io.IOException error) {
+        return new GetSpnegoTicketTask.SpnegoTicketResult(new TicketRequestResult(
+            TicketRequestResult.ResultCode.ERROR_GSS_FAILURE, "Verified HTTPS channel binding unavailable"), null);
+      }
+    }
     return GetSpnegoTicketTask.getServiceTicket(
         context,
         tgt.asSubject(),
