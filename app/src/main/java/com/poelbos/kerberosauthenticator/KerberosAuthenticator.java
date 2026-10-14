@@ -258,6 +258,21 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
         + ":" + serviceName.toLowerCase(java.util.Locale.ROOT);
     try {
       incomingAuthToken = incomingAuthToken(options);
+      if (incomingAuthToken != null && incomingAuthToken.length > 0) {
+        try {
+          byte[] mechanism = new com.hierynomus.spnego.NegTokenTarg()
+              .read(incomingAuthToken).getResponseToken();
+          sun.security.krb5.internal.KRBError peerError = mechanism == null ? null
+              : HttpKerberosProbeReceiver.kerberosError(mechanism);
+          if (peerError != null) {
+            String principal = String.valueOf(peerError.getServerPrincipal());
+            Log.i(TAG, "HTTP_KERBEROS_PEER_ERROR host=" + serviceName
+                + " code=" + peerError.getErrorCode()
+                + " reportedPrincipal=" + (principal.matches("[a-zA-Z0-9._$/@-]{1,255}")
+                    ? principal : "omitted"));
+          }
+        } catch (Exception ignored) { }
+      }
       negotiationState = negotiationState(options, serviceName);
       if (negotiationState != null) {
         pendingStates.clear(pendingIdentity);

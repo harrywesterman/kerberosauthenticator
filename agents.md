@@ -5,6 +5,7 @@
 - The release workflow derives the version from the latest GitHub release tag and passes it into Gradle with `-PreleaseVersion=...`.
 - Local Gradle builds on this machine need JDK 17; Temurin 26 triggers the Kotlin/Gradle Java version parsing issue.
 - Always stay on `main` (MAIN) for this repository and do not continue work on other branches.
+- Test internal sites and Kerberos authentication exclusively in Chrome on the attached Android device. This computer cannot access the internal network. Use ADB to operate the Android device and read its logs. Do not open, operate, or use local desktop Chrome for testing or remote inspection of Android Chrome.
 - For a change that must be tested on a managed Android device:
   1. Run the relevant unit tests and assemble the APK locally with JDK 17.
   2. Commit and push the verified change to `main`.

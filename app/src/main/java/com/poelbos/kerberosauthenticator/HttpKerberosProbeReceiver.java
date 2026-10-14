@@ -116,6 +116,7 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
           }
         }
         Log.i(Constants.TAG, "HTTP_TLS_PROBE host=" + host + " spn=" + spn
+            + " selectedSpn=" + ticket.getSelectedService()
             + " binding=" + bindingEnabled + " httpStatus=" + httpStatus + " kerberosCode=" + kerberosCode
             + " peerCertificateSha256=" + fingerprint
             + " remoteAddress=" + raw.getInetAddress().getHostAddress()
@@ -124,7 +125,7 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
     }
   }
 
-  private static sun.security.krb5.internal.KRBError kerberosError(byte[] token) {
+  static sun.security.krb5.internal.KRBError kerberosError(byte[] token) {
     for (int i = 0; i + 2 < token.length; i++) {
       if ((token[i] & 255) != 0x7e) continue;
       try {
