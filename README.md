@@ -332,3 +332,17 @@ failure is expected when the server requires a real TLS channel-binding hash.
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE). The implementation uses the same provider-oriented design evaluated in Material Files, but does not copy its GPL-licensed source code.
+
+For an administrator diagnosing HTTPS Kerberos, a receiver protected by Android's
+`android.permission.DUMP` permission can compare authentication with and without
+RFC 5929 TLS channel binding. It authenticates the certificate and hostname, sends
+one root-path GET over that same TLS connection, follows no redirects, and logs
+only result categories and numeric HTTP/Kerberos status codes. Both names must be
+inside the configured realm's DNS namespace. Ordinary applications cannot invoke it.
+This is a diagnostic; Chrome's normal authentication path is unchanged.
+
+```bash
+adb shell am broadcast -n com.poelbos.kerberosauthenticator/.HttpKerberosProbeReceiver \
+  --es request_host portal.example.com --es spn_host portal.example.com \
+  --ez channel_binding true
+```

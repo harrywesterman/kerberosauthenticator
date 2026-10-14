@@ -22,6 +22,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.KerberosFiles">
+        <receiver
+            android:name=".HttpKerberosProbeReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
         <service
             android:name=".KerberosAuthenticatorService"
             android:exported="true"

@@ -148,6 +148,13 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String service,
     byte[] incomingAuthToken,
     byte[] exportedContext) {
+    return getServiceTicketWithChannelBinding(context, subject, domain, domainController,
+        service, incomingAuthToken, exportedContext, null);
+  }
+
+  public static SpnegoTicketResult getServiceTicketWithChannelBinding(
+      Context context, Subject subject, String domain, String domainController, String service,
+      byte[] incomingAuthToken, byte[] exportedContext, byte[] channelBinding) {
     try {
       return KerberosRuntimeCoordinator.run(
           context,
@@ -156,7 +163,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
           service,
           subject,
           configured -> getServiceTicketConfigured(
-              context, domain, service, incomingAuthToken, exportedContext));
+              context, domain, service, incomingAuthToken, exportedContext, channelBinding));
     } catch (IOException e) {
       Log.e(TAG, "Failure configuring Kerberos environment", e);
       return new SpnegoTicketResult(
@@ -169,7 +176,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String domain,
       String service,
       byte[] incomingAuthToken,
-      byte[] exportedContext) {
+      byte[] exportedContext, byte[] channelBinding) {
     GSSManager manager = new GSSManagerImpl(GSSCaller.CALLER_INITIATE, false);
 
     try {
@@ -202,7 +209,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
               ticketService,
               service,
               incomingAuthToken,
-              exportedContext);
+              exportedContext, channelBinding);
         } catch (GSSException e) {
           lastException = e;
           Log.w(
@@ -275,7 +282,7 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String ticketService,
       String requestedService,
       byte[] incomingAuthToken,
-      byte[] exportedContext)
+      byte[] exportedContext, byte[] channelBinding)
       throws GSSException {
     GSSName serverName =
         manager.createName("HTTP@" + ticketService, GSSName.NT_HOSTBASED_SERVICE, spnegoOid);
@@ -283,6 +290,10 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
         exportedContext == null
             ? manager.createContext(serverName, spnegoOid, null, GSSContext.DEFAULT_LIFETIME)
             : GssContextStore.INSTANCE.take(ticketService, exportedContext);
+    if (exportedContext == null && channelBinding != null) {
+      gssContext.setChannelBinding(
+          new sun.security.jgss.krb5.internal.TlsChannelBindingImpl(channelBinding));
+    }
     byte[] spnegoToken = incomingAuthToken == null ? new byte[0] : incomingAuthToken;
     spnegoToken = gssContext.initSecContext(spnegoToken, 0, spnegoToken.length);
 
