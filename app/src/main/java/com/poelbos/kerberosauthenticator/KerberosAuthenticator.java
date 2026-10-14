@@ -36,6 +36,7 @@ import com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoCoordinator;
 import com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoResult;
 import com.poelbos.kerberosauthenticator.internal.spnego.SpnegoNegotiationState;
 import com.poelbos.kerberosauthenticator.internal.spnego.SpnegoStateCodec;
+import com.poelbos.kerberosauthenticator.internal.spnego.PendingSpnegoStateStore;
 import com.hierynomus.smbj.SmbConfig;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -44,6 +45,7 @@ import java.util.regex.Matcher;
 
 /** Kerberos account authenticator. */
 public class KerberosAuthenticator extends AbstractAccountAuthenticator {
+  private static PendingSpnegoStateStore pendingStates = new PendingSpnegoStateStore();
   private final Context context;
   private static ServiceTicketProvider serviceTicketProvider =
       KerberosAuthenticator::requestServiceTicket;
@@ -85,6 +87,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
   static void resetServiceTicketProviderForTesting() {
     serviceTicketProvider = KerberosAuthenticator::requestServiceTicket;
+    pendingStates = new PendingSpnegoStateStore();
   }
 
   static void setTgtValidityCheckerForTesting(TgtValidityChecker checker) {
@@ -250,9 +253,19 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             + " incomingTokenPresent=" + options.containsKey(Constants.KEY_INCOMING_AUTH_TOKEN));
     byte[] incomingAuthToken;
     SpnegoNegotiationState negotiationState;
+    String pendingIdentity = account.name.length() + ":" + account.name
+        + krbAccount.getDomain().length() + ":" + krbAccount.getDomain()
+        + ":" + serviceName.toLowerCase(java.util.Locale.ROOT);
     try {
       incomingAuthToken = incomingAuthToken(options);
       negotiationState = negotiationState(options, serviceName);
+      if (negotiationState != null) {
+        pendingStates.clear(pendingIdentity);
+      } else if (incomingAuthToken != null) {
+        negotiationState = pendingStates.recover(pendingIdentity);
+        Log.i(TAG, "HTTP_AUTH_CONTEXT host=" + serviceName
+            + " recovered=" + (negotiationState != null));
+      }
     } catch (IllegalArgumentException error) {
       Log.w(TAG, "HTTP_AUTH_RESULT code=4 reason=invalid_context");
       result.putInt(Constants.KEY_SPNEGO_RESULT, HttpSpnegoResult.ERR_INVALID_RESPONSE);
@@ -331,6 +344,9 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     if (authResult.getState() != null) {
       result.putBundle(
           Constants.KEY_SPNEGO_CONTEXT, SpnegoStateCodec.encode(authResult.getState()));
+      if (authResult.getState().getKerberosContext() != null) {
+        pendingStates.remember(pendingIdentity, authResult.getState());
+      }
     }
     Log.i(TAG, "HTTP_AUTH_STATE host=" + serviceName
         + " returnedContext=" + (authResult.getState() != null)

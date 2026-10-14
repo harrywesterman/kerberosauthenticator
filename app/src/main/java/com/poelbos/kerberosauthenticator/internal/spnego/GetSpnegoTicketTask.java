@@ -208,8 +208,8 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
           Log.w(
               TAG,
               String.format(
-                  "SPN_TICKET_FAILED host=%s major=%d minor=%d unknownPrincipal=%s",
-                  ticketService, e.getMajor(), e.getMinor(), isUnknownPrincipal(e)));
+                  "SPN_TICKET_FAILED host=%s major=%d minor=%d unknownPrincipal=%s kerberosCode=%d",
+                  ticketService, e.getMajor(), e.getMinor(), isUnknownPrincipal(e), kerberosErrorCode(e)));
           if (!isUnknownPrincipal(e)) {
             return new SpnegoTicketResult(
                 new TicketRequestResult(ResultCode.ERROR_GSS_FAILURE, e.getMessage()), null);
@@ -247,6 +247,15 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       }
     }
     return false;
+  }
+
+  private static int kerberosErrorCode(Throwable error) {
+    for (int depth = 0; error != null && depth < 8; depth++, error = error.getCause()) {
+      if (error instanceof sun.security.krb5.KrbException) {
+        return ((sun.security.krb5.KrbException) error).returnCode();
+      }
+    }
+    return 0;
   }
 
   static List<String> candidatesForRound(

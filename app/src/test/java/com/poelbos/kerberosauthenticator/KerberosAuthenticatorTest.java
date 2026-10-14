@@ -251,7 +251,7 @@ public class KerberosAuthenticatorTest {
   }
 
   @Test
-  public void initialTokenReturnsVersionedHostBoundContext() {
+  public void initialTokenReturnsContextAndRecoversDroppedBundle() throws Exception {
     String encodedToken =
         Base64.encodeToString(new byte[] {1, 2, 3}, Base64.NO_WRAP);
     KerberosAuthenticator.setServiceTicketProviderForTesting(
@@ -292,6 +292,28 @@ public class KerberosAuthenticatorTest {
     assertThat(state.getSelectedService()).isEqualTo("backend.example.com");
     assertThat(state.getKerberosContext()).isEqualTo(new byte[] {9, 8, 7});
     assertThat(accountManager.getPassword(testAccount)).isEqualTo("synthetic-legacy-password");
+    com.hierynomus.spnego.NegTokenTarg server = new com.hierynomus.spnego.NegTokenTarg();
+    server.setSupportedMech(new com.hierynomus.asn1.types.primitive.ASN1ObjectIdentifier("1.2.840.113554.1.2.2"));
+    com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer encoded =
+        new com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer(
+            com.hierynomus.protocol.commons.buffer.Endian.LE);
+    server.write(encoded);
+    AtomicInteger continuations = new AtomicInteger();
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, serviceName, krbAccount, incoming, contextBytes) -> {
+          assertThat(serviceName).isEqualTo("backend.example.com");
+          assertThat(contextBytes).isEqualTo(new byte[] {9, 8, 7});
+          continuations.incrementAndGet();
+          return new GetSpnegoTicketTask.SpnegoTicketResult(
+              new TicketRequestResult(ResultCode.SUCCESS, "synthetic continuation"), encodedToken);
+        });
+    Bundle continuationOptions = getTestOptions();
+    continuationOptions.putString(Constants.KEY_INCOMING_AUTH_TOKEN,
+        Base64.encodeToString(encoded.getCompactData(), Base64.NO_WRAP));
+    Bundle continuation = authenticator.getAuthToken(null, testAccount,
+        "SPNEGO:HOSTBASED:HTTP@portal.example.com", continuationOptions);
+    assertThat(continuation.getInt(Constants.KEY_SPNEGO_RESULT)).isEqualTo(HttpSpnegoResult.OK);
+    assertThat(continuations.get()).isEqualTo(1);
   }
 
   @Test
