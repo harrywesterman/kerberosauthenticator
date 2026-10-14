@@ -148,8 +148,21 @@ public class GetSpnegoTicketTask extends AsyncTask<String, Void, TicketRequestRe
       String service,
     byte[] incomingAuthToken,
     byte[] exportedContext) {
+    byte[] binding = null;
+    com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.Mapping mapping =
+        com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.get(context, domain, service);
+    if (exportedContext == null && mapping != null && mapping.tlsBinding) {
+      try {
+        binding = TlsEndpointBinding.discover(context, service);
+        Log.i(TAG, "HTTP_TLS_BINDING host=" + service + " verified=true");
+      } catch (IOException error) {
+        Log.w(TAG, "HTTP_TLS_BINDING host=" + service + " verified=false");
+        return new SpnegoTicketResult(new TicketRequestResult(
+            ResultCode.ERROR_GSS_FAILURE, "Verified HTTPS channel binding unavailable"), null);
+      }
+    }
     return getServiceTicketWithChannelBinding(context, subject, domain, domainController,
-        service, incomingAuthToken, exportedContext, null);
+        service, incomingAuthToken, exportedContext, binding);
   }
 
   public static SpnegoTicketResult getServiceTicketWithChannelBinding(

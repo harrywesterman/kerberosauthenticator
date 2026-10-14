@@ -42,8 +42,9 @@ public final class SpnResolver {
     }
 
     Set<String> candidates = new LinkedHashSet<>();
-    String override = managedMappings(context, realm).get(requested);
-    addCandidate(candidates, override, realm, "mdm");
+    HttpSpnSettings.Mapping mapping = HttpSpnSettings.get(context, realm, requested);
+    addCandidate(candidates, mapping == null ? null : mapping.host, realm,
+        mapping == null ? "mdm" : mapping.source);
     addCandidate(candidates, requested, realm, "requested");
     for (String cname : safeList(cnameChain)) {
       addCandidate(candidates, cname, realm, "cname");

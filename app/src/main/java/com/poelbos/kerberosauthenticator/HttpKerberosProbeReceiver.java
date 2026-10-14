@@ -48,6 +48,18 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
     if (host == null || spn == null || !host.endsWith(suffix) || !spn.endsWith(suffix))
       throw new IllegalArgumentException();
     boolean bindingEnabled = intent.getBooleanExtra("channel_binding", false);
+    String operation = intent.getStringExtra("operation");
+    if ("set_mapping".equals(operation)) {
+      com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.setForShell(context, realm, host, spn, bindingEnabled);
+      Log.i(Constants.TAG, "HTTP_SPN_ADMIN host=" + host + " spn=" + spn + " binding=" + bindingEnabled + " result=saved");
+      return;
+    }
+    if ("clear_mapping".equals(operation)) {
+      com.poelbos.kerberosauthenticator.internal.HttpSpnSettings.clearForShell(context, realm, host);
+      Log.i(Constants.TAG, "HTTP_SPN_ADMIN host=" + host + " result=cleared");
+      return;
+    }
+
     ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
     Network network = cm.getActiveNetwork();
     if (network == null) throw new IllegalStateException();
@@ -62,6 +74,9 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
         tls.startHandshake();
         X509Certificate certificate = (X509Certificate) tls.getSession().getPeerCertificates()[0];
         byte[] binding = bindingEnabled ? TlsEndpointBinding.fromCertificate(certificate) : null;
+        StringBuilder fingerprint = new StringBuilder();
+        for (byte value : java.security.MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded()))
+          fingerprint.append(String.format(java.util.Locale.ROOT, "%02x", value));
         TicketGrantingTicket tgt = TicketGrantingTicket.fromSerializedSubject(account.getTicketGrantingTicket());
         GetSpnegoTicketTask.SpnegoTicketResult ticket =
             GetSpnegoTicketTask.getServiceTicketWithChannelBinding(context, tgt.asSubject(), realm,
@@ -93,7 +108,8 @@ public final class HttpKerberosProbeReceiver extends BroadcastReceiver {
           }
         }
         Log.i(Constants.TAG, "HTTP_TLS_PROBE host=" + host + " spn=" + spn
-            + " binding=" + bindingEnabled + " httpStatus=" + httpStatus + " kerberosCode=" + kerberosCode);
+            + " binding=" + bindingEnabled + " httpStatus=" + httpStatus + " kerberosCode=" + kerberosCode
+            + " peerCertificateSha256=" + fingerprint);
       }
     }
   }

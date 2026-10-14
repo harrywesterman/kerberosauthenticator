@@ -14,6 +14,8 @@
     limitations under the License.
 -->
 <resources>
+    <string name="mdm_http_tls_binding">HTTPS certificate binding</string>
+    <string name="mdm_http_tls_binding_description">Use a verified TLS certificate for this HTTPS origin on port 443. The browser and authenticator must reach the same TLS certificate. Keep cleartext HTTP blocked in Chrome.</string>
     <!-- [CHAR_LIMIT=100] -->
     <string name="app_name">Enterprise Files</string>
     <string name="mdm_realm_title">Active Directory realm</string>

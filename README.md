@@ -346,3 +346,32 @@ adb shell am broadcast -n com.poelbos.kerberosauthenticator/.HttpKerberosProbeRe
   --es request_host portal.example.com --es spn_host portal.example.com \
   --ez channel_binding true
 ```
+
+An exact `http_spn_mappings` entry may set `tls_channel_binding: true` for an
+HTTPS origin on port 443. This obtains a hostname- and chain-validated certificate
+from that original origin and binds the Kerberos authenticator to its RFC 5929
+TLS endpoint hash. The browser and authenticator must reach the same TLS
+certificate; compare their SHA-256 leaf-certificate fingerprints when deploying
+through a proxy or load balancer. Certificate discovery failure stops authentication
+instead of silently sending an unbound token. Other hosts retain their existing behavior.
+
+A USB administrator can apply or clear an exact, in-realm local mapping using the
+same DUMP-protected receiver. Explicit managed configuration takes precedence,
+including invalid/conflicting managed entries. These settings contain hostnames,
+not credentials, and remain scoped to the configured realm.
+
+```bash
+adb shell am broadcast -n com.poelbos.kerberosauthenticator/.HttpKerberosProbeReceiver \
+  --es operation set_mapping --es request_host portal.example.com \
+  --es spn_host web01.example.com --ez channel_binding true
+
+adb shell am broadcast -n com.poelbos.kerberosauthenticator/.HttpKerberosProbeReceiver \
+  --es operation clear_mapping --es request_host portal.example.com \
+  --es spn_host portal.example.com
+```
+
+For fleet deployment, prefer the equivalent managed configuration:
+
+```json
+{"http_spn_mappings":[{"request_host":"portal.example.com","spn_host":"web01.example.com","tls_channel_binding":true}]}
+```

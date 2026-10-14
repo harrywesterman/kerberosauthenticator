@@ -1,0 +1,67 @@
+package com.poelbos.kerberosauthenticator.internal;
+
+import android.content.Context;
+import android.content.RestrictionsManager;
+import android.os.Bundle;
+import android.os.Parcelable;
+import java.util.Locale;
+
+/** Exact administrator-approved targets. Managed settings always take precedence over shell settings. */
+public final class HttpSpnSettings {
+  public static final String TLS_BINDING_KEY = "tls_channel_binding";
+  private static final String PREFS = "shell_http_spn_mappings";
+  private HttpSpnSettings() {}
+  public static final class Mapping {
+    public final String host;
+    public final boolean tlsBinding;
+    public final String source;
+    Mapping(String host, boolean tlsBinding, String source) {
+      this.host = host; this.tlsBinding = tlsBinding; this.source = source;
+    }
+  }
+  public static Mapping get(Context context, String realm, String requested) {
+    if (context == null) return null;
+    String origin = SpnResolver.normalizeHost(requested, realm);
+    if (origin == null) return null;
+    RestrictionsManager manager = (RestrictionsManager) context.getSystemService(Context.RESTRICTIONS_SERVICE);
+    Bundle restrictions = manager == null ? null : manager.getApplicationRestrictions();
+    Parcelable[] entries = restrictions == null ? null : restrictions.getParcelableArray(SpnResolver.MAPPINGS_KEY);
+    if (entries != null) {
+      boolean configured = false;
+      boolean binding = false;
+      for (Parcelable item : entries) if (item instanceof Bundle) {
+        Bundle entry = (Bundle) item;
+        if (origin.equals(SpnResolver.normalizeHost(entry.getString(SpnResolver.REQUEST_HOST_KEY), realm))) {
+          configured = true;
+          binding = entry.getBoolean(TLS_BINDING_KEY, false);
+        }
+      }
+      if (configured) {
+        String target = SpnResolver.managedMappings(context, realm).get(origin);
+        return target == null ? null : new Mapping(target, binding, "mdm");
+      }
+    }
+    String key = key(realm, origin);
+    android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    String target = SpnResolver.normalizeHost(prefs.getString(key, null), realm);
+    if (target == null) return null;
+    return new Mapping(target, prefs.getBoolean(key + ".tls", false), "shell_admin");
+  }
+  public static void setForShell(Context context, String realm, String requested, String target, boolean binding) {
+    String origin = SpnResolver.normalizeHost(requested, realm);
+    String spn = SpnResolver.normalizeHost(target, realm);
+    String suffix = "." + realm.toLowerCase(Locale.ROOT);
+    if (origin == null || spn == null || !origin.endsWith(suffix) || !spn.endsWith(suffix))
+      throw new IllegalArgumentException("Invalid in-realm HTTP mapping");
+    if (!context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        .putString(key(realm, origin), spn).putBoolean(key(realm, origin) + ".tls", binding).commit())
+      throw new IllegalStateException("Mapping could not be saved");
+  }
+  public static void clearForShell(Context context, String realm, String requested) {
+    String origin = SpnResolver.normalizeHost(requested, realm);
+    if (origin == null) throw new IllegalArgumentException();
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        .remove(key(realm, origin)).remove(key(realm, origin) + ".tls").apply();
+  }
+  private static String key(String realm, String origin) { return realm.toUpperCase(Locale.ROOT) + "|" + origin; }
+}

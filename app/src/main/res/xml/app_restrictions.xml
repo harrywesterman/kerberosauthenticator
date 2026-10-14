@@ -64,6 +64,7 @@
         <restriction android:key="http_spn_mapping" android:title="@string/mdm_http_spn_mapping" android:restrictionType="bundle">
             <restriction android:key="request_host" android:title="@string/mdm_http_request_host" android:restrictionType="string" />
             <restriction android:key="spn_host" android:title="@string/mdm_http_spn_host" android:restrictionType="string" />
+            <restriction android:key="tls_channel_binding" android:title="@string/mdm_http_tls_binding" android:description="@string/mdm_http_tls_binding_description" android:restrictionType="bool" android:defaultValue="false" />
         </restriction>
     </restriction>
     <restriction
