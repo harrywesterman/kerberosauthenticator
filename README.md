@@ -9,7 +9,7 @@ You need an MDM solution to push the Android app and its configuration to the mo
 
 The app is based on the existing old Google [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase. 
 
-## HTTP authentication: Kerberos, managed NTLMv2 and Chrome Basic
+## HTTP authentication
 
 The authenticator stores the user password after the first successful login only when the
 device has a secure screen lock and a hardware-backed Android Keystore. This allows the app
