@@ -17,7 +17,7 @@
     <string name="mdm_http_tls_binding">HTTPS certificate binding</string>
     <string name="mdm_http_tls_binding_description">Use a verified TLS certificate for this HTTPS origin on port 443. The browser and authenticator must reach the same TLS certificate. Keep cleartext HTTP blocked in Chrome.</string>
     <!-- [CHAR_LIMIT=100] -->
-    <string name="app_name">Enterprise Files</string>
+    <string name="app_name">Kerberos Authenticator</string>
     <string name="mdm_realm_title">Active Directory realm</string>
     <string name="mdm_realm_description">Kerberos realm, for example EXAMPLE.COM.</string>
     <string name="mdm_enable_http_kerberos_title">Enable HTTP Kerberos</string>
@@ -111,7 +111,7 @@
     <string name="enter_pw">Enter Password</string>
     <string name="notification_permission_missing">Sign-in alerts are disabled. Tap to open notification settings.</string>
     <string name="account">Account</string>
-    <string name="enterprise_files">Enterprise Files</string>
+    <string name="enterprise_files">Kerberos Authenticator</string>
     <string name="open_system_files">Open Files</string>
     <string name="sign_in">Sign in</string>
     <string name="sign_in_title">Sign in to your work account</string>

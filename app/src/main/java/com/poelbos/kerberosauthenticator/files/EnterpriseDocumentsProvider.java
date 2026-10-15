@@ -159,7 +159,7 @@ public final class EnterpriseDocumentsProvider extends DocumentsProvider {
     MatrixCursor cursor = new MatrixCursor(projection == null ? DOCUMENT_COLUMNS : projection);
     if (SIGN_IN_ID.equals(documentId)) {
       add(cursor, DocumentsContract.Document.COLUMN_DOCUMENT_ID, SIGN_IN_ID,
-          DocumentsContract.Document.COLUMN_DISPLAY_NAME, "Sign in to Enterprise Files",
+          DocumentsContract.Document.COLUMN_DISPLAY_NAME, "Sign in to Kerberos Authenticator",
           DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.MIME_TYPE_DIR,
           DocumentsContract.Document.COLUMN_FLAGS,
               DocumentsContract.Document.FLAG_SUPPORTS_SETTINGS);
@@ -259,6 +259,7 @@ public final class EnterpriseDocumentsProvider extends DocumentsProvider {
 
   @Override public ParcelFileDescriptor openDocument(String documentId, String mode,
       CancellationSignal signal) throws FileNotFoundException {
+    if (signal != null) signal.throwIfCanceled();
     Resolved doc = resolve(documentId);
     if (doc.path.isEmpty()) throw new FileNotFoundException("Cannot open a directory");
     boolean writable = !"r".equals(mode);
@@ -273,27 +274,31 @@ public final class EnterpriseDocumentsProvider extends DocumentsProvider {
     ProxyHandle handle = null;
     try {
       client = connect(doc);
-      remote = client.openFile(doc.path, writable, truncate);
+      if (signal != null) signal.throwIfCanceled();
+      remote = client.openFile(doc.path, writable, false);
       thread = new HandlerThread("EnterpriseDocumentsIO");
       thread.start();
       handle = new ProxyHandle(documentId, client, remote, thread, signal,
           "wa".equals(mode));
       HANDLES.add(handle);
+      if (signal != null) signal.setOnCancelListener(handle::close);
+      handle.check();
+      if (truncate) handle.truncateForOpen();
       StorageManager storage = (StorageManager) context().getSystemService(Context.STORAGE_SERVICE);
       int flags = "r".equals(mode) ? ParcelFileDescriptor.MODE_READ_ONLY
           : ("rw".equals(mode) || "rwt".equals(mode))
               ? ParcelFileDescriptor.MODE_READ_WRITE : ParcelFileDescriptor.MODE_WRITE_ONLY;
       ParcelFileDescriptor descriptor = storage.openProxyFileDescriptor(
           flags, handle, new Handler(thread.getLooper()));
-      if (signal != null) signal.setOnCancelListener(handle::close);
       return descriptor;
-    } catch (IOException | RuntimeException exception) {
+    } catch (IOException | RuntimeException | ErrnoException exception) {
       if (handle != null) handle.close();
       else {
         if (thread != null) thread.quitSafely();
         if (remote != null) remote.close();
         if (client != null) client.close();
       }
+      if (signal != null) signal.throwIfCanceled();
       throw notFound(exception);
     }
   }
@@ -410,6 +415,12 @@ public final class EnterpriseDocumentsProvider extends DocumentsProvider {
     @Override public synchronized long onGetSize() throws ErrnoException {
       check();
       try { return remote.size(); }
+      catch (RuntimeException exception) { throw ioError(); }
+    }
+
+    synchronized void truncateForOpen() throws ErrnoException {
+      check();
+      try { remote.truncate(0); }
       catch (RuntimeException exception) { throw ioError(); }
     }
 

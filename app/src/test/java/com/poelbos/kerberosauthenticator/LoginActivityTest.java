@@ -74,8 +74,7 @@ public final class LoginActivityTest {
 
   @Test
   public void accountModeStartsWithEmptyUsernameAndPassword() {
-    Intent intent = new Intent(context, LoginActivity.class)
-        .putExtra("return_to_account", true);
+    Intent intent = LoginActivity.getAccountSignInIntent(context);
 
     LoginActivity activity = Robolectric.buildActivity(LoginActivity.class, intent).setup().get();
     int usernameId = resourceId(activity, "accountUsername");
@@ -158,8 +157,7 @@ public final class LoginActivityTest {
 
   @Test
   public void accountModeRequiresUsernameAndPassword() {
-    Intent intent = new Intent(context, LoginActivity.class)
-        .putExtra("return_to_account", true);
+    Intent intent = LoginActivity.getAccountSignInIntent(context);
     LoginActivity activity = Robolectric.buildActivity(LoginActivity.class, intent).setup().get();
     int signInId = resourceId(activity, "accountSignInButton");
     int usernameLayoutId = resourceId(activity, "accountUsernameLayout");
@@ -179,6 +177,21 @@ public final class LoginActivityTest {
   public void domainEntryResourceIsRemoved() {
     assertThat(context.getResources().getIdentifier(
         "edit_domain", "id", context.getPackageName())).isEqualTo(0);
+  }
+
+  @Test public void externalLoginIntentIsRejected() {
+    Intent forged = new Intent(context, LoginActivity.class)
+        .putExtra(Constants.SERVICE_NAME, "server.example.com");
+    LoginActivity activity = Robolectric.buildActivity(LoginActivity.class, forged).setup().get();
+    assertThat(activity.isFinishing()).isTrue();
+  }
+
+  @Test public void validLoginSurvivesActivityRecreation() {
+    org.robolectric.android.controller.ActivityController<LoginActivity> controller =
+        Robolectric.buildActivity(LoginActivity.class,
+            LoginActivity.getAccountSignInIntent(context)).setup();
+    controller.recreate();
+    assertThat(controller.get().isFinishing()).isFalse();
   }
 
   private static int resourceId(LoginActivity activity, String name) {

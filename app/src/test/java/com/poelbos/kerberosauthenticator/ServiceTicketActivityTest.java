@@ -35,6 +35,24 @@ public class ServiceTicketActivityTest {
   }
 
   @Test
+  public void serviceTicketActivityCannotBeStartedByOtherApps() throws Exception {
+    android.content.Context app = ApplicationProvider.getApplicationContext();
+    android.content.pm.ActivityInfo info = app.getPackageManager().getActivityInfo(
+        new android.content.ComponentName(app, ServiceTicketActivity.class), 0);
+    org.junit.Assert.assertFalse(info.exported);
+  }
+
+  @Test
+  public void disabledHttpKerberosRejectsInternalTicketActivity() {
+    android.os.Bundle managed = TestHelper.makeRestrictionsBundle();
+    managed.putBoolean("enable_http_kerberos", false);
+    shadowOf(restrictionsManager).setApplicationRestrictions(managed);
+    ServiceTicketActivity activity = Robolectric.buildActivity(ServiceTicketActivity.class)
+        .create().get();
+    org.junit.Assert.assertTrue(activity.isFinishing());
+  }
+
+  @Test
   public void testServiceTicketResultWithMissingAccountDoesNotCrash() {
     ActivityController<ServiceTicketActivity> controller =
         Robolectric.buildActivity(ServiceTicketActivity.class).create().start();

@@ -27,6 +27,14 @@ val releaseKeyAlias = providers.gradleProperty("releaseKeyAlias")
     .orElse("")
     .map { it.ifBlank { "kerberos" } }
 
+val packageLicenseAssets by tasks.registering(Sync::class) {
+    into(layout.buildDirectory.dir("generated/licenseAssets/licenses"))
+    from(rootProject.file("LICENSE")) { rename { "Apache-2.0.txt" } }
+    from(rootProject.file("openjdk-kerberos/LICENSE")) { rename { "OpenJDK-GPL-2.0-with-Classpath-exception.txt" } }
+    from(rootProject.file("THIRD_PARTY_NOTICES.md"))
+    from(rootProject.file("third_party_licenses"))
+}
+
 android {
     namespace = "com.poelbos.kerberosauthenticator"
     compileSdk = 35
@@ -71,7 +79,10 @@ android {
             isIncludeAndroidResources = true
         }
     }
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/licenseAssets"))
 }
+
+tasks.named("preBuild").configure { dependsOn(packageLicenseAssets) }
 
 tasks.withType<Test> {
     jvmArgs(
@@ -93,6 +104,10 @@ dependencies {
     implementation("androidx.work:work-runtime:2.10.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.hierynomus:smbj:0.14.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86") {
+        version { strictly("1.86") }
+        because("Replace SMBJ's vulnerable transitive crypto provider")
+    }
     implementation("com.hierynomus:asn-one:0.6.0")
     implementation("com.google.guava:guava:33.4.0-android")
 

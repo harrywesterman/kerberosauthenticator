@@ -8,5 +8,6 @@ interface SmbRandomAccess extends AutoCloseable {
   int read(byte[] buffer, long fileOffset, int bufferOffset, int length);
   int write(byte[] buffer, long fileOffset, int bufferOffset, int length) throws IOException;
   void flush();
+  void truncate(long length);
   @Override void close();
 }

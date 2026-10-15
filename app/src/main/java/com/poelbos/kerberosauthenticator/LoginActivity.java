@@ -53,6 +53,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
   private boolean refreshStatusAfterAuth = false;
   private boolean accountMode = false;
   private char[] pendingPassword;
+  private boolean authorizedEntry;
+  private static final String AUTHORIZED_ENTRY = "authorized_authenticator_entry";
 
   /** Returns an intent that can be used to authenticate an account. */
   public static Intent getAuthenticateIntent(
@@ -68,22 +70,31 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     if (serviceName != null) {
       intent.putExtra(Constants.SERVICE_NAME, serviceName);
     }
-    return intent;
+    return AuthenticatorActivityAccess.authorize(context, intent);
   }
 
   public static Intent getRefreshIntent(Context context) {
     Intent intent = new Intent(context, LoginActivity.class);
     intent.putExtra(Constants.REFRESH_STATUS_AFTER_AUTH, true);
-    return intent;
+    return AuthenticatorActivityAccess.authorize(context, intent);
   }
 
   public static Intent getAccountSignInIntent(Context context) {
-    return new Intent(context, LoginActivity.class).putExtra(RETURN_TO_ACCOUNT, true);
+    return AuthenticatorActivityAccess.authorize(context,
+        new Intent(context, LoginActivity.class).putExtra(RETURN_TO_ACCOUNT, true));
   }
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+
+    authorizedEntry = savedInstanceState != null && savedInstanceState.getBoolean(AUTHORIZED_ENTRY)
+        || AuthenticatorActivityAccess.consume(this, getIntent());
+    if (!authorizedEntry) {
+      setErrorResultAndFinish(AccountManager.ERROR_CODE_BAD_REQUEST,
+          "Authentication activity request is invalid or expired");
+      return;
+    }
 
     accountMode = getIntent().getBooleanExtra(RETURN_TO_ACCOUNT, false);
 
@@ -163,11 +174,8 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
     } else {
       clearPendingPassword();
       if (ticketRequestResult.isCredentialRejected() && !isPasswordRetry) {
-        Log.i(
-            Constants.TAG,
-            String.format(
-                "Credentials rejected for user %s, removing and attempting re-authentication.",
-            account == null ? "unknown" : account.getName()));
+        Log.i(Constants.TAG,
+            "Credentials rejected; removing account and attempting re-authentication.");
         KerberosAccount.removeAccount(this);
         isPasswordRetry = true;
         showUserLoginUI();
@@ -202,6 +210,11 @@ public class LoginActivity extends BaseAuthenticatorActivity implements
       startActivity(serviceTicketIntent);
       finish();
     }
+  }
+
+  @Override protected void onSaveInstanceState(Bundle state) {
+    super.onSaveInstanceState(state);
+    state.putBoolean(AUTHORIZED_ENTRY, authorizedEntry);
   }
 
   private void authenticateAccount(boolean shouldAddAccount) {

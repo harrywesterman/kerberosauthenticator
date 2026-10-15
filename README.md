@@ -35,7 +35,7 @@ configuration. Disabling HTTP Kerberos does not disable the Kerberos account, TG
 Kerberos-only SMB. When only NTLMv2 is enabled, the app sends an NTLMSSP-only SPNEGO offer without
 requesting a Kerberos service ticket.
 
-## Enterprise files in Android Files
+## SMB shares in Android Files
 
 - MDM determines which shares appear as storage locations in Android's system Files picker;
   users cannot add their own SMB server.
@@ -46,7 +46,7 @@ requesting a Kerberos service ticket.
   the Kerberos-only SMB session; the app does not make complete local working copies.
 - The user confirms or edits their AD username and enters their own password. MDM can prefill an
   editable username, but never supplies a password.
-- On a device with a secure screen lock, the password is device-bound encrypted with a hardware-backed Android Keystore key. The app uses this to request a completely new TGT every day. Storage no longer requires the realm to be supplied through one specific Android RestrictionsManager source.
+- On a managed device with a configured `ad_realm`, a secure screen lock and a hardware-backed Android Keystore key, the password is stored with device-bound encryption. The app uses this to request a completely new TGT every day.
 - If secure hardware storage is unavailable, sign-in remains possible but the password is not stored persistently.
 - Screenshots of this app's own account screens are blocked by default and SMB 3 encryption can
   be required by MDM. External apps that open a selected file control their own screenshots and
@@ -66,6 +66,10 @@ requesting a Kerberos service ticket.
 - Logout button that removes the account and clears local config
 
 ## Prerequisites
+
+License texts and upstream attributions are in [LICENSE](LICENSE),
+[openjdk-kerberos/LICENSE](openjdk-kerberos/LICENSE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). They are also included in the APK.
 
 - JDK 17
 - Android SDK (API 35 + build-tools 35.0.0)
@@ -141,7 +145,7 @@ For the integrated file app, for example:
   "ad_realm": "EXAMPLE.COM",
   "username": "user12342",
   "enable_http_kerberos": true,
-  "enable_http_ntlm": true,
+  "enable_http_ntlm": false,
   "ntlm_domain": "EXAMPLE",
   "enable_shares": true,
   "require_smb_encryption": true,
@@ -184,7 +188,8 @@ a successful login, the app requests a new TGT daily through WorkManager. Androi
 exact execution time because of Doze. The app discovers KDCs through DNS SRV records such as
 `_kerberos._udp.example.com`.
 
-If you enable the Android permission "Notifications" then the app give notifications to the user. You can create an MDM profile for that.
+Enable the Android "Notifications" permission so the app can notify the user when they need to
+sign in again. You can grant this permission through an MDM profile.
 
 #### Chrome app
 
@@ -194,8 +199,8 @@ Chrome must also be managed. Add or edit the managed Google Play assignment for 
 |---|---|---|---|
 | `AuthAndroidNegotiateAccountType` | string | `AndroidEnterpriseKerberos` | Account type exposed by this authenticator app. Without this, Chrome disables HTTP Negotiate on Android. |
 | `AuthServerAllowlist` | string | `*.example.com,example.com` | Internal sites where Chrome may answer Kerberos/Negotiate challenges. |
-| `AuthSchemes` | string | `basic,negotiate` | Use `negotiate`. Do not include direct `ntlm` or `digest`. |
-| `HttpsOnlyMode` | string | `force_enabled` | Upgrade navigations to HTTPS in strict mode before the HTTP block is reached. |
+| `AuthSchemes` | string | `negotiate` | Enable HTTP Negotiate. Do not include direct `ntlm` or `digest`. |
+| `HttpsOnlyMode` | string | `force_enabled` | Require HTTPS for navigations in strict mode. |
 | `AuthNegotiateDelegateAllowlist` | string | `*.example.com` | Optional. Only needed if credential delegation is required. |
 | `DisableAuthNegotiateCnameLookup` | bool | `true` | Preserve the original URL host for the Kerberos request. The app can then try that host before its CNAME chain. |
 
@@ -207,14 +212,15 @@ Chrome also needs the Android Permission "Contacts". You can make an MDM profile
 
 ### Testing managed config
 
-**Option 1** — Use the built-in debug UI: install the APK and enter username and domain. Without managed configuration, the password is not stored persistently.
+Managed configuration is required to sign in; the app has no manual realm configuration UI.
+For testing, use an MDM assignment or Test DPC to supply at least `ad_realm`.
 
-**Option 2** — Use [Test DPC](https://play.google.com/store/apps/details?id=com.afwsamples.testdpc) from Google Play. After installing:
+Use [Test DPC](https://play.google.com/store/apps/details?id=com.afwsamples.testdpc) from Google Play. After installing:
 1. Set Test DPC as device owner
 2. Navigate to **Managed Configurations** → find the Kerberos Authenticator
 3. Enter the configuration values as key-value pairs using the keys below
 
-**Option 3** — Via `adb` with Test DPC:
+To set up Test DPC via `adb`:
 
 ```bash
 adb shell dpm set-test-device-owner com.afwsamples.testdpc/.DeviceAdminReceiver

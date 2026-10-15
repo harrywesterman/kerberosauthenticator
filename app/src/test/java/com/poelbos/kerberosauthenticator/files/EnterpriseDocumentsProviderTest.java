@@ -202,12 +202,47 @@ public final class EnterpriseDocumentsProviderTest {
     return ManagedDocumentId.encode(parsed.epoch, "alice", "EXAMPLE.COM", share, true, name);
   }
 
+  @Test public void canceledOpenIsRejectedBeforeAnyNetworkOrTruncation() throws Exception {
+    signIn("alice");
+    String documentId = child(firstRoot(), "file.txt");
+    CancellationSignal signal = new CancellationSignal();
+    signal.cancel();
+    for (String mode : new String[] {"r", "wt", "rwt"}) {
+      assertThrows(android.os.OperationCanceledException.class,
+          () -> provider.openDocument(documentId, mode, signal));
+    }
+  }
+
+  @Test public void cancellationBeforeTruncationPreservesExistingBytes() throws Exception {
+    signIn("alice");
+    FakeFile file = new FakeFile("keep me".getBytes());
+    CancellationSignal signal = new CancellationSignal();
+    EnterpriseDocumentsProvider.ProxyHandle handle = provider.new ProxyHandle(
+        child(firstRoot(), "file.txt"), null, file, null, signal, false);
+    signal.setOnCancelListener(handle::close);
+    signal.cancel();
+    assertThrows(ErrnoException.class, handle::truncateForOpen);
+    assertThat(new String(file.bytes)).isEqualTo("keep me");
+    assertThat(file.closed).isTrue();
+  }
+
+  @Test public void validTruncationEmptiesExistingFile() throws Exception {
+    signIn("alice");
+    FakeFile file = new FakeFile("replace me".getBytes());
+    EnterpriseDocumentsProvider.ProxyHandle handle = provider.new ProxyHandle(
+        child(firstRoot(), "file.txt"), null, file, null, null, false);
+    handle.truncateForOpen();
+    assertThat(file.bytes).isEmpty();
+    handle.close();
+  }
+
   private static final class FakeFile implements SmbRandomAccess {
     byte[] bytes;
     boolean closed;
     boolean flushed;
     boolean fail;
     FakeFile(byte[] bytes) { this.bytes = bytes; }
+    @Override public void truncate(long length) { bytes = Arrays.copyOf(bytes, (int) length); }
     @Override public long size() { return bytes.length; }
     @Override public int read(byte[] target, long position, int offset, int length) {
       if (fail) throw new IllegalStateException("network lost");

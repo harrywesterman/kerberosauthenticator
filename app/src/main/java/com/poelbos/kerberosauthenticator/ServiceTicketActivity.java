@@ -39,10 +39,20 @@ import java.util.Date;
  */
 public class ServiceTicketActivity extends BaseAuthenticatorActivity
     implements ServiceTicketResultListener {
+  private String requestAccount;
+  private String requestRealm;
+  private String requestEpoch;
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.authenticator);
+
+    if (!accountConfiguration.hasManagedConfigs()
+        || !accountConfiguration.isHttpKerberosEnabled()) {
+      setErrorResultAndFinish(AccountManager.ERROR_CODE_UNSUPPORTED_OPERATION,
+          "HTTP Kerberos is unavailable");
+      return;
+    }
 
     // See if we need to get a TGT or service ticket, or the activity is initialised by the user.
     Intent intent = getIntent();
@@ -69,6 +79,9 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
     // Activity was created to generate a service ticket.
     setRefreshingStatus(getServiceTimestampTextviewId());
     setOkStatus(getTGTTimestampTextViewId());
+    requestAccount = account.getName();
+    requestRealm = account.getDomain();
+    requestEpoch = KerberosAccount.getDocumentEpoch(this);
     getServiceTicket(serviceName, account);
   }
 
@@ -99,7 +112,11 @@ public class ServiceTicketActivity extends BaseAuthenticatorActivity
 
     Bundle result = new Bundle();
     KerberosAccount account = KerberosAccount.getAccount(this);
-    if (account != null && service != null) {
+    if (account != null && service != null && accountConfiguration.hasManagedConfigs()
+        && accountConfiguration.isHttpKerberosEnabled()
+        && account.getName().equals(requestAccount)
+        && account.getDomain().equals(requestRealm)
+        && KerberosAccount.getDocumentEpoch(this).equals(requestEpoch)) {
       result.putString(AccountManager.KEY_ACCOUNT_NAME, account.getName());
       result.putString(AccountManager.KEY_ACCOUNT_TYPE, Constants.KERBEROS_ACCOUNT_TYPE);
       result.putString(AccountManager.KEY_AUTHTOKEN, serviceTicket);

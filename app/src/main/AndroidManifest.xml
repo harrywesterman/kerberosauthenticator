@@ -69,7 +69,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".DeclineAddingAccountActivity" android:exported="true"/>
-        <activity android:name=".ServiceTicketActivity" android:exported="true"/>
+        <activity android:name=".ServiceTicketActivity" android:exported="false"/>
         <activity android:name=".LoginActivity" android:exported="true"/>
         <meta-data android:name="android.content.APP_RESTRICTIONS"
             android:resource="@xml/app_restrictions" />

@@ -41,7 +41,7 @@ public final class TicketGrantingTicketTest {
           + "phdmEvdXRpbC9MaW5rZWRMaXN0O0wABnRoaXMkMHQAHUxqYXZheC9zZWN1cml0eS9hdXRoL1N1Y"
           + "mplY3Q7eHAAAAABc3IAFGphdmEudXRpbC5MaW5rZWRMaXN0DClTXUpgiCIDAAB4cHcEAAAAAXNy"
           + "ADJrcmIuamF2YXguc2VjdXJpdHkuYXV0aC5rZXJiZXJvcy5LZXJiZXJvc1ByaW5jaXBhbJmnfV0"
-          + "PHjMpAwAAeHB1cgACW0Ks8xf4BghU4AIAAHhwAAAAEjAQoAMCAQGhCTAHGwVlcmFubXVxAH4AEA"
+          + "PHjMpAwAAeHB1cgACW0Ks8xf4BghU4AIAAHhwAAAAEjAQoAMCAQGhCTAHGwV1c2VyMXVxAH4AEA"
           + "AAABIbEEFCQ0QuRVhBTVBMRS5DT014eHEAfgACeHEAfgAHeHhzcQB+AANzcQB+AAgAAAADc3EAf"
           + "gAMdwQAAAABc3IAL2tyYi5qYXZheC5zZWN1cml0eS5hdXRoLmtlcmJlcm9zLktlcmJlcm9zVGlj"
           + "a2V0ZqGBbXB3w7sCAApbAAxhc24xRW5jb2Rpbmd0AAJbQkwACGF1dGhUaW1ldAAQTGphdmEvdXR"
@@ -69,7 +69,7 @@ public final class TicketGrantingTicketTest {
           + "4peXy52R2I29Dofh0RGq1EDyq7ibsTssoG9kmzAHdmgq4U0vARwQf4hAN+BEYxNurJ0K2vVo926"
           + "4F5SQZBVPm7dHcik+yjr403UsJwjlBQBHgBZvb5842bKXw6e1g4MekSaqyR2H7yiohzcgAOamF2"
           + "YS51dGlsLkRhdGVoaoEBS1l0GQMAAHhwdwgAAAFp6ICSMHhzcQB+AA51cQB+ABAAAAASMBCgAwI"
-          + "BAaEJMAcbBWVyYW5tdXEAfgAQAAAAEhsQQUJDRC5FWEFNUExFLkNPTXhwc3EAfgAfdwgAAAFp6q"
+          + "BAaEJMAcbBXVzZXIxdXEAfgAQAAAAEhsQQUJDRC5FWEFNUExFLkNPTXhwc3EAfgAfdwgAAAFp6q"
           + "XjMHh1cgACW1pXjyA5FLhd4gIAAHhwAAAAIAAAAAAAAAAAAAEBAAAAAAAAAAAAAAAAAAAAAAAAA"
           + "AAAcHNxAH4ADnVxAH4AEAAAACUwI6ADAgECoRwwGhsGa3JidGd0GxBBQkNELkVYQU1QTEUuQ09N"
           + "dXEAfgAQAAAAEhsQQUJDRC5FWEFNUExFLkNPTXhzcgAoa3JiLmphdmF4LnNlY3VyaXR5LmF1dGg"
@@ -113,7 +113,7 @@ public final class TicketGrantingTicketTest {
     assertThat(principals).hasSize(1);
     Principal username = subject.getPrincipals().iterator().next();
     assertThat(username).isNotNull();
-    assertThat(username.getName()).isEqualTo("eranm@ABCD.EXAMPLE.COM");
+    assertThat(username.getName()).isEqualTo("user1@ABCD.EXAMPLE.COM");
 
     assertThat(subject.getPrivateCredentials()).isNotEmpty();
     assertThat(subject.getPrivateCredentials().iterator().next()).isNotNull();

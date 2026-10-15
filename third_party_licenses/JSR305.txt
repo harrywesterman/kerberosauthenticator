@@ -1,0 +1,7 @@
+JSR305 annotations (com.google.code.findbugs:jsr305:3.0.2)
+
+The published Maven metadata declares Apache License 2.0:
+https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.pom
+
+The complete license text is included in Apache-2.0.txt in the APK and LICENSE
+at the root of the source repository.

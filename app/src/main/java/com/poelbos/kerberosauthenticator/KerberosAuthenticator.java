@@ -236,7 +236,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     if (needReAuthentication) {
       Log.d(
           TAG,
-          String.format("Ticket-granting-ticket for %s will be renewed.", krbAccount.getName()));
+          "Ticket-granting-ticket will be renewed.");
       Intent intent =
           LoginActivity.getAuthenticateIntent(context, response, serviceName);
       result.putParcelable(AccountManager.KEY_INTENT, intent);
