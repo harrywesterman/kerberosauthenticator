@@ -1,11 +1,13 @@
-# Enterprise Files for Android
+# Kerberos Authenticator for Android
 
-An Android Enterprise app for Active Directory/Kerberos with two components in one APK:
+An Android app for Active Directory/Kerberos with two components in one APK. First Configure a VPN of your choice to connect your phone to your company network, then you get:
 
-- a Kerberos authenticator for SSO and ticket management
-- an Android document provider that shows managed SMB 2/3 shares in system Files
+- a Kerberos authenticator for SSO and ticket management. You enter your username and password for Active Directory, then the Chrome app on Android can be configured to automatically log you in into your old intranet websites.
+- an Android document provider that shows managed SMB shares in the Android Files app. So you can browse your old fileservers.
 
-The app is based on the existing [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase and has been extended with an integrated enterprise file experience. Chrome can still use the same Kerberos account for HTTP Negotiate.
+You need an MDM solution to push the Android app and its configuration to the mobile phones. The examples are for Omnissa Workspace One, but all MDM suites should work. 
+
+The app is based on the existing old Google [android-kerberos-authenticator](https://github.com/google/android-kerberos-authenticator) codebase. 
 
 ## HTTP authentication: Kerberos, managed NTLMv2 and Chrome Basic
 
@@ -19,22 +21,19 @@ explicitly enables HTTP NTLMv2. The Kerberos path requests a ticket for an exact
 original host, and then each name in the DNS CNAME chain. Only
 `KDC_ERR_S_PRINCIPAL_UNKNOWN` advances to the next Kerberos candidate.
 
-NTLMv2 is used only if the server explicitly selects NTLMSSP in a
-`WWW-Authenticate: Negotiate` exchange. A Kerberos error never causes an NTLM downgrade. A direct
-`WWW-Authenticate: NTLM` challenge is not passed to this Android authenticator by Chrome and is
-therefore unsupported. Internal Kerberos/JGSS debugging is permanently disabled; passwords,
-tickets, hashes, challenges, MICs, session keys, and SPNEGO token bytes are never logged.
+The app can even use NTLMv2 as a downgrade path for really old websites. By Default this behaviour
+is disabled because NTLM is not secure. So only enable this if you understand the risk!
+
+NTLMv2 is used only if the server explicitly selects NTLMSSP in a `WWW-Authenticate: Negotiate` exchange. 
+A Kerberos error never causes an NTLM downgrade. A direct `WWW-Authenticate: NTLM` challenge is not passed 
+to this Android authenticator by Chrome and is therefore unsupported. 
+
+Internal Kerberos/JGSS debugging is permanently disabled; passwords, tickets, hashes, challenges, MICs, session keys, and SPNEGO token bytes are never logged.
 
 Administrators can independently enable HTTP Kerberos and NTLMv2 in this app's managed
 configuration. Disabling HTTP Kerberos does not disable the Kerberos account, TGT renewal, or
 Kerberos-only SMB. When only NTLMv2 is enabled, the app sends an NTLMSSP-only SPNEGO offer without
 requesting a Kerberos service ticket.
-
-HTTP Basic uses Chrome's native HTTP authentication and password manager; Chrome does not expose
-its Basic prompt to this Android AccountManager authenticator. The user enters a Basic credential
-once and may save it in Chrome for later automatic reuse. The app never exports its credential
-vault to Chrome. Basic must be enabled through Chrome's managed `AuthSchemes` policy and restricted
-to HTTPS by blocking cleartext HTTP URLs with Chrome's managed `URLBlocklist` policy.
 
 ## Enterprise files in Android Files
 
@@ -60,7 +59,6 @@ to HTTPS by blocking cleartext HTTP URLs with Chrome's managed `URLBlocklist` po
 - **Support Library → AndroidX**
 - **CompileSDK 35, MinSDK 26, TargetSDK 35**
 - `openjdk-kerberos` included as a local library module (cloned from [google/openjdk-kerberos](https://github.com/google/openjdk-kerberos))
-- Manual config UI for testing without MDM
 - DNS-based KDC discovery from SRV records (`_kerberos._udp.<realm>`)
 - App version, TGT validity, and service ticket info shown in the status UI
 - Android DocumentsProvider for managed shares, backed by Kerberos-only SMB sessions
@@ -120,12 +118,6 @@ to `kerberos`.
 ```bash
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
-
-## Testing without MDM
-
-Local configuration supports interactive sign-in only. Persistent credential storage and daily
-TGT refresh require an Android Enterprise managed profile or fully managed device, an `ad_realm`
-delivered through managed configuration, a screen lock, and hardware-backed Android Keystore.
 
 ## MDM Deployment
 
@@ -192,6 +184,8 @@ a successful login, the app requests a new TGT daily through WorkManager. Androi
 exact execution time because of Doze. The app discovers KDCs through DNS SRV records such as
 `_kerberos._udp.example.com`.
 
+If you enable the Android permission "Notifications" then the app give notifications to the user. You can create an MDM profile for that.
+
 #### Chrome app
 
 Chrome must also be managed. Add or edit the managed Google Play assignment for `com.android.chrome`, then set these application configuration values:
@@ -200,16 +194,16 @@ Chrome must also be managed. Add or edit the managed Google Play assignment for 
 |---|---|---|---|
 | `AuthAndroidNegotiateAccountType` | string | `AndroidEnterpriseKerberos` | Account type exposed by this authenticator app. Without this, Chrome disables HTTP Negotiate on Android. |
 | `AuthServerAllowlist` | string | `*.example.com,example.com` | Internal sites where Chrome may answer Kerberos/Negotiate challenges. |
-| `AuthSchemes` | string | `basic,negotiate` | Use `negotiate` when Basic is disabled, or `basic,negotiate` when Basic is enabled. Do not include direct `ntlm` or `digest`. |
-| `URLBlocklist` | string list | `["http://*"]` | Block cleartext HTTP so Basic credentials can be used only on HTTPS sites. Scope this more narrowly only when required HTTP exceptions are understood. |
+| `AuthSchemes` | string | `basic,negotiate` | Use `negotiate`. Do not include direct `ntlm` or `digest`. |
 | `HttpsOnlyMode` | string | `force_enabled` | Upgrade navigations to HTTPS in strict mode before the HTTP block is reached. |
-| `PasswordManagerEnabled` | bool | `true` | Allow the user to save a Basic credential in Chrome for later reuse. |
 | `AuthNegotiateDelegateAllowlist` | string | `*.example.com` | Optional. Only needed if credential delegation is required. |
 | `DisableAuthNegotiateCnameLookup` | bool | `true` | Preserve the original URL host for the Kerberos request. The app can then try that host before its CNAME chain. |
 
 After the assignment syncs, fully stop and restart Chrome, then open `chrome://policy` on the
 device to confirm the policies are present. `AuthAndroidNegotiateAccountType` does not refresh
 dynamically, so restart Chrome after changing that policy.
+
+Chrome also needs the Android Permission "Contacts". You can make an MDM profile to allow android.permission.GET_ACCOUNTS for the Chrome app.
 
 ### Testing managed config
 
