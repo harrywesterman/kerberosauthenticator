@@ -71,6 +71,7 @@ public class KerberosAccount {
   }
 
   public static void removeAccount(Context context) {
+    KerberosAuthenticator.clearPendingHttpAuthentication();
     com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider.invalidate(context);
     new CredentialVault(context).delete();
     TgtRefreshScheduler.cancel(context);

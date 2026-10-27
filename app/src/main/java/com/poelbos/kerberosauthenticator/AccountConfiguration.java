@@ -213,6 +213,7 @@ public class AccountConfiguration {
   class ManagedConfigsBroadcastReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(@NonNull Context context, Intent intent) {
+      KerberosAuthenticator.clearPendingHttpAuthentication();
       Log.d(Constants.TAG, "New managed configuration received.");
       com.poelbos.kerberosauthenticator.files.EnterpriseDocumentsProvider.invalidate(context);
       setManagedConfigs();

@@ -552,6 +552,167 @@ public class KerberosAuthenticatorTest {
   }
 
   @Test
+  public void ntlmContinuationRecoversDroppedContextAndConsumesItOnce() throws Exception {
+    Account account = prepareNtlm();
+    Bundle first = httpRound(account, getTestOptions());
+    assertThat(first.getBundle(Constants.KEY_SPNEGO_CONTEXT).getString("phase"))
+        .isEqualTo("NTLM_TYPE1_SENT");
+    Bundle third = httpRound(account, ntlmChallenge());
+    assertType3(third);
+    assertThat(httpRound(account, ntlmChallenge()).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    Bundle explicit = ntlmChallenge();
+    explicit.putBundle(Constants.KEY_SPNEGO_CONTEXT, third.getBundle(Constants.KEY_SPNEGO_CONTEXT));
+    assertThat(httpRound(account, explicit).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_AUTH_CREDENTIALS);
+  }
+
+  @Test
+  public void ntlmExplicitContextClearsRecoveryCopy() throws Exception {
+    Account account = prepareNtlm();
+    Bundle first = httpRound(account, getTestOptions());
+    Bundle options = ntlmChallenge();
+    options.putBundle(Constants.KEY_SPNEGO_CONTEXT, first.getBundle(Constants.KEY_SPNEGO_CONTEXT));
+    assertType3(httpRound(account, options));
+    assertThat(httpRound(account, ntlmChallenge()).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+  }
+
+  @Test
+  public void concurrentNtlmNegotiationsAreNotGuessed() throws Exception {
+    Account account = prepareNtlm();
+    httpRound(account, getTestOptions());
+    httpRound(account, getTestOptions());
+    assertThat(httpRound(account, ntlmChallenge()).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+  }
+
+  @Test
+  public void malformedContextDiscardsPendingNtlmState() throws Exception {
+    Account account = prepareNtlm();
+    httpRound(account, getTestOptions());
+    Bundle options = ntlmChallenge();
+    Bundle invalid = new Bundle();
+    invalid.putInt("version", 99);
+    options.putBundle(Constants.KEY_SPNEGO_CONTEXT, invalid);
+    assertThat(httpRound(account, options).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertThat(httpRound(account, ntlmChallenge()).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+  }
+
+  @Test
+  public void ntlmRecoveryDoesNotCrossHosts() throws Exception {
+    Account account = prepareNtlm();
+    httpRound(account, getTestOptions());
+    Bundle other = authenticator.getAuthToken(null, account,
+        "SPNEGO:HOSTBASED:HTTP@other.example.com", ntlmChallenge());
+    assertThat(other.getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+    assertType3(httpRound(account, ntlmChallenge()));
+  }
+
+  @Test
+  public void credentialDeletionDiscardsPendingNtlmState() throws Exception {
+    Account account = prepareNtlm();
+    httpRound(account, getTestOptions());
+    context.getSharedPreferences("encrypted_enterprise_credentials", 0).edit()
+        .putString("ciphertext", "synthetic").commit();
+    new CredentialVault(context).delete();
+    assertThat(httpRound(account, ntlmChallenge()).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+  }
+
+  @Test
+  public void combinedOfferRecoversThenSelectsNtlm() throws Exception {
+    Account account = prepareNtlm();
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, true);
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, true);
+    restrictions.putString(AccountConfiguration.NTLM_DOMAIN_KEY, "EXAMPLE");
+    setTestRestrictions(restrictions);
+    KerberosAuthenticator.setTgtValidityCheckerForTesting(ignored -> true);
+    com.hierynomus.spnego.NegTokenInit offer = new com.hierynomus.spnego.NegTokenInit();
+    offer.addSupportedMech(new com.hierynomus.asn1.types.primitive.ASN1ObjectIdentifier("1.2.840.113554.1.2.2"));
+    offer.setMechToken(new byte[] {1, 2, 3});
+    com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer encoded =
+        new com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer(
+            com.hierynomus.protocol.commons.buffer.Endian.LE);
+    offer.write(encoded);
+    KerberosAuthenticator.setServiceTicketProviderForTesting(
+        (requestContext, host, krbAccount, incoming, contextBytes, retry) ->
+            new GetSpnegoTicketTask.SpnegoTicketResult(
+                new TicketRequestResult(ResultCode.SUCCESS, "synthetic"),
+                Base64.encodeToString(encoded.getCompactData(), Base64.NO_WRAP)));
+    Bundle first = httpRound(account, getTestOptions());
+    assertThat(first.getBundle(Constants.KEY_SPNEGO_CONTEXT).getBoolean("ntlmOffered")).isTrue();
+    assertType3(httpRound(account, ntlmChallenge()));
+  }
+
+  @Test
+  public void managedPolicyChangeDiscardsPendingState() throws Exception {
+    Account account = prepareNtlm();
+    httpRound(account, getTestOptions());
+    new com.poelbos.kerberosauthenticator.files.ManagedSharesChangedReceiver().onReceive(
+        context, new Intent(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED));
+    assertThat(httpRound(account, ntlmChallenge()).getInt(Constants.KEY_SPNEGO_RESULT))
+        .isEqualTo(HttpSpnegoResult.ERR_INVALID_RESPONSE);
+  }
+
+  private Account prepareNtlm() {
+    Account account = addTestAccount();
+    Bundle restrictions = TestHelper.makeRestrictionsBundle();
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_KERBEROS_KEY, false);
+    restrictions.putBoolean(AccountConfiguration.ENABLE_HTTP_NTLM_KEY, true);
+    restrictions.putString(AccountConfiguration.NTLM_DOMAIN_KEY, "EXAMPLE");
+    setTestRestrictions(restrictions);
+    authenticator = new KerberosAuthenticator(context,
+        new com.poelbos.kerberosauthenticator.internal.spnego.HttpSpnegoCoordinator.CredentialProvider() {
+          public boolean isAvailable(String username, String realm) { return true; }
+          public char[] load(String username, String realm) { return "synthetic-password".toCharArray(); }
+        });
+    return account;
+  }
+
+  private Bundle httpRound(Account account, Bundle options) {
+    return authenticator.getAuthToken(null, account,
+        "SPNEGO:HOSTBASED:HTTP@portal.example.com", options);
+  }
+
+  private static void assertType3(Bundle result) throws Exception {
+    assertThat(result.getInt(Constants.KEY_SPNEGO_RESULT)).isEqualTo(HttpSpnegoResult.OK);
+    byte[] wrapped = Base64.decode(result.getString(AccountManager.KEY_AUTHTOKEN), Base64.NO_WRAP);
+    byte[] raw = new com.hierynomus.spnego.NegTokenTarg().read(wrapped).getResponseToken();
+    assertThat(java.util.Arrays.copyOf(raw, 12))
+        .isEqualTo(new byte[] {'N', 'T', 'L', 'M', 'S', 'S', 'P', 0, 3, 0, 0, 0});
+  }
+
+  private static Bundle ntlmChallenge() throws Exception {
+    // Synthetic Type 2: Unicode, NTLM, extended session security and target info.
+    com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer raw =
+        new com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer(
+            com.hierynomus.protocol.commons.buffer.Endian.LE);
+    raw.putRawBytes(new byte[] {'N', 'T', 'L', 'M', 'S', 'S', 'P', 0}).putUInt32(2);
+    raw.putUInt16(0).putUInt16(0).putUInt32(48);
+    raw.putUInt32(0x20888205L);
+    raw.putRawBytes(new byte[] {1, 2, 3, 4, 5, 6, 7, 8}).putLong(0);
+    raw.putUInt16(16).putUInt16(16).putUInt32(48);
+    raw.putUInt16(7).putUInt16(8).putLong(0L);
+    raw.putUInt16(0).putUInt16(0);
+    com.hierynomus.spnego.NegTokenTarg server = new com.hierynomus.spnego.NegTokenTarg();
+    server.setSupportedMech(com.poelbos.kerberosauthenticator.internal.ntlm.HttpNtlmV2Engine.NTLMSSP_OID);
+    server.setResponseToken(raw.getCompactData());
+    com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer wrapped =
+        new com.hierynomus.protocol.commons.buffer.Buffer.PlainBuffer(
+            com.hierynomus.protocol.commons.buffer.Endian.LE);
+    server.write(wrapped);
+    Bundle options = getTestOptions();
+    options.putString(Constants.KEY_INCOMING_AUTH_TOKEN,
+        Base64.encodeToString(wrapped.getCompactData(), Base64.NO_WRAP));
+    return options;
+  }
+
+  @Test
   public void testHasFeatures() {
     Account account = new Account(USERNAME, KERBEROS_ACCOUNT_TYPE);
     shadowOf(accountManager).addAccount(account);

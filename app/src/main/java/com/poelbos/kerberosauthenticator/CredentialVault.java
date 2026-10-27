@@ -33,6 +33,7 @@ public final class CredentialVault {
   }
 
   public boolean store(String username, String realm, char[] password) {
+    KerberosAuthenticator.clearPendingHttpAuthentication();
     if (password == null || password.length == 0) {
       delete();
       return false;
@@ -104,6 +105,7 @@ public final class CredentialVault {
   }
 
   public void delete() {
+    if (hasCredentials()) KerberosAuthenticator.clearPendingHttpAuthentication();
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit();
     try {
       KeyStore store = KeyStore.getInstance(ANDROID_KEY_STORE);

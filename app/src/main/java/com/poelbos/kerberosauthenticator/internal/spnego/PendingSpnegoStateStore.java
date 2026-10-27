@@ -32,6 +32,8 @@ public final class PendingSpnegoStateStore {
 
   public synchronized void clear(String identity) { pending.remove(identity); }
 
+  public synchronized void clearAll() { pending.clear(); }
+
   private void prune() {
     long now = clock.getAsLong();
     Iterator<Entry> entries = pending.values().iterator();

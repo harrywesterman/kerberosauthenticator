@@ -48,6 +48,7 @@ import java.util.regex.Matcher;
 public class KerberosAuthenticator extends AbstractAccountAuthenticator {
   private static PendingSpnegoStateStore pendingStates = new PendingSpnegoStateStore();
   private final Context context;
+  private final HttpSpnegoCoordinator.CredentialProvider ntlmCredentials;
   private static ServiceTicketProvider serviceTicketProvider =
       KerberosAuthenticator::requestServiceTicket;
   private static TgtValidityChecker tgtValidityChecker =
@@ -57,8 +58,17 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       KerberosAuthenticator::isAuthorizedChromeCaller;
 
   KerberosAuthenticator(Context context) {
+    this(context, new NtlmCredentialProvider(context));
+  }
+
+  KerberosAuthenticator(Context context, HttpSpnegoCoordinator.CredentialProvider credentials) {
     super(context);
     this.context = context;
+    this.ntlmCredentials = credentials;
+  }
+
+  public static void clearPendingHttpAuthentication() {
+    pendingStates.clearAll();
   }
 
   interface ServiceTicketProvider {
@@ -195,6 +205,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     KerberosAccount krbAccount = KerberosAccount.getAccount(context);
     // No account, this is a deviation from the protocol, return an error.
     if (krbAccount == null) {
+      clearPendingHttpAuthentication();
       result.putInt(AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_REQUEST);
       result.putString(AccountManager.KEY_ERROR_MESSAGE, "No account configured?");
       return result;
@@ -211,6 +222,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
 
     HttpAuthenticationPolicy httpPolicy = getHttpAuthenticationPolicy();
     if (!httpPolicy.hasEnabledMechanism()) {
+      clearPendingHttpAuthentication();
       result.putInt(
           Constants.KEY_SPNEGO_RESULT, HttpSpnegoResult.ERR_UNSUPPORTED_AUTH_SCHEME);
       Log.i(TAG, "HTTP_AUTH_RESULT mechanism=NONE code=6");
@@ -234,6 +246,7 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
       }
     }
     if (needReAuthentication) {
+      clearPendingHttpAuthentication();
       Log.d(
           TAG,
           "Ticket-granting-ticket will be renewed.");
@@ -299,12 +312,12 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
             + " recovered=" + (negotiationState != null));
       }
     } catch (IllegalArgumentException error) {
+      pendingStates.clear(pendingIdentity);
       Log.w(TAG, "HTTP_AUTH_RESULT code=4 reason=invalid_context");
       result.putInt(Constants.KEY_SPNEGO_RESULT, HttpSpnegoResult.ERR_INVALID_RESPONSE);
       return result;
     }
 
-    NtlmCredentialProvider ntlmCredentials = new NtlmCredentialProvider(context);
     if (negotiationState == null) {
       boolean ntlmEligible =
           httpPolicy.ntlmEnabled
@@ -377,7 +390,8 @@ public class KerberosAuthenticator extends AbstractAccountAuthenticator {
     if (authResult.getState() != null) {
       result.putBundle(
           Constants.KEY_SPNEGO_CONTEXT, SpnegoStateCodec.encode(authResult.getState()));
-      if (authResult.getState().getKerberosContext() != null) {
+      // Retain only rounds that can safely consume a server continuation. Type 3 is terminal.
+      if (authResult.getState().getPhase() != SpnegoNegotiationState.Phase.NTLM_TYPE3_SENT) {
         pendingStates.remember(pendingIdentity, authResult.getState());
       }
     }

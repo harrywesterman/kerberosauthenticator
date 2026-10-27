@@ -8,6 +8,7 @@ import android.content.Intent;
 public final class ManagedSharesChangedReceiver extends BroadcastReceiver {
   @Override public void onReceive(Context context, Intent intent) {
     if (Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED.equals(intent.getAction())) {
+      com.poelbos.kerberosauthenticator.KerberosAuthenticator.clearPendingHttpAuthentication();
       EnterpriseDocumentsProvider.invalidate(context);
     }
   }
